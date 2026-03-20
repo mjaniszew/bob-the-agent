@@ -1,0 +1,61 @@
+# ===========================================
+# OpenClaw Agent Dockerfile
+# ===========================================
+# Base: Node.js 24 on Debian Bookworm (stable, widely compatible)
+FROM node:24-bookworm-slim
+
+# Build arguments for customization
+ARG OPENCLAW_VERSION=2026.3.13
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Environment setup
+ENV NODE_ENV=production \
+    DEBIAN_FRONTEND=noninteractive \
+    HOME=/home/node
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Note: Node.js 24+ images already include a 'node' user (UID 1000, GID 1000)
+# If custom UID/GID is needed, uncomment and modify the following:
+# RUN usermod -u ${USER_ID} node && groupmod -g ${GROUP_ID} node
+
+# Install OpenClaw globally
+RUN npm install -g openclaw@${OPENCLAW_VERSION}
+
+# Create application directories
+RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config \
+    && chown -R node:node /app
+
+# Set working directory
+WORKDIR /app
+
+# Copy configuration and script files
+COPY --chown=node:node ./src/config/ /app/config/
+COPY --chown=node:node ./src/scripts/ /app/scripts/
+# Prepare openclaw config generation script
+RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/
+RUN chmod +x /app/scripts/app-entrypoint.sh
+
+# Switch to non-root user
+USER node
+
+
+# Expose OpenClaw gateway port
+EXPOSE 18789
+
+# Health check - use TCP socket test since gateway speaks WebSocket
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD bash -c 'echo > /dev/tcp/localhost/18789' || exit 1
+
+# Default command - start OpenClaw gateway
+# Use --allow-unconfigured for initial setup without pre-configuration
+# Use loopback binding (default) - Docker port mapping handles external access
+# Port 18789 is the default gateway port
+ENTRYPOINT ["/app/scripts/app-entrypoint.sh"]
+CMD ["openclaw", "gateway", "run", "--port", "18789", "--allow-unconfigured"]
