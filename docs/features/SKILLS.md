@@ -1,6 +1,25 @@
 # Skills
 
-This file describes which skills should be used by agent to perform various taks and gives some context how they should be implemented or included in agent if already available
+This file describes which skills should be used by agent to perform various tasks and gives some context how they should be implemented or included in agent if already available.
+
+## Current Implementation Status
+
+The skills in `src/skills/` are TypeScript implementations for the agent's capability layer. They are **NOT currently integrated** with the OpenClaw agent.
+
+**Integration Status:**
+- ✅ Skills code exists with proper TypeScript types and interfaces
+- ⚠️ Skills lack OpenClaw skill loader mechanism
+- ⚠️ Scheduling skill imports from web API's database (separate container)
+- 📋 No mechanism for OpenClaw to discover/use these skills
+
+These implementations serve as:
+1. **Documentation** of expected skill interfaces
+2. **Reference implementations** for skill contracts
+3. **Basis** for future OpenClaw integration work
+
+**Follow-up Task:** See `docs/tasks/3-integrate-skills.md` for the task to integrate these skills with OpenClaw.
+
+---
 
 ## Web Search
 1. Agent should be able to freely use web search to find information about any topic defined by user.

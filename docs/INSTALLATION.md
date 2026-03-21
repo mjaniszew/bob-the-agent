@@ -54,7 +54,7 @@ cd mini-agent-docker
 ### Step 2: Configure Environment
 
 ```bash
-cp .env.example .env
+cp .env.template .env
 ```
 
 Edit `.env` with your settings:

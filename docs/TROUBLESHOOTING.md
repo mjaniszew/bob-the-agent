@@ -16,7 +16,7 @@
    lsof -i :11434
    lsof -i :18789
    ```
-3. Ensure `.env` exists: `cp .env.example .env`
+3. Ensure `.env` exists: `cp .env.template .env`
 4. Rebuild containers: `docker compose build --no-cache`
 
 #### Out of Memory
@@ -88,7 +88,7 @@
    ```bash
    docker compose logs agent
    ```
-2. Verify OpenClaw config: `src/config/openclaw.yaml`
+2. Verify OpenClaw config was generated: check logs for "First run: openclaw.json generated"
 3. Check Ollama connection:
    ```bash
    docker exec mini-agent ping ollama

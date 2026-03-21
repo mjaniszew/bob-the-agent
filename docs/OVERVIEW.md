@@ -2,6 +2,10 @@
 
 This project purpose is to build containerized ai agent which can be run via Docker or Docker Compose, witch freedom to perform any tasks 24/7 without any user interactions, based on tasks defined by user beforehand.
 
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, container configuration, and data flow.
+
 ## Features
 - `docs/features` folder contains files describing specific functionalities that agent should have. Read it every time you're being asked to build somethign new, and use it as additional context to what you've been asked to build. Features might change over the time and it's critical to keep track of changes in this folder
 

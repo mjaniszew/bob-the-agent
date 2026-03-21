@@ -38,51 +38,51 @@ AWS_REGION=us-east-1
 NOTIFICATION_EMAIL=
 ```
 
-### openclaw.yaml
+### openclaw.json.template
 
-Agent behavior configuration located at `src/config/openclaw.yaml`.
+Agent behavior configuration template located at `src/config/openclaw.json.template`.
 
-```yaml
-agent:
-  name: "MiniAgent"
-  description: "Autonomous AI agent running 24/7 in Docker container"
-  autonomous: true
-  yolo: true
+**How it works:**
+1. At container startup, `app-entrypoint.sh` checks if OpenClaw config exists
+2. If not, `generate-config.mjs` reads the JSON template
+3. Environment variables are substituted (e.g., `${DISCORD_BOT_TOKEN}`)
+4. Final config is written to `/home/node/.openclaw/openclaw.json`
 
-  heartbeat:
-    enabled: true
-    interval: 60000
+The template uses OpenClaw's native JSON format. Only essential configuration is specified; OpenClaw manages defaults for optional settings.
 
-  memory:
-    type: "file"
-    path: "/app/data/memory"
-
-  workspace:
-    path: "/app/workspace"
-    resultsPath: "/app/results"
-    userFilesPath: "/app/user-files"
-
-providers:
-  ollama:
-    enabled: true
-    baseUrl: "http://ollama:11434"
-    defaultModel: "llama3.2"
-    models:
-      - name: "llama3.2"
-        alias: "default"
-      - name: "llama3.2:1b"
-        alias: "fast"
-    timeout: 120000
-
-tasks:
-  storage:
-    type: "sqlite"
-    path: "/app/data/tasks.db"
-
-logging:
-  level: "${LOG_LEVEL:info}"
-  format: "json"
+```json
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.13"
+  },
+  "auth": {
+    "profiles": {
+      "ollama:default": {
+        "provider": "ollama",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://ollama:11434",
+        "models": [
+          { "id": "llama3.2", "contextWindow": 128000 }
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local"
+  }
+}
 ```
+
+**Environment Variable Substitution:**
+Any `${VAR_NAME}` in the template is replaced with the corresponding environment variable value at startup. If a variable is missing, startup fails with an error.
 
 ## Environment Variables
 
@@ -180,17 +180,17 @@ services:
    docker exec mini-agent-ollama ollama pull codellama
    ```
 
-2. Configure in `openclaw.yaml`:
-   ```yaml
-   providers:
-     ollama:
-       models:
-         - name: "llama3.2"
-           alias: "default"
-         - name: "codellama"
-           alias: "code"
-         - name: "mistral"
-           alias: "fast"
+2. Configure in `openclaw.json.template`:
+   ```json
+   "providers": {
+     "ollama": {
+       "models": [
+         { "id": "llama3.2" },
+         { "id": "codellama" },
+         { "id": "mistral" }
+       ]
+     }
+   }
    ```
 
 ### Cloud Provider Setup
@@ -200,17 +200,29 @@ services:
    ANTHROPIC_API_KEY=sk-ant-...
    ```
 
-2. Enable in configuration:
-   ```yaml
-   providers:
-     anthropic:
-       enabled: true
-       defaultModel: "claude-sonnet-4-6"
+2. Add provider configuration to `openclaw.json.template`:
+   ```json
+   "models": {
+     "providers": {
+       "anthropic": {
+         "apiKey": "${ANTHROPIC_API_KEY}",
+         "models": [
+           { "id": "claude-sonnet-4-6" }
+         ]
+       }
+     }
+   }
    ```
 
-3. Switch default provider:
-   ```env
-   DEFAULT_PROVIDER=anthropic
+3. Switch default provider by setting the primary model:
+   ```json
+   "agents": {
+     "defaults": {
+       "model": {
+         "primary": "anthropic/claude-sonnet-4-6"
+       }
+     }
+   }
    ```
 
 ## Security Considerations
@@ -254,8 +266,11 @@ ollama:
 
 ### Parallel Tasks
 
-Adjust concurrency in agent configuration:
-```yaml
-agent:
-  maxConcurrentTasks: 5
+Adjust concurrency in the OpenClaw configuration:
+```json
+"agents": {
+  "defaults": {
+    "maxConcurrentTasks": 5
+  }
+}
 ```

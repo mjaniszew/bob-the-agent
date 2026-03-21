@@ -24,7 +24,7 @@ A containerized AI agent that runs 24/7 autonomously via Docker/Docker Compose. 
 ```bash
 git clone <repository-url>
 cd mini-agent-docker
-cp .env.example .env
+cp .env.template .env
 # Edit .env with your configuration
 ```
 
