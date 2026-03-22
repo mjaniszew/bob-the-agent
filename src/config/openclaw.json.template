@@ -145,5 +145,18 @@
         "enabled": true
       }
     }
+  },
+  "skills": {
+    "directory": "/home/node/.openclaw/skills",
+    "enabled": [
+      "web_search",
+      "grok_search",
+      "data_extraction",
+      "math_operations",
+      "document_creation",
+      "notifications",
+      "scheduling"
+    ],
+    "runner": "/app/cli/skill-runner.mjs"
   }
 }
