@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs';
 
-const template = readFileSync('/app/config/openclaw.json.template', 'utf8');
+const template = readFileSync('/app/config/openclaw.template.json', 'utf8');
 
 const config = JSON.parse(template.replace(/\$\{(\w+)\}/g, (_, key) => {
   const val = process.env[key];

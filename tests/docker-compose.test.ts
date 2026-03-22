@@ -143,12 +143,12 @@ describeDocker('Docker Compose Runtime Tests', () => {
       // Wait for container to be running
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      const status = getContainerStatus('mini-agent-ollama');
+      const status = getContainerStatus('bob-the-agent-ollama');
       expect(status).not.toBeNull();
     }, 60000);
 
     it('should have healthy Ollama container', async () => {
-      const healthy = await waitForHealthy('mini-agent-ollama', 60000);
+      const healthy = await waitForHealthy('bob-the-agent-ollama', 60000);
       expect(healthy).toBe(true);
     }, 90000);
 
@@ -158,12 +158,12 @@ describeDocker('Docker Compose Runtime Tests', () => {
 
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      const status = getContainerStatus('mini-agent');
+      const status = getContainerStatus('bob-the-agent');
       expect(status).not.toBeNull();
     }, 60000);
 
     it('should have healthy agent container', async () => {
-      const healthy = await waitForHealthy('mini-agent', 90000);
+      const healthy = await waitForHealthy('bob-the-agent', 90000);
       expect(healthy).toBe(true);
     }, 120000);
 
@@ -173,29 +173,29 @@ describeDocker('Docker Compose Runtime Tests', () => {
 
       await new Promise(resolve => setTimeout(resolve, 5000));
 
-      const status = getContainerStatus('mini-agent-web');
+      const status = getContainerStatus('bob-the-agent-web');
       expect(status).not.toBeNull();
     }, 60000);
 
     it('should have healthy web container', async () => {
-      const healthy = await waitForHealthy('mini-agent-web', 60000);
+      const healthy = await waitForHealthy('bob-the-agent-web', 60000);
       expect(healthy).toBe(true);
     }, 90000);
   });
 
   describe('Port Availability', () => {
     it('should expose Ollama on port 11434', () => {
-      const result = execSync('docker port mini-agent-ollama', { encoding: 'utf-8' });
+      const result = execSync('docker port bob-the-agent-ollama', { encoding: 'utf-8' });
       expect(result).toContain('11434');
     });
 
     it('should expose agent on port 18789', () => {
-      const result = execSync('docker port mini-agent', { encoding: 'utf-8' });
+      const result = execSync('docker port bob-the-agent', { encoding: 'utf-8' });
       expect(result).toContain('18789');
     });
 
     it('should expose web on port 8080', () => {
-      const result = execSync('docker port mini-agent-web', { encoding: 'utf-8' });
+      const result = execSync('docker port bob-the-agent-web', { encoding: 'utf-8' });
       expect(result).toContain('80');
     });
   });
@@ -203,7 +203,7 @@ describeDocker('Docker Compose Runtime Tests', () => {
   describe('Service Connectivity', () => {
     it('should have network connectivity between services', () => {
       const result = execSync(
-        'docker exec mini-agent curl -s -o /dev/null -w "%{http_code}" http://ollama:11434/api/tags',
+        'docker exec bob-the-agent curl -s -o /dev/null -w "%{http_code}" http://ollama:11434/api/tags',
         { encoding: 'utf-8', timeout: 10000 }
       ).trim();
 
@@ -214,7 +214,7 @@ describeDocker('Docker Compose Runtime Tests', () => {
     it('should allow web container to reach agent via TCP', () => {
       // Agent gateway speaks WebSocket, not HTTP, so we test TCP connectivity
       const result = execSync(
-        'docker exec mini-agent-web bash -c "echo > /dev/tcp/agent/18789 && echo OK || echo FAIL"',
+        'docker exec bob-the-agent-web bash -c "echo > /dev/tcp/agent/18789 && echo OK || echo FAIL"',
         { encoding: 'utf-8', timeout: 10000 }
       ).trim();
       expect(result).toBe('OK');
@@ -224,7 +224,7 @@ describeDocker('Docker Compose Runtime Tests', () => {
   describe('Volume Mounts', () => {
     it('should mount results volume', () => {
       const result = execSync(
-        'docker inspect mini-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/results\\"}}{{.Source}}{{end}}{{end}}"',
+        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/results\\"}}{{.Source}}{{end}}{{end}}"',
         { encoding: 'utf-8' }
       ).trim();
 
@@ -233,7 +233,7 @@ describeDocker('Docker Compose Runtime Tests', () => {
 
     it('should mount user-files volume', () => {
       const result = execSync(
-        'docker inspect mini-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/user-files\\"}}{{.Source}}{{end}}{{end}}"',
+        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/user-files\\"}}{{.Source}}{{end}}{{end}}"',
         { encoding: 'utf-8' }
       ).trim();
 
@@ -242,7 +242,7 @@ describeDocker('Docker Compose Runtime Tests', () => {
 
     it('should mount data volume', () => {
       const result = execSync(
-        'docker inspect mini-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/data\\"}}{{.Source}}{{end}}{{end}}"',
+        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/data\\"}}{{.Source}}{{end}}{{end}}"',
         { encoding: 'utf-8' }
       ).trim();
 
@@ -258,9 +258,9 @@ describeDocker('Health Endpoint Tests', () => {
     // Wait longer for containers to be ready after previous suite teardown
     await new Promise(resolve => setTimeout(resolve, 90000));
     // Wait for containers to be healthy
-    await waitForHealthy('mini-agent-ollama', 60000);
-    await waitForHealthy('mini-agent', 60000);
-    await waitForHealthy('mini-agent-web', 60000);
+    await waitForHealthy('bob-the-agent-ollama', 60000);
+    await waitForHealthy('bob-the-agent', 60000);
+    await waitForHealthy('bob-the-agent-web', 60000);
   }, 180000); // Increase timeout for this hook
 
   afterAll(() => {
@@ -271,7 +271,7 @@ describeDocker('Health Endpoint Tests', () => {
     it('should have open TCP port for WebSocket gateway', async () => {
       // Agent gateway speaks WebSocket, test TCP connectivity
       const result = execSync(
-        'docker exec mini-agent bash -c "echo > /dev/tcp/localhost/18789 && echo OK || echo FAIL"',
+        'docker exec bob-the-agent bash -c "echo > /dev/tcp/localhost/18789 && echo OK || echo FAIL"',
         { encoding: 'utf-8', timeout: 10000 }
       ).trim();
       expect(result).toBe('OK');
@@ -281,7 +281,7 @@ describeDocker('Health Endpoint Tests', () => {
   describe('Ollama Health', () => {
     it('should respond to /api/tags endpoint', async () => {
       const result = execSync(
-        'docker exec mini-agent-ollama curl -s http://localhost:11434/api/tags',
+        'docker exec bob-the-agent-ollama curl -s http://localhost:11434/api/tags',
         { encoding: 'utf-8', timeout: 10000 }
       );
 
@@ -294,7 +294,7 @@ describeDocker('Health Endpoint Tests', () => {
   describe('Web Interface Health', () => {
     it('should respond to /health endpoint', async () => {
       const result = execSync(
-        'docker exec mini-agent-web curl -s http://localhost:80/health',
+        'docker exec bob-the-agent-web curl -s http://localhost:80/health',
         { encoding: 'utf-8', timeout: 10000 }
       ).trim();
 

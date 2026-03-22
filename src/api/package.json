@@ -1,5 +1,5 @@
 {
-  "name": "mini-agent-api",
+  "name": "bob-the-agent-api",
   "version": "1.0.0",
   "description": "API server for Mini Agent web interface",
   "main": "dist/index.js",

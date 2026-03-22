@@ -10,15 +10,17 @@ ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Environment setup
-ENV NODE_ENV=production \
-    DEBIAN_FRONTEND=noninteractive \
+ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/node
 
-# Install system dependencies
+# Install system dependencies (python, make, g++ for native modules like better-sqlite3)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     ca-certificates \
+    python3 \
+    make \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: Node.js 24+ images already include a 'node' user (UID 1000, GID 1000)
@@ -29,22 +31,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g openclaw@${OPENCLAW_VERSION}
 
 # Create application directories
-RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config \
+RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts \
     && chown -R node:node /app
 
-# Set working directory
-WORKDIR /app
-
-# Copy configuration and script files
+# Copy application files
 COPY --chown=node:node ./src/config/ /app/config/
 COPY --chown=node:node ./src/scripts/ /app/scripts/
-# Prepare openclaw config generation script
+COPY --chown=node:node ./src/skills/ /app/skills/
+RUN chmod +x /app/scripts/skill-runner.mjs
+
+# Set working directory for skills build
+WORKDIR /app/skills
+
+# Install skills dependencies and build skills
+RUN npm install 
+RUN npm run build
+
+# Prepare OpenClaw config directory
 RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/
 RUN chmod +x /app/scripts/app-entrypoint.sh
 
 # Switch to non-root user
 USER node
-
 
 # Expose OpenClaw gateway port
 EXPOSE 18789

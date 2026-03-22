@@ -3,12 +3,13 @@
  * Exports all available skills for the agent
  */
 
-export { webSearch } from './web-search';
-export { dataExtraction } from './data-extraction';
-export { mathOperations } from './math-operations';
-export { documentCreation } from './document-creation';
-export { notifications } from './notifications';
-export { scheduling, listSchedules, deleteSchedule } from './scheduling';
+export { webSearch } from './web-search/index.js';
+export { dataExtraction } from './data-extraction/index.js';
+export { mathOperations } from './math-operations/index.js';
+export { documentCreation } from './document-creation/index.js';
+export { notifications } from './notifications/index.js';
+export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
+export { grokSearch } from './grok-search/index.js';
 
 // Skill metadata for registration
 export const skillRegistry = {
@@ -74,6 +75,24 @@ export const skillRegistry = {
       schedule: { type: 'object', required: true, description: 'Schedule configuration' },
       task: { type: 'object', required: true, description: 'Task to execute' }
     }
+  },
+  'grok-search': {
+    name: 'Grok Search',
+    description: 'Search web and X.com (Twitter) using x.AI Grok API',
+    version: '1.0.0',
+    params: {
+      query: { type: 'string', required: true, description: 'Search query' },
+      mode: { type: 'string', enum: ['web', 'x', 'both'], default: 'web', description: 'Search mode: web, x (Twitter), or both' },
+      allowedDomains: { type: 'array', description: 'Domains to include in results' },
+      excludedDomains: { type: 'array', description: 'Domains to exclude from results' },
+      allowedXHandles: { type: 'array', description: 'X.com handles to include' },
+      excludedXHandles: { type: 'array', description: 'X.com handles to exclude' },
+      fromDate: { type: 'string', description: 'Start date for X.com results (YYYY-MM-DD)' },
+      toDate: { type: 'string', description: 'End date for X.com results (YYYY-MM-DD)' },
+      enableImageUnderstanding: { type: 'boolean', default: false, description: 'Enable image understanding' },
+      enableVideoUnderstanding: { type: 'boolean', default: false, description: 'Enable video understanding for X.com' },
+      maxResults: { type: 'number', default: 10, description: 'Maximum results per source' }
+    }
   }
 };
 
@@ -97,28 +116,32 @@ export async function executeSkill(skillName: string, params: Record<string, any
   // Execute the skill
   switch (skillName) {
     case 'web-search': {
-      const { webSearch } = await import('./web-search');
-      return webSearch(params);
+      const { webSearch } = await import('./web-search/index.js');
+      return webSearch(params as any);
     }
     case 'data-extraction': {
-      const { dataExtraction } = await import('./data-extraction');
-      return dataExtraction(params);
+      const { dataExtraction } = await import('./data-extraction/index.js');
+      return dataExtraction(params as any);
     }
     case 'math-operations': {
-      const { mathOperations } = await import('./math-operations');
-      return mathOperations(params);
+      const { mathOperations } = await import('./math-operations/index.js');
+      return mathOperations(params as any);
     }
     case 'document-creation': {
-      const { documentCreation } = await import('./document-creation');
-      return documentCreation(params);
+      const { documentCreation } = await import('./document-creation/index.js');
+      return documentCreation(params as any);
     }
     case 'notifications': {
-      const { notifications } = await import('./notifications');
-      return notifications(params);
+      const { notifications } = await import('./notifications/index.js');
+      return notifications(params as any);
     }
     case 'scheduling': {
-      const { scheduling } = await import('./scheduling');
-      return scheduling(params);
+      const { scheduling } = await import('./scheduling/index.js');
+      return scheduling(params as any);
+    }
+    case 'grok-search': {
+      const { grokSearch } = await import('./grok-search/index.js');
+      return grokSearch(params as any);
     }
     default:
       throw new Error(`Skill not implemented: ${skillName}`);

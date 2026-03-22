@@ -48,13 +48,13 @@ For NVIDIA GPU acceleration:
 
 ```bash
 git clone <repository-url>
-cd mini-agent-docker
+cd bob-the-agent-docker
 ```
 
 ### Step 2: Configure Environment
 
 ```bash
-cp .env.example .env
+cp .env.template .env
 ```
 
 Edit `.env` with your settings:
@@ -93,10 +93,10 @@ docker compose ps
 
 ```bash
 # Pull default model
-docker exec mini-agent-ollama ollama pull llama3.2
+docker exec bob-the-agent-ollama ollama pull llama3.2
 
 # Optional: Pull additional models
-docker exec mini-agent-ollama ollama pull codellama
+docker exec bob-the-agent-ollama ollama pull codellama
 ```
 
 ### Step 5: Verify Installation
@@ -155,7 +155,7 @@ docker compose down
 docker compose down -v
 
 # Remove images
-docker rmi $(docker images -q 'mini-agent*')
+docker rmi $(docker images -q 'bob-the-agent*')
 ```
 
 ## Next Steps

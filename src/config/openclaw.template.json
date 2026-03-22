@@ -110,5 +110,20 @@
         "enabled": true
       }
     }
+  },
+  "skills": {
+    "install": {
+      "preferBrew": true,
+      "nodeManager": "npm"
+    },
+    "entries": {
+      "web_search": { "enabled": false },
+      "grok_search": { "enabled": true },
+      "data_extraction": { "enabled": false },
+      "math_operations": { "enabled": false },
+      "document_creation": { "enabled": false },
+      "notifications": { "enabled": false },
+      "scheduling": { "enabled": false }
+    }
   }
 }

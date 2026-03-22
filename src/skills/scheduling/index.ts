@@ -1,11 +1,70 @@
 /**
  * Scheduling Skill Implementation
  * Manages scheduled task execution
+ *
+ * This skill uses its own database connection independent of the web API.
+ * Database path is configurable via SCHEDULES_DB_PATH environment variable.
  */
 
-import { getDatabase } from '../api/src/database';
-import { eventBus } from '../api/src/websocket';
+import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import fs from 'fs';
+
+// Database singleton
+let db: Database.Database | null = null;
+
+/**
+ * Get or initialize the database connection
+ */
+function getDatabase(): Database.Database {
+  if (!db) {
+    const dbPath = process.env.SCHEDULES_DB_PATH || '/app/data/schedules.db';
+    const dbDir = path.dirname(dbPath);
+
+    // Ensure directory exists
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    db = new Database(dbPath);
+
+    // Enable WAL mode for better concurrency
+    db.pragma('journal_mode = WAL');
+
+    // Create tables if not exist
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schedules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        cron_expression TEXT NOT NULL,
+        task_template TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_run TIMESTAMP,
+        next_run TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
+    `);
+
+    console.log('Scheduling database initialized at', dbPath);
+  }
+
+  return db;
+}
+
+/**
+ * Close database connection (for cleanup)
+ */
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
 
 interface ScheduleParams {
   mode: 'cron' | 'interval' | 'once';
@@ -31,7 +90,7 @@ interface ScheduleResult {
 
 // Create a cron-based schedule
 function createCronSchedule(expression: string, task: ScheduleParams['task']): ScheduleResult {
-  const db = getDatabase();
+  const database = getDatabase();
   const id = randomUUID();
 
   // Validate cron expression (basic validation)
@@ -48,7 +107,7 @@ function createCronSchedule(expression: string, task: ScheduleParams['task']): S
   const nextRun = calculateNextRun(expression);
 
   try {
-    const stmt = db.prepare(`
+    const stmt = database.prepare(`
       INSERT INTO schedules (id, name, description, cron_expression, task_template, enabled)
       VALUES (?, ?, ?, ?, ?, 1)
     `);
@@ -78,7 +137,7 @@ function createCronSchedule(expression: string, task: ScheduleParams['task']): S
 
 // Create an interval-based schedule
 function createIntervalSchedule(intervalSeconds: number, task: ScheduleParams['task']): ScheduleResult {
-  const db = getDatabase();
+  const database = getDatabase();
   const id = randomUUID();
 
   if (intervalSeconds < 60) {
@@ -99,7 +158,7 @@ function createIntervalSchedule(intervalSeconds: number, task: ScheduleParams['t
     // Store as a special interval format in cron_expression field
     const intervalCron = `INTERVAL_${intervalSeconds}`;
 
-    const stmt = db.prepare(`
+    const stmt = database.prepare(`
       INSERT INTO schedules (id, name, description, cron_expression, task_template, enabled)
       VALUES (?, ?, ?, ?, ?, 1)
     `);
@@ -129,7 +188,7 @@ function createIntervalSchedule(intervalSeconds: number, task: ScheduleParams['t
 
 // Create a one-time schedule
 function createOnceSchedule(datetime: string, task: ScheduleParams['task']): ScheduleResult {
-  const db = getDatabase();
+  const database = getDatabase();
   const id = randomUUID();
 
   const scheduledDate = new Date(datetime);
@@ -153,7 +212,7 @@ function createOnceSchedule(datetime: string, task: ScheduleParams['task']): Sch
     // Store as a special one-time format
     const onceCron = `ONCE_${datetime}`;
 
-    const stmt = db.prepare(`
+    const stmt = database.prepare(`
       INSERT INTO schedules (id, name, description, cron_expression, task_template, enabled)
       VALUES (?, ?, ?, ?, ?, 1)
     `);
@@ -182,22 +241,22 @@ function createOnceSchedule(datetime: string, task: ScheduleParams['task']): Sch
 }
 
 // List all schedules
-function listSchedules(): any[] {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM schedules ORDER BY created_at DESC').all();
+export function listSchedules(): any[] {
+  const database = getDatabase();
+  return database.prepare('SELECT * FROM schedules ORDER BY created_at DESC').all();
 }
 
 // Delete a schedule
-function deleteSchedule(id: string): { success: boolean; message: string } {
-  const db = getDatabase();
+export function deleteSchedule(id: string): { success: boolean; message: string } {
+  const database = getDatabase();
 
-  const existing = db.prepare('SELECT id FROM schedules WHERE id = ?').get(id);
+  const existing = database.prepare('SELECT id FROM schedules WHERE id = ?').get(id);
   if (!existing) {
     return { success: false, message: 'Schedule not found' };
   }
 
   try {
-    db.prepare('DELETE FROM schedules WHERE id = ?').run(id);
+    database.prepare('DELETE FROM schedules WHERE id = ?').run(id);
     return { success: true, message: `Schedule ${id} deleted` };
   } catch (error) {
     return {
@@ -247,8 +306,5 @@ export function scheduling(params: ScheduleParams): ScheduleResult {
       return { success: false, scheduleId: '', message: `Unknown mode: ${mode}` };
   }
 }
-
-// Export additional functions
-export { listSchedules, deleteSchedule };
 
 export default scheduling;
