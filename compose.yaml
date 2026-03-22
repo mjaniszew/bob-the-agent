@@ -4,7 +4,7 @@ services:
   # ===========================================
   ollama:
     image: ollama/ollama:latest
-    container_name: mini-agent-ollama
+    container_name: bob-the-agent-ollama
     restart: unless-stopped
     ports:
       - "11434:11434"
@@ -32,7 +32,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.agent
-    container_name: mini-agent
+    container_name: bob-the-agent
     restart: unless-stopped
     depends_on:
       ollama:
@@ -43,6 +43,7 @@ services:
       - NODE_ENV=production
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - XAI_API_KEY=${XAI_API_KEY}
     volumes:
       - agent_results:/app/results:rw
       - agent_user_files:/app/user-files:ro
@@ -64,7 +65,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.web
-    container_name: mini-agent-web
+    container_name: bob-the-agent-web
     restart: unless-stopped
     depends_on:
       agent:
@@ -106,4 +107,4 @@ volumes:
 # ===========================================
 networks:
   default:
-    name: mini-agent-network
+    name: bob-the-agent-network

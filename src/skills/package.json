@@ -1,9 +1,9 @@
 {
-  "name": "mini-agent-skills",
+  "name": "bob-the-agent-skills",
   "version": "1.0.0",
   "description": "Skills for Mini Agent",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc"
   },

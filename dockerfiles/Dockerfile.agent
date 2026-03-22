@@ -10,8 +10,7 @@ ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Environment setup
-ENV NODE_ENV=production \
-    DEBIAN_FRONTEND=noninteractive \
+ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/node
 
 # Install system dependencies (python, make, g++ for native modules like better-sqlite3)
@@ -32,61 +31,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g openclaw@${OPENCLAW_VERSION}
 
 # Create application directories
-RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills-dist /app/cli \
+RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts \
     && chown -R node:node /app
 
-# Set working directory for skills build
-WORKDIR /app
-
-# Copy skills package files first for dependency caching
-COPY --chown=node:node ./src/skills/package.json /tmp/skills-build/package.json
-COPY --chown=node:node ./src/skills/tsconfig.json /tmp/skills-build/tsconfig.json
-
-# Install skills dependencies (including better-sqlite3)
-RUN cd /tmp/skills-build && npm install --production=false
-
-# Copy skills source code
-COPY --chown=node:node ./src/skills/ /tmp/skills-build/
-
-# Build skills (output goes to ./dist relative to tsconfig)
-RUN cd /tmp/skills-build && npm run build
-
-# Move built files to final location (preserving directory structure)
-# TypeScript compiles to /tmp/skills-build/dist/ with structure like:
-#   dist/web-search/index.js
-#   dist/grok-search/index.js
-#   etc.
-RUN mkdir -p /app/skills-dist && \
-    cp -r /tmp/skills-build/dist/* /app/skills-dist/ && \
-    # Copy node_modules for better-sqlite3 and other dependencies
-    cp -r /tmp/skills-build/node_modules /app/skills-dist/ && \
-    # Cleanup build directory
-    rm -rf /tmp/skills-build
-
-# Copy skill-runner script
-COPY --chown=node:node ./src/scripts/skill-runner.mjs /app/cli/skill-runner.mjs
-RUN chmod +x /app/cli/skill-runner.mjs
-
-# Copy configuration and script files
+# Copy application files
 COPY --chown=node:node ./src/config/ /app/config/
 COPY --chown=node:node ./src/scripts/ /app/scripts/
+COPY --chown=node:node ./src/skills/ /app/skills/
+RUN chmod +x /app/scripts/skill-runner.mjs
 
-# Copy OpenClaw skill definitions (SKILL.md files) to skills directory
-RUN mkdir -p /app/skills/web-search \
-    /app/skills/grok-search \
-    /app/skills/data-extraction \
-    /app/skills/math-operations \
-    /app/skills/document-creation \
-    /app/skills/notifications \
-    /app/skills/scheduling
+# Set working directory for skills build
+WORKDIR /app/skills
 
-COPY --chown=node:node ./src/skills/web-search/SKILL.md /app/skills/web-search/SKILL.md
-COPY --chown=node:node ./src/skills/grok-search/SKILL.md /app/skills/grok-search/SKILL.md
-COPY --chown=node:node ./src/skills/data-extraction/SKILL.md /app/skills/data-extraction/SKILL.md
-COPY --chown=node:node ./src/skills/math-operations/SKILL.md /app/skills/math-operations/SKILL.md
-COPY --chown=node:node ./src/skills/document-creation/SKILL.md /app/skills/document-creation/SKILL.md
-COPY --chown=node:node ./src/skills/notifications/SKILL.md /app/skills/notifications/SKILL.md
-COPY --chown=node:node ./src/skills/scheduling/SKILL.md /app/skills/scheduling/SKILL.md
+# Install skills dependencies and build skills
+RUN npm install 
+RUN npm run build
 
 # Prepare OpenClaw config directory
 RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/

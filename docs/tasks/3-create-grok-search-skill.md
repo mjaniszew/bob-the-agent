@@ -4,7 +4,7 @@ Create skill along with all required code / app in order to enable openclaw to u
 
 ## Definition of Done
 1. Plan for development is prepared and saved as a plan file in `docs/plans`. Plan should cover these areas:
-- web search implementation using Grok Search API according to web search features described in `docs/features/SKILLS.md`. It should cover acual openclaw skill implementation, along with proper config section in `openclaw.json.template`, and if necessary with additional application to be runned by skill in order to provide search results through Grok Search API, unless it's already achevable by some openclaw configuration, or plugin
+- web search implementation using Grok Search API according to web search features described in `docs/features/SKILLS.md`. It should cover acual openclaw skill implementation, along with proper config section in `openclaw.template.json`, and if necessary with additional application to be runned by skill in order to provide search results through Grok Search API, unless it's already achevable by some openclaw configuration, or plugin
 - proper tests are prepared in order to test implementation functionality. Tests should fail before implementation, and pass after implementation of functionality
 2. Tests are created according plan, and they fail untill Skill is fully implemented.
 2. Skill is developed according the plan.

@@ -50,7 +50,7 @@
    ```
 3. Pull a model:
    ```bash
-   docker exec mini-agent-ollama ollama pull llama3.2
+   docker exec bob-the-agent-ollama ollama pull llama3.2
    ```
 
 #### Model Not Found
@@ -60,11 +60,11 @@
 **Solutions**:
 1. List available models:
    ```bash
-   docker exec mini-agent-ollama ollama list
+   docker exec bob-the-agent-ollama ollama list
    ```
 2. Pull the model:
    ```bash
-   docker exec mini-agent-ollama ollama pull llama3.2
+   docker exec bob-the-agent-ollama ollama pull llama3.2
    ```
 3. Check model name spelling
 
@@ -91,7 +91,7 @@
 2. Verify OpenClaw config was generated: check logs for "First run: openclaw.json generated"
 3. Check Ollama connection:
    ```bash
-   docker exec mini-agent ping ollama
+   docker exec bob-the-agent ping ollama
    ```
 4. Verify gateway port is available
 
@@ -174,7 +174,7 @@
 1. Check Docker network:
    ```bash
    docker network ls
-   docker network inspect mini-agent-network
+   docker network inspect bob-the-agent-network
    ```
 2. Verify service names match in config
 3. Recreate network:
@@ -205,20 +205,20 @@ docker compose logs -f agent
 docker compose ps
 
 # Inspect container
-docker inspect mini-agent
+docker inspect bob-the-agent
 
 # Check resource usage
 docker stats
 
 # Enter container shell
-docker exec -it mini-agent bash
+docker exec -it bob-the-agent bash
 
 # Test API endpoints
 curl http://localhost:18789/healthz
 curl http://localhost:3001/api/status
 
 # Check Ollama
-docker exec mini-agent-ollama ollama list
+docker exec bob-the-agent-ollama ollama list
 ```
 
 ## Getting Help

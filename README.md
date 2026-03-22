@@ -23,7 +23,7 @@ A containerized AI agent that runs 24/7 autonomously via Docker/Docker Compose. 
 
 ```bash
 git clone <repository-url>
-cd mini-agent-docker
+cd bob-the-agent-docker
 cp .env.template .env
 # Edit .env with your configuration
 ```
@@ -46,7 +46,7 @@ Default credentials:
 
 ```bash
 # Pull the default model
-docker exec mini-agent-ollama ollama pull llama3.2
+docker exec bob-the-agent-ollama ollama pull llama3.2
 ```
 
 ## Architecture
@@ -94,7 +94,7 @@ docker exec mini-agent-ollama ollama pull llama3.2
 
 ```bash
 # Connect to agent container
-docker exec -it mini-agent bash
+docker exec -it bob-the-agent bash
 
 # Add a task
 openclaw task add "Search for latest AI news"
@@ -252,7 +252,7 @@ Schedule recurring tasks.
 ### Project Structure
 
 ```
-mini-agent-docker/
+bob-the-agent-docker/
 ├── docker-compose.yml       # Service orchestration
 ├── dockerfiles/
 │   ├── Dockerfile.agent     # Agent container
@@ -304,7 +304,7 @@ npm test
 docker compose logs ollama
 
 # Pull a model manually
-docker exec mini-agent-ollama ollama pull llama3.2
+docker exec bob-the-agent-ollama ollama pull llama3.2
 ```
 
 ### Agent container not starting

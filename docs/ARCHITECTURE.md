@@ -51,7 +51,7 @@ The agent container uses a two-stage startup process:
 │         └── NO  → Run generate-config.mjs                 │
 │                    │                                       │
 │  2. generate-config.mjs                                   │
-│     ├── Read openclaw.json.template                       │
+│     ├── Read openclaw.template.json                       │
 │     ├── Substitute ${VAR_NAME} with env vars              │
 │     ├── Write to /home/node/.openclaw/openclaw.json       │
 │     └── Continue to agent startup                         │
@@ -65,7 +65,7 @@ The agent container uses a two-stage startup process:
 
 | File | Purpose |
 |------|---------|
-| `src/config/openclaw.json.template` | Source template with `${VAR}` placeholders |
+| `src/config/openclaw.template.json` | Source template with `${VAR}` placeholders |
 | `src/scripts/app-entrypoint.sh` | Entry point script that checks for existing config |
 | `src/scripts/generate-config.mjs` | Generates runtime config from template |
 | `/home/node/.openclaw/openclaw.json` | Generated config (inside container) |

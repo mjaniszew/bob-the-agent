@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/cli/skill-runner.js --skill web-search --params '{"query":"your search term"}'
+node /app/scripts/skill-runner.js --skill web-search --params '{"query":"your search term"}'
 ```
 
 ## Parameters
@@ -39,17 +39,17 @@ node /app/cli/skill-runner.js --skill web-search --params '{"query":"your search
 
 ### Basic Search
 ```bash
-node /app/cli/skill-runner.js --skill web-search --params '{"query":"latest AI news"}'
+node /app/scripts/skill-runner.js --skill web-search --params '{"query":"latest AI news"}'
 ```
 
 ### Multi-source Search
 ```bash
-node /app/cli/skill-runner.js --skill web-search --params '{"query":"TypeScript best practices","sources":["google","duckduckgo"],"maxResults":20}'
+node /app/scripts/skill-runner.js --skill web-search --params '{"query":"TypeScript best practices","sources":["google","duckduckgo"],"maxResults":20}'
 ```
 
 ### Deep Search
 ```bash
-node /app/cli/skill-runner.js --skill web-search --params '{"query":"detailed tutorial","deep":true,"maxResults":5}'
+node /app/scripts/skill-runner.js --skill web-search --params '{"query":"detailed tutorial","deep":true,"maxResults":5}'
 ```
 
 ## Output

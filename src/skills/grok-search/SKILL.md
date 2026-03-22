@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/cli/skill-runner.js --skill grok-search --params '{"query":"your search term","mode":"web"}'
+node /app/scripts/skill-runner.js --skill grok-search --params '{"query":"your search term","mode":"web"}'
 ```
 
 ## Parameters
@@ -46,17 +46,17 @@ node /app/cli/skill-runner.js --skill grok-search --params '{"query":"your searc
 
 ### Web Search
 ```bash
-node /app/cli/skill-runner.js --skill grok-search --params '{"query":"AI developments 2026","mode":"web"}'
+node /app/scripts/skill-runner.js --skill grok-search --params '{"query":"AI developments 2026","mode":"web"}'
 ```
 
 ### X/Twitter Search
 ```bash
-node /app/cli/skill-runner.js --skill grok-search --params '{"query":"breaking news","mode":"x","maxResults":20}'
+node /app/scripts/skill-runner.js --skill grok-search --params '{"query":"breaking news","mode":"x","maxResults":20}'
 ```
 
 ### Combined Search with Filters
 ```bash
-node /app/cli/skill-runner.js --skill grok-search --params '{"query":"technology news","mode":"both","fromDate":"2026-01-01","maxResults":15}'
+node /app/scripts/skill-runner.js --skill grok-search --params '{"query":"technology news","mode":"both","fromDate":"2026-01-01","maxResults":15}'
 ```
 
 ## Output

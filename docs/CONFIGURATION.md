@@ -38,9 +38,9 @@ AWS_REGION=us-east-1
 NOTIFICATION_EMAIL=
 ```
 
-### openclaw.json.template
+### openclaw.template.json
 
-Agent behavior configuration template located at `src/config/openclaw.json.template`.
+Agent behavior configuration template located at `src/config/openclaw.template.json`.
 
 **How it works:**
 1. At container startup, `app-entrypoint.sh` checks if OpenClaw config exists
@@ -177,10 +177,10 @@ services:
 
 1. Pull additional models:
    ```bash
-   docker exec mini-agent-ollama ollama pull codellama
+   docker exec bob-the-agent-ollama ollama pull codellama
    ```
 
-2. Configure in `openclaw.json.template`:
+2. Configure in `openclaw.template.json`:
    ```json
    "providers": {
      "ollama": {
@@ -200,7 +200,7 @@ services:
    ANTHROPIC_API_KEY=sk-ant-...
    ```
 
-2. Add provider configuration to `openclaw.json.template`:
+2. Add provider configuration to `openclaw.template.json`:
    ```json
    "models": {
      "providers": {

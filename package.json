@@ -1,5 +1,5 @@
 {
-  "name": "mini-agent",
+  "name": "bob-the-agent",
   "version": "1.0.0",
   "description": "Containerized AI Agent running 24/7",
   "private": true,
