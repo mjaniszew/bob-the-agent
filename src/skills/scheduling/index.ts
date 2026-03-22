@@ -3,8 +3,8 @@
  * Manages scheduled task execution
  */
 
-import { getDatabase } from '../api/src/database';
-import { eventBus } from '../api/src/websocket';
+import { getDatabase } from '../../api/src/database';
+import { eventBus } from '../../api/src/websocket';
 import { randomUUID } from 'crypto';
 
 interface ScheduleParams {
