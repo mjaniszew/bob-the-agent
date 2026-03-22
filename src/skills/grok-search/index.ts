@@ -104,7 +104,7 @@ async function grokWebSearch(params: GrokWebSearchParams): Promise<SearchResult>
       return { results: [], error: errorMessage };
     }
 
-    const data: GrokSearchResponse = await response.json();
+    const data = await response.json() as GrokSearchResponse;
 
     return {
       results: (data.results || []).map(result => ({
@@ -178,7 +178,7 @@ async function grokXSearch(params: GrokXSearchParams): Promise<SearchResult> {
       return { results: [], error: errorMessage };
     }
 
-    const data: GrokSearchResponse = await response.json();
+    const data = await response.json() as GrokSearchResponse;
 
     return {
       results: (data.results || []).map(result => ({

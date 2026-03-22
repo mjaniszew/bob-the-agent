@@ -40,7 +40,7 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
       throw new Error(`DuckDuckGo API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, any>;
 
     // Extract related topics
     if (data.RelatedTopics) {
@@ -94,7 +94,7 @@ async function searchGoogle(query: string, maxResults: number): Promise<SearchRe
       throw new Error(`Google API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, any>;
 
     if (data.items) {
       for (const item of data.items) {
@@ -139,7 +139,7 @@ async function searchBing(query: string, maxResults: number): Promise<SearchResu
       throw new Error(`Bing API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, any>;
 
     if (data.webPages?.value) {
       for (const page of data.webPages.value) {

@@ -3,13 +3,13 @@
  * Exports all available skills for the agent
  */
 
-export { webSearch } from './web-search';
-export { dataExtraction } from './data-extraction';
-export { mathOperations } from './math-operations';
-export { documentCreation } from './document-creation';
-export { notifications } from './notifications';
-export { scheduling, listSchedules, deleteSchedule } from './scheduling';
-export { grokSearch } from './grok-search';
+export { webSearch } from './web-search/index.js';
+export { dataExtraction } from './data-extraction/index.js';
+export { mathOperations } from './math-operations/index.js';
+export { documentCreation } from './document-creation/index.js';
+export { notifications } from './notifications/index.js';
+export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
+export { grokSearch } from './grok-search/index.js';
 
 // Skill metadata for registration
 export const skillRegistry = {
@@ -116,31 +116,31 @@ export async function executeSkill(skillName: string, params: Record<string, any
   // Execute the skill
   switch (skillName) {
     case 'web-search': {
-      const { webSearch } = await import('./web-search');
+      const { webSearch } = await import('./web-search/index.js');
       return webSearch(params as any);
     }
     case 'data-extraction': {
-      const { dataExtraction } = await import('./data-extraction');
+      const { dataExtraction } = await import('./data-extraction/index.js');
       return dataExtraction(params as any);
     }
     case 'math-operations': {
-      const { mathOperations } = await import('./math-operations');
+      const { mathOperations } = await import('./math-operations/index.js');
       return mathOperations(params as any);
     }
     case 'document-creation': {
-      const { documentCreation } = await import('./document-creation');
+      const { documentCreation } = await import('./document-creation/index.js');
       return documentCreation(params as any);
     }
     case 'notifications': {
-      const { notifications } = await import('./notifications');
+      const { notifications } = await import('./notifications/index.js');
       return notifications(params as any);
     }
     case 'scheduling': {
-      const { scheduling } = await import('./scheduling');
+      const { scheduling } = await import('./scheduling/index.js');
       return scheduling(params as any);
     }
     case 'grok-search': {
-      const { grokSearch } = await import('./grok-search');
+      const { grokSearch } = await import('./grok-search/index.js');
       return grokSearch(params as any);
     }
     default:
