@@ -5,7 +5,7 @@
 FROM node:24-bookworm-slim
 
 # Build arguments for customization
-ARG OPENCLAW_VERSION=2026.3.13
+ARG OPENCLAW_VERSION=2026.3.22
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
@@ -40,12 +40,22 @@ COPY --chown=node:node ./src/scripts/ /app/scripts/
 COPY --chown=node:node ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/skill-runner.mjs
 
+# Copy agent workspaces
+COPY --chown=node:node ./src/agents/main/ /app/workspace/main/
+COPY --chown=node:node ./src/agents/web-searcher/ /app/workspace/web-searcher/
+COPY --chown=node:node ./src/agents/data-extractor/ /app/workspace/data-extractor/
+COPY --chown=node:node ./src/agents/research-analyzer/ /app/workspace/research-analyzer/
+COPY --chown=node:node ./src/agents/document-creator/ /app/workspace/document-creator/
+
 # Set working directory for skills build
 WORKDIR /app/skills
 
 # Install skills dependencies and build skills
 RUN npm install 
 RUN npm run build
+
+# Set working directory to app for further actions
+WORKDIR /app
 
 # Prepare OpenClaw config directory
 RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/

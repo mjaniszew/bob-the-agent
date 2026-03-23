@@ -1,11 +1,11 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.3.22",
-    "lastTouchedAt": "2026-03-23T16:12:54.868Z"
+    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedAt": "2026-03-17T14:23:19.030Z"
   },
   "wizard": {
-    "lastRunAt": "2026-03-23T16:12:54.830Z",
-    "lastRunVersion": "2026.3.22",
+    "lastRunAt": "2026-03-17T14:01:51.332Z",
+    "lastRunVersion": "2026.3.13",
     "lastRunCommand": "configure",
     "lastRunMode": "local"
   },
@@ -78,46 +78,70 @@
     }
   },
   "agents": {
-    "defaults": {
-      "model": {
+    "main": {
+      "defaults": {
         "primary": "ollama/minimax-m2.7:cloud",
-        "fallbacks": [
-          "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
-        ]
+        "fallbacks": ["sorc/qwen3.5-claude-4.6-opus-q4:0.8b"]
       },
       "models": {
-        "ollama/minimax-m2.7:cloud": {
-          "alias": "minimax-m2.7"
-        },
-        "sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {
-          "alias": "qwen3.5-claude-local"
-        }
+        "ollama/minimax-m2.7:cloud": { "alias": "minimax-m2.7" },
+        "sorc/qwen3.5-claude-4.6-opus-q4:0.8b": { "alias": "qwen3.5-claude-local" }
       },
       "workspace": "/app/workspace/main",
-      "maxConcurrent": 3
-    },
-    "list": [
-      {
-        "id": "main",
-        "default": true,
-        "workspace": "/app/workspace/main",
-        "agentDir": "/home/node/.openclaw/agents/main/agent",
-        "model": "ollama/minimax-m2.7:cloud",
-        "thinkingDefault": "high",
-        "reasoningDefault": "on",
-        "fastModeDefault": false
-      },
-      {
-        "id": "web-searcher",
-        "name": "web-searcher",
-        "workspace": "/app/workspace/web-searcher",
-        "agentDir": "/home/node/.openclaw/agents/web-searcher/agent",
-        "model": "ollama/minimax-m2.7:cloud",
-        "thinkingDefault": "high",
-        "reasoningDefault": "on",
-        "fastModeDefault": false
+      "subagents": {
+        "allowAgents": ["web-searcher", "data-extractor", "research-analyzer", "document-creator"],
+        "maxSpawnDepth": 2,
+        "maxConcurrent": 4
       }
-    ]
+    },
+    "web-searcher": {
+      "model": {
+        "primary": "ollama/minimax-m2.7:cloud"
+      },
+      "models": {
+        "ollama/minimax-m2.7:cloud": {}
+      },
+      "workspace": "/app/workspace/web-searcher",
+      "subagents": {
+        "allowAgents": []
+      }
+    },
+    "data-extractor": {
+      "model": {
+        "primary": "ollama/minimax-m2.7:cloud"
+      },
+      "models": {
+        "ollama/minimax-m2.7:cloud": {}
+      },
+      "workspace": "/app/workspace/data-extractor",
+      "subagents": {
+        "allowAgents": []
+      }
+    },
+    "research-analyzer": {
+      "model": {
+        "primary": "ollama/minimax-m2.7:cloud"
+      },
+      "models": {
+        "ollama/minimax-m2.7:cloud": {}
+      },
+      "workspace": "/app/workspace/research-analyzer",
+      "subagents": {
+        "allowAgents": ["web-searcher", "data-extractor"]
+      }
+    },
+    "document-creator": {
+      "model": {
+        "primary": "ollama/minimax-m2.7:cloud"
+      },
+      "models": {
+        "ollama/minimax-m2.7:cloud": {}
+      },
+      "workspace": "/app/workspace/document-creator",
+      "subagents": {
+        "allowAgents": []
+      }
+    }
   },
   "tools": {
     "profile": "coding"
@@ -136,10 +160,7 @@
       "enabled": true,
       "token": "${DISCORD_BOT_TOKEN}",
       "groupPolicy": "open",
-      "streaming": "off",
-      "dm": {
-        "enabled": true
-      }
+      "streaming": "off"
     }
   },
   "gateway": {
@@ -154,40 +175,26 @@
       "resetOnExit": false
     }
   },
+  "plugins": {
+    "entries": {
+      "discord": {
+        "enabled": true
+      }
+    }
+  },
   "skills": {
     "install": {
       "preferBrew": true,
       "nodeManager": "npm"
     },
     "entries": {
-      "web_search": {
-        "enabled": false
-      },
-      "grok_search": {
-        "enabled": true
-      },
-      "data_extraction": {
-        "enabled": false
-      },
-      "math_operations": {
-        "enabled": false
-      },
-      "document_creation": {
-        "enabled": false
-      },
-      "notifications": {
-        "enabled": false
-      },
-      "scheduling": {
-        "enabled": false
-      }
-    }
-  },
-  "plugins": {
-    "entries": {
-      "discord": {
-        "enabled": true
-      }
+      "web_search": { "enabled": false },
+      "grok_search": { "enabled": true },
+      "data_extraction": { "enabled": false },
+      "math_operations": { "enabled": false },
+      "document_creation": { "enabled": false },
+      "notifications": { "enabled": false },
+      "scheduling": { "enabled": false }
     }
   }
 }
