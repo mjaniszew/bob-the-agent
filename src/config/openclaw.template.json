@@ -26,8 +26,8 @@
         "api": "ollama",
         "models": [
           {
-            "id": "glm-4.7-flash",
-            "name": "glm-4.7-flash",
+            "id": "sorc/qwen3.5-claude-4.6-opus-q4:0.8b",
+            "name": "sorc/qwen3.5-claude-4.6-opus-q4:0.8b",
             "reasoning": false,
             "input": [
               "text"
@@ -38,7 +38,7 @@
               "cacheRead": 0,
               "cacheWrite": 0
             },
-            "contextWindow": 128000,
+            "contextWindow": 256000,
             "maxTokens": 8192
           },
           {
@@ -54,7 +54,23 @@
               "cacheRead": 0,
               "cacheWrite": 0
             },
-            "contextWindow": 262144,
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "minimax-m2.7:cloud",
+            "name": "minimax-m2.7:cloud",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 200000,
             "maxTokens": 8192
           }
         ]
@@ -64,12 +80,23 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/kimi-k2.5:cloud"
+        "primary": "ollama/minimax-m2.7:cloud"
       },
       "models": {
-        "ollama/kimi-k2.5:cloud": {}
+        "ollama/minimax-m2.7:cloud": {},
+        "sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {}
       },
-      "workspace": "/app/workspace"
+      "workspace": "/app/workspace/defaults"
+    },
+    "search_agent": {
+      "model": {
+        "primary": "ollama/minimax-m2.7:cloud"
+      },
+      "models": {
+        "ollama/minimax-m2.7:cloud": {},
+        "sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {}
+      },
+      "workspace": "/app/workspace/search_agent"
     }
   },
   "tools": {
