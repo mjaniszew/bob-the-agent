@@ -256,13 +256,11 @@ bob-the-agent-docker/
 ├── docker-compose.yml       # Service orchestration
 ├── dockerfiles/
 │   ├── Dockerfile.agent     # Agent container
-│   ├── Dockerfile.web       # Web interface container
-│   ├── nginx.conf           # Nginx configuration
-│   └── nginx-default.conf   # Site configuration
+│   └── Dockerfile.web       # Web interface container
 ├── src/
 │   ├── api/                 # Node.js API server
 │   ├── frontend/            # React web interface
-│   ├── config/              # OpenClaw configuration
+│   ├── config/              # OpenClaw & Nginx configuration
 │   ├── skills/              # Skill implementations
 │   └── discord/             # Discord bot
 ├── volumes/

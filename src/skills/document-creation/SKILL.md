@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/scripts/skill-runner.js --skill document-creation --params '{"format":"pdf","template":"report","language":"en","content":{"title":"My Report"}}'
+node /app/scripts/skill-runner.mjs --skill document-creation --params '{"format":"pdf","template":"report","language":"en","content":{"title":"My Report"}}'
 ```
 
 ## Parameters
@@ -61,7 +61,7 @@ Each section in `content.sections`:
 
 ### Create a Report
 ```bash
-node /app/scripts/skill-runner.js --skill document-creation --params '{
+node /app/scripts/skill-runner.mjs --skill document-creation --params '{
   "format": "pdf",
   "template": "report",
   "language": "en",
@@ -78,7 +78,7 @@ node /app/scripts/skill-runner.js --skill document-creation --params '{
 
 ### Create an Article
 ```bash
-node /app/scripts/skill-runner.js --skill document-creation --params '{
+node /app/scripts/skill-runner.mjs --skill document-creation --params '{
   "format": "docx",
   "template": "article",
   "content": {
