@@ -15,7 +15,7 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Check skill documentation for capabilities
 
 ### grok_search Skill
-- Specialized for X/Twitter content
+- Specialized for X/Twitter content, and web search using Grok
 - Real-time discussions and trends
 - Use when you need social media context
 

@@ -6,6 +6,10 @@ if [ ! -f /home/node/.openclaw/openclaw.json ]; then
   node /app/scripts/generate-config.mjs
 fi
 
+# Set up skills directory for OpenClaw
+# OpenClaw looks for skills in ~/.openclaw/skills/ or /app/skills/
+mkdir -p /home/node/.openclaw/skills
+
 # Copy skill definitions to OpenClaw skills directory if not already there
 # This ensures OpenClaw can discover the skills
 for skill_dir in /app/skills/*/; do

@@ -135,6 +135,39 @@
         "thinkingDefault": "high",
         "reasoningDefault": "on",
         "fastModeDefault": false
+      },
+      {
+        "id": "research-analyzer",
+        "name": "research-analyzer",
+        "workspace": "/app/workspace/research-analyzer",
+        "agentDir": "/home/node/.openclaw/agents/research-analyzer/agent",
+        "model": {
+          "primary": "ollama/minimax-m2.7:cloud",
+          "fallbacks": [
+            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+          ]
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "fastModeDefault": false,
+        "subagents": {
+          "allowAgents": ["web-searcher", "data-extractor"]
+        }
+      },
+      {
+        "id": "data-extractor",
+        "name": "data-extractor",
+        "workspace": "/app/workspace/data-extractor",
+        "agentDir": "/home/node/.openclaw/agents/data-extractor/agent",
+        "model": {
+          "primary": "ollama/minimax-m2.7:cloud",
+          "fallbacks": [
+            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+          ]
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "fastModeDefault": false
       }
     ]
   },
@@ -189,7 +222,7 @@
         "enabled": true
       },
       "data_extraction": {
-        "enabled": false
+        "enabled": true
       },
       "math_operations": {
         "enabled": false

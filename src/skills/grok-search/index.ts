@@ -213,7 +213,7 @@ export async function grokSearch(params: GrokSearchParams): Promise<GrokSearchOu
   const startTime = Date.now();
   const apiKey = process.env.XAI_API_KEY;
 
-    console.log("Doing Grok Search");
+  console.log("Doing Grok Search");
 
   if (!apiKey) {
     return {
