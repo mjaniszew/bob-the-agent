@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/scripts/skill-runner.js --skill scheduling --params '{"mode":"cron","schedule":{"expression":"0 9 * * *"},"task":{"skill":"web-search","parameters":{"query":"daily news"}}}'
+node /app/scripts/skill-runner.mjs --skill scheduling --params '{"mode":"cron","schedule":{"expression":"0 9 * * *"},"task":{"skill":"web-search","parameters":{"query":"daily news"}}}'
 ```
 
 ## Parameters
@@ -55,7 +55,7 @@ node /app/scripts/skill-runner.js --skill scheduling --params '{"mode":"cron","s
 
 ### Cron Schedule (Daily at 9 AM)
 ```bash
-node /app/scripts/skill-runner.js --skill scheduling --params '{
+node /app/scripts/skill-runner.mjs --skill scheduling --params '{
   "mode": "cron",
   "schedule": {"expression": "0 9 * * *"},
   "task": {
@@ -68,7 +68,7 @@ node /app/scripts/skill-runner.js --skill scheduling --params '{
 
 ### Interval Schedule (Every Hour)
 ```bash
-node /app/scripts/skill-runner.js --skill scheduling --params '{
+node /app/scripts/skill-runner.mjs --skill scheduling --params '{
   "mode": "interval",
   "schedule": {"interval": 3600},
   "task": {
@@ -81,7 +81,7 @@ node /app/scripts/skill-runner.js --skill scheduling --params '{
 
 ### One-time Schedule
 ```bash
-node /app/scripts/skill-runner.js --skill scheduling --params '{
+node /app/scripts/skill-runner.mjs --skill scheduling --params '{
   "mode": "once",
   "schedule": {"datetime": "2026-03-25T10:00:00Z"},
   "task": {

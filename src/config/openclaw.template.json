@@ -1,13 +1,7 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.3.22",
-    "lastTouchedAt": "2026-03-23T16:12:54.868Z"
-  },
-  "wizard": {
-    "lastRunAt": "2026-03-23T16:12:54.830Z",
-    "lastRunVersion": "2026.3.22",
-    "lastRunCommand": "configure",
-    "lastRunMode": "local"
+    "lastTouchedVersion": "2026.3.24",
+    "lastTouchedAt": "2026-03-27T15:24:58.280Z"
   },
   "auth": {
     "profiles": {
@@ -79,12 +73,6 @@
   },
   "agents": {
     "defaults": {
-      "model": {
-        "primary": "ollama/minimax-m2.7:cloud",
-        "fallbacks": [
-          "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
-        ]
-      },
       "models": {
         "ollama/minimax-m2.7:cloud": {
           "alias": "minimax-m2.7"
@@ -93,8 +81,11 @@
           "alias": "qwen3.5-claude-local"
         }
       },
-      "workspace": "/app/workspace/main",
-      "maxConcurrent": 3
+      "subagents": {
+        "maxSpawnDepth": 2,
+        "maxChildrenPerAgent": 5,
+        "maxConcurrent": 8
+      }
     },
     "list": [
       {
@@ -102,17 +93,45 @@
         "default": true,
         "workspace": "/app/workspace/main",
         "agentDir": "/home/node/.openclaw/agents/main/agent",
-        "model": "ollama/minimax-m2.7:cloud",
+        "model": {
+          "primary": "ollama/minimax-m2.7:cloud",
+          "fallbacks": [
+            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+          ]
+        },
         "thinkingDefault": "high",
         "reasoningDefault": "on",
-        "fastModeDefault": false
+        "fastModeDefault": false,
+        "subagents": {
+          "allowAgents": ["*"]
+        }
       },
       {
         "id": "web-searcher",
         "name": "web-searcher",
         "workspace": "/app/workspace/web-searcher",
         "agentDir": "/home/node/.openclaw/agents/web-searcher/agent",
-        "model": "ollama/minimax-m2.7:cloud",
+        "model": {
+          "primary": "ollama/minimax-m2.7:cloud",
+          "fallbacks": [
+            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+          ]
+        },
+        "thinkingDefault": "high",
+        "reasoningDefault": "on",
+        "fastModeDefault": false
+      },
+      {
+        "id": "document-creator",
+        "name": "document-creator",
+        "workspace": "/app/workspace/document-creator",
+        "agentDir": "/home/node/.openclaw/agents/document-creator/agent",
+        "model": {
+          "primary": "ollama/minimax-m2.7:cloud",
+          "fallbacks": [
+            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+          ]
+        },
         "thinkingDefault": "high",
         "reasoningDefault": "on",
         "fastModeDefault": false
@@ -120,7 +139,10 @@
     ]
   },
   "tools": {
-    "profile": "coding"
+    "profile": "full",
+    "deny": [
+      "gateway"
+    ]
   },
   "commands": {
     "native": "auto",
@@ -173,7 +195,7 @@
         "enabled": false
       },
       "document_creation": {
-        "enabled": false
+        "enabled": true
       },
       "notifications": {
         "enabled": false

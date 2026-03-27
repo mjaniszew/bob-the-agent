@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/scripts/skill-runner.js --skill notifications --params '{"channels":[{"type":"discord","webhook_url":"https://discord.com/api/webhooks/..."}],"message":{"title":"Alert","body":"Task completed"}}'
+node /app/scripts/skill-runner.mjs --skill notifications --params '{"channels":[{"type":"discord","webhook_url":"https://discord.com/api/webhooks/..."}],"message":{"title":"Alert","body":"Task completed"}}'
 ```
 
 ## Parameters
@@ -56,7 +56,7 @@ node /app/scripts/skill-runner.js --skill notifications --params '{"channels":[{
 
 ### Discord Notification
 ```bash
-node /app/scripts/skill-runner.js --skill notifications --params '{
+node /app/scripts/skill-runner.mjs --skill notifications --params '{
   "channels": [{"type": "discord", "webhook_url": "https://discord.com/api/webhooks/..."}],
   "message": {"title": "Task Complete", "body": "Your task has finished", "priority": "normal"}
 }'
@@ -64,7 +64,7 @@ node /app/scripts/skill-runner.js --skill notifications --params '{
 
 ### Email Notification
 ```bash
-node /app/scripts/skill-runner.js --skill notifications --params '{
+node /app/scripts/skill-runner.mjs --skill notifications --params '{
   "channels": [{"type": "email", "to": "user@example.com", "subject": "Report Ready"}],
   "message": {"title": "Report Generated", "body": "Your report is ready for download."}
 }'
@@ -72,7 +72,7 @@ node /app/scripts/skill-runner.js --skill notifications --params '{
 
 ### Multi-channel Notification
 ```bash
-node /app/scripts/skill-runner.js --skill notifications --params '{
+node /app/scripts/skill-runner.mjs --skill notifications --params '{
   "channels": [
     {"type": "discord", "webhook_url": "https://discord.com/api/webhooks/..."},
     {"type": "email", "to": "user@example.com"}

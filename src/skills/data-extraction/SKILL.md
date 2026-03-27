@@ -23,7 +23,7 @@ Use this skill when:
 Call the skill-runner with:
 
 ```bash
-node /app/scripts/skill-runner.js --skill data-extraction --params '{"source":{"type":"url","value":"https://example.com"}}'
+node /app/scripts/skill-runner.mjs --skill data-extraction --params '{"source":{"type":"url","value":"https://example.com"}}'
 ```
 
 ## Parameters
@@ -40,12 +40,12 @@ node /app/scripts/skill-runner.js --skill data-extraction --params '{"source":{"
 
 ### Extract from URL
 ```bash
-node /app/scripts/skill-runner.js --skill data-extraction --params '{"source":{"type":"url","value":"https://news.ycombinator.com"},"outputFormat":"markdown"}'
+node /app/scripts/skill-runner.mjs --skill data-extraction --params '{"source":{"type":"url","value":"https://news.ycombinator.com"},"outputFormat":"markdown"}'
 ```
 
 ### Extract Tables Only
 ```bash
-node /app/scripts/skill-runner.js --skill data-extraction --params '{"source":{"type":"url","value":"https://example.com/data"},"extract":["tables"],"outputFormat":"csv"}'
+node /app/scripts/skill-runner.mjs --skill data-extraction --params '{"source":{"type":"url","value":"https://example.com/data"},"extract":["tables"],"outputFormat":"csv"}'
 ```
 
 ## Output
