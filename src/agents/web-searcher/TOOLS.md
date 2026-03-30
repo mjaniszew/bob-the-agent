@@ -9,15 +9,22 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Returns search results with snippets and URLs
 - Use for current events, documentation, general queries
 
-### web_search Skill
+### web-search Skill
 - Structured search with specific requirements
 - May have additional filtering options
 - Check skill documentation for capabilities
 
-### grok_search Skill
+### grok-search Skill
 - Specialized for X/Twitter content, and web search using Grok
 - Real-time discussions and trends
 - Use when you need social media context
+
+### playwright Skill
+- Headless browser for website interaction and automation
+- Take screenshots for visual evidence
+- Use for JavaScript-heavy sites that WebFetch cannot parse
+- When specifically asked to use playwright
+- Run `playwright-cli --help` for available commands
 
 ## Search Tips
 

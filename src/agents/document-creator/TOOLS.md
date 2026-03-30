@@ -4,11 +4,15 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 ## Your Primary Tools
 
-### document_creation Skill
+### document-creation Skill
 - Create PDF, DOCX, and other document formats
 - Support for multiple languages
 - Template support for consistent formatting
 - Check skill documentation for available options
+
+### playwright Skill
+- Use as a fallback for pdf creation, use browser to save contents as pdf
+- Run `playwright-cli --help` for available commands
 
 ## Document Tips
 

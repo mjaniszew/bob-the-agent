@@ -1,9 +1,6 @@
 ---
-name: data_extraction
+name: data-extraction
 description: Extract structured data from URLs and various file formats
-version: 1.0.0
-trigger: "extract|scrape|parse|data from|content from"
-tools: [shell]
 ---
 
 # Data Extraction Skill

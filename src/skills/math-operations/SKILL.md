@@ -1,5 +1,5 @@
 ---
-name: math_operations
+name: math-operations
 description: Perform mathematical calculations and statistical analysis
 version: 1.0.0
 trigger: "calculate|compute|math|statistics|convert|evaluate"

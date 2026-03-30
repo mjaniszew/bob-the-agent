@@ -9,10 +9,17 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Returns HTML/markdown content from URLs
 - Use for fetching pages to extract data from
 
-### data_extraction Skill
+### data-extraction Skill
 - Specialized extraction capabilities
 - Structured data parsing
 - Check skill documentation for supported formats
+
+### playwright Skill
+- Headless browser for website interaction and automation
+- Take screenshots for visual evidence
+- Use for JavaScript-heavy sites that WebFetch cannot parse
+- When specifically asked to use playwright
+- Run `playwright-cli --help` for available commands
 
 ## Extraction Tips
 

@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install OpenClaw globally
 RUN npm install -g openclaw@${OPENCLAW_VERSION}
+RUN npm install -g @playwright/cli@latest
+RUN npx playwright install-deps
 
 # Create application directories
 RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts \
@@ -62,6 +64,7 @@ RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/
 USER 1000:1000
 # Set working directory to app for further actions
 WORKDIR /app
+RUN playwright-cli install --skills
 
 # Expose OpenClaw gateway port
 EXPOSE 18789

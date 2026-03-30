@@ -20,8 +20,8 @@
         "api": "ollama",
         "models": [
           {
-            "id": "sorc/qwen3.5-claude-4.6-opus-q4:0.8b",
-            "name": "sorc/qwen3.5-claude-4.6-opus-q4:0.8b",
+            "id": "qwen3.5:4b",
+            "name": "sorc/qwen3.5-claude-4.6-opus-q4:4b",
             "reasoning": true,
             "input": [
               "text"
@@ -77,7 +77,7 @@
         "ollama/minimax-m2.7:cloud": {
           "alias": "minimax-m2.7"
         },
-        "sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {
+        "ollama/sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {
           "alias": "qwen3.5-claude-local"
         }
       },
@@ -96,7 +96,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -114,7 +114,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -129,7 +129,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -144,7 +144,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -162,7 +162,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "sorc/qwen3.5-claude-4.6-opus-q4:0.8b"
+            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -215,19 +215,19 @@
       "nodeManager": "npm"
     },
     "entries": {
-      "web_search": {
+      "web-search": {
         "enabled": false
       },
-      "grok_search": {
+      "grok-search": {
         "enabled": true
       },
-      "data_extraction": {
+      "data-extraction": {
         "enabled": true
       },
-      "math_operations": {
+      "math-operations": {
         "enabled": false
       },
-      "document_creation": {
+      "document-creation": {
         "enabled": true
       },
       "notifications": {
@@ -235,6 +235,9 @@
       },
       "scheduling": {
         "enabled": false
+      },
+      "playwright": {
+        "enabled": true
       }
     }
   },
@@ -244,5 +247,8 @@
         "enabled": true
       }
     }
+  },
+  "browser": {
+    "enabled": true
   }
 }

@@ -1,9 +1,6 @@
 ---
-name: grok_search
+name: grok-search
 description: Search web and X.com (Twitter) using x.AI's Grok API for real-time information
-version: 1.0.0
-trigger: "grok|x search|twitter search|x.com|real-time search"
-tools: [shell]
 ---
 
 # Grok Search Skill
@@ -13,6 +10,7 @@ Use this skill to search the web and X.com (Twitter) using x.AI's Grok API. Prov
 ## When to Use
 
 Use this skill when:
+- When specifically asked to search the web using grok
 - You need real-time information from social media (X/Twitter)
 - You need current news and trends
 - You want to search both web and social media together

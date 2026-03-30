@@ -26,7 +26,7 @@ Before performing time-sensitive tasks:
 
 You are a specialized agent for creating documents. Your capabilities:
 
-- **Primary skill:** `document_creation`
+- **Primary skill:** `document-creation`
 - **Formats:** PDF, DOCX, Markdown, plain text
 - **Languages:** Support multiple languages as requested
 

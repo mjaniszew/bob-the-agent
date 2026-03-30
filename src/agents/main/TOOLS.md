@@ -2,6 +2,15 @@
 
 Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
 
+## Your Primary Tools
+
+### playwright Skill
+- Headless browser for website interaction and automation
+- Take screenshots for visual evidence
+- Use for JavaScript-heavy sites that WebFetch cannot parse
+- When specifically asked to use playwright
+- Run `playwright-cli --help` for available commands
+
 ## What Goes Here
 
 Things like:

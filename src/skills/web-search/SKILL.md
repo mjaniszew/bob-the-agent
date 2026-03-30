@@ -1,9 +1,6 @@
 ---
-name: web_search
+name: web-search
 description: Search the web using DuckDuckGo, Google, or Bing to find information
-version: 1.0.0
-trigger: "search|find|look up|google|bing|duckduckgo"
-tools: [shell]
 ---
 
 # Web Search Skill
