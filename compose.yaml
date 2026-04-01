@@ -45,9 +45,9 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - XAI_API_KEY=${XAI_API_KEY}
     volumes:
-      - agent_results:/app/results:rw
-      - agent_user_files:/app/user-files:ro
-      - agent_data:/app/data:rw
+      - ./volumes/results:${APP_BASE_PATH}/results:rw
+      - ./volumes/user-files:${APP_BASE_PATH}/user-files:ro
+      - ./volumes/data:${APP_BASE_PATH}/data:rw
       - agent_workspace:/app/workspace
     ports:
       - "18789:18789"  # OpenClaw gateway
@@ -73,12 +73,12 @@ services:
     environment:
       - AGENT_API_URL=http://agent:18789
       - NODE_ENV=production
-      - WEB_APP_BASE_PATH=${WEB_APP_BASE_PATH}
+      - WEB_APP_BASE_PATH=${APP_BASE_PATH}
       - WEB_DATABASE_PATH=${WEB_DATABASE_PATH}
       - WEB_USERNAME=${WEB_USERNAME}
       - WEB_PASSWORD=${WEB_PASSWORD}
     volumes:
-      - agent_results:/app/results:ro
+      - ./volumes/results:${APP_BASE_PATH}/results:ro
     ports:
       - "8080:80"
     healthcheck:
@@ -94,12 +94,6 @@ volumes:
   ollama_data:
     driver: local
   agent_workspace:
-    driver: local
-  agent_results:
-    driver: local
-  agent_user_files:
-    driver: local
-  agent_data:
     driver: local
 
 # ===========================================

@@ -61,7 +61,7 @@ interface SearchResult {
 const XAI_API_BASE = 'https://api.x.ai/v1';
 
 /**
- * Search the web using x.AI's web_search tool
+ * Search the web using x.AI's web-search tool
  */
 async function grokWebSearch(params: GrokWebSearchParams): Promise<SearchResult> {
   const apiKey = process.env.XAI_API_KEY;
@@ -88,7 +88,7 @@ async function grokWebSearch(params: GrokWebSearchParams): Promise<SearchResult>
   }
 
   try {
-    const response = await fetch(`${XAI_API_BASE}/web_search`, {
+    const response = await fetch(`${XAI_API_BASE}/web-search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,9 +1,6 @@
 ---
-name: document_creation
+name: document-creation
 description: Create documents in PDF or DOCX format with customizable templates
-version: 1.0.0
-trigger: "create document|generate pdf|create pdf|make document|write document"
-tools: [shell, filesystem]
 ---
 
 # Document Creation Skill
