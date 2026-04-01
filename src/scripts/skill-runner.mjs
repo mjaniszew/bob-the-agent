@@ -15,8 +15,8 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Skills are compiled to /app/skills-dist/ in the container
-const SKILLS_DIST = '/app/skills';
+// Skills are compiled to /app/skills/dist/ in the container
+const SKILLS_DIST = '/app/skills/dist';
 
 // Parse command line arguments
 function parseArgs() {

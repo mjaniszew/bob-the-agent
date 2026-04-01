@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: Node.js 24+ images already include a 'node' user (UID 1000, GID 1000)
@@ -29,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install OpenClaw globally
 RUN npm install -g openclaw@${OPENCLAW_VERSION}
-RUN npm install -g @playwright/cli@latest
+# Install and setup Playwright globally
+RUN npm install -g @playwright/cli@latest && npm install -g @playwright/test
 RUN npx playwright install-deps
 
 # Create application directories
@@ -57,11 +59,14 @@ WORKDIR /app/skills
 RUN npm install 
 RUN npm run build
 
+# Workaround to make sure ~/.npm is owned by node user
+RUN chown -R node:node /home/node/.npm
+
 # Prepare OpenClaw config directory
 RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/
 
 # Switch to non-root user
-USER 1000:1000
+USER node:node
 # Set working directory to app for further actions
 WORKDIR /app
 RUN playwright-cli install --skills

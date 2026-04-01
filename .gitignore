@@ -140,3 +140,4 @@ vite.config.ts.timestamp-*
 
 docs/tasks/*
 docs/plans/*
+volumes

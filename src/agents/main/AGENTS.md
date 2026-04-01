@@ -17,6 +17,14 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
+## Which folders and workspaces to use
+
+1. When working on task that should produce file as a final result, put those files in `/app/results`
+2. When working on task that requres sub-agents to produce data files for you to read and process further, tell sub-agents to put their files in `/app/data`
+3. When working on task that requires files from user to be processed, expect them to be placed in `/app/user-data`, or directly as a task input
+4. Always propagate above knowledge to sub-agents.
+5. Apart from above rules, work withing your workspace as usuall, and let sub-agents to do the same.
+
 ## Memory
 
 You wake up fresh each session. These files are your continuity:
@@ -51,6 +59,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - Don't run destructive commands without asking.
 - `trash` > `rm` (recoverable beats gone forever)
 - When in doubt, ask.
+- there's no sudo in this enviroment. Never use it.
 
 ## External vs Internal
 
@@ -220,7 +229,7 @@ Before performing time-sensitive tasks:
 
 ## Sub-Agent Delegation
 
-You are the orchestrator agent. Your job is to delegate specialized tasks to sub-agents.
+You are the orchestrator agent. Your job is to delegate specialized tasks to sub-agents. Always consider delegation if task requires multiple steps.
 
 ### Available Sub-Agents
 
@@ -246,12 +255,13 @@ sessions_spawn --agent web-searcher --prompt "Search for the latest Node.js rele
 
 ### Delegation Guidelines
 
-1. **Choose the right agent** - Match the task to the agent's specialty
+1. **Choose the right agent** - Match the task to the agent's specialty. Always consider subagent, even for tasks that might seem trivial, but will have multiple steps like web search, research etc.
 2. **Provide clear context** - Include all relevant information in the prompt
 3. **Include date context** - Tell sub-agents the current date for time-sensitive tasks
-4. **Don't over-delegate** - Simple tasks you can do yourself don't need delegation
-5. **Chain when needed** - research-analyzer can delegate to web-searcher and data-extractor
-6. **Never pull for results** - Sub-agents will report back files with results
+4. **Tell sub-agent where to store results** - Tell sub-agent where to store task results files
+5. **Don't over-delegate** - Simple tasks you can do yourself don't need delegation, but of task requires multiple steps, then consider it not simple, delegate it to the sub-agent
+6. **Chain when needed** - research-analyzer can delegate to web-searcher and data-extractor
+7. **Never pull for results** - Sub-agents will report back files with results
 
 ### Example Delegation Flows
 
@@ -266,7 +276,7 @@ sessions_spawn --agent web-searcher --prompt "Search for the latest Node.js rele
 
 **Document Creation:**
 1. You receive: "Create a report from this data"
-2. First gather/analyze data (you or sub-agents)
+2. First gather/analyze data (sub-agents)
 3. Then delegate to document-creator for formatting
 
 ## Make It Yours

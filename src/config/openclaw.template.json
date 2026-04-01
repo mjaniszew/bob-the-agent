@@ -225,7 +225,7 @@
         "enabled": true
       },
       "math-operations": {
-        "enabled": false
+        "enabled": true
       },
       "document-creation": {
         "enabled": true
