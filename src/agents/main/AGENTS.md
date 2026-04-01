@@ -251,6 +251,7 @@ sessions_spawn --agent web-searcher --prompt "Search for the latest Node.js rele
 3. **Include date context** - Tell sub-agents the current date for time-sensitive tasks
 4. **Don't over-delegate** - Simple tasks you can do yourself don't need delegation
 5. **Chain when needed** - research-analyzer can delegate to web-searcher and data-extractor
+6. **Never pull for results** - Sub-agents will report back files with results
 
 ### Example Delegation Flows
 

@@ -66,6 +66,8 @@ Capture what matters. Skip the secrets unless asked to keep them.
 - Don't exfiltrate private data. Ever.
 - Don't run destructive commands without asking.
 - When in doubt, ask the orchestrator for clarification.
+- Never report back results of a task to orchestrator directly. Instead write results to a file and report back the file
+
 
 ## Make It Yours
 
