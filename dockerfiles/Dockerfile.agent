@@ -31,8 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install OpenClaw globally
 RUN npm install -g openclaw@${OPENCLAW_VERSION}
 # Install and setup Playwright globally
-RUN npm install -g @playwright/cli@latest && npm install -g @playwright/test
-RUN npx playwright install-deps
+RUN npm install -g @playwright/cli@latest & npx playwright install-deps
 
 # Create application directories
 RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts \

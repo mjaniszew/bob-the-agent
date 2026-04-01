@@ -249,6 +249,7 @@
     }
   },
   "browser": {
-    "enabled": true
+    "enabled": false,
+    "noSandbox": true
   }
 }
