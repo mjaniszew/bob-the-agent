@@ -38,6 +38,7 @@ describe('AWS S3 Skill', () => {
 
       expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('upload');
       expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('getUrl');
+      expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('getPublicUrl');
     });
   });
 
@@ -428,6 +429,95 @@ describe('AWS S3 Skill', () => {
       });
 
       expect(result).toHaveProperty('success');
+    });
+  });
+
+  describe('Get Public URL', () => {
+    it('should return public URL with correct format', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
+
+      process.env.AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.AWS_S3_REGION = 'us-east-1';
+      // Note: getPublicUrl does NOT require credentials
+
+      const result = await awsS3({
+        action: 'getPublicUrl',
+        key: 'test/file.txt'
+      });
+
+      expect(result).toHaveProperty('success', true);
+      expect(result).toHaveProperty('key', 'test/file.txt');
+      expect(result).toHaveProperty('url');
+      expect(result.url).toBe('https://my-public-bucket.s3.us-east-1.amazonaws.com/test/file.txt');
+    });
+
+    it('should handle keys with special characters (encoding)', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
+
+      process.env.AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.AWS_S3_REGION = 'eu-central-1';
+      // Note: getPublicUrl does NOT require credentials
+
+      const result = await awsS3({
+        action: 'getPublicUrl',
+        key: 'path with spaces/file.txt'
+      });
+
+      expect(result).toHaveProperty('success', true);
+      expect(result).toHaveProperty('key', 'path with spaces/file.txt');
+      expect(result.url).toContain('path%20with%20spaces');
+    });
+
+    it('should use default region if AWS_S3_REGION not set', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
+
+      process.env.AWS_S3_BUCKET = 'my-public-bucket';
+      delete process.env.AWS_S3_REGION;
+
+      const result = await awsS3({
+        action: 'getPublicUrl',
+        key: 'test/file.txt'
+      });
+
+      expect(result).toHaveProperty('success', true);
+      expect(result.url).toContain('us-east-1');
+    });
+
+    it('should not require AWS credentials for getPublicUrl', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
+
+      process.env.AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.AWS_S3_REGION = 'us-west-2';
+      // Explicitly do NOT set AWS credentials
+      delete process.env.AWS_ACCESS_KEY_ID;
+      delete process.env.AWS_SECRET_ACCESS_KEY;
+
+      const result = await awsS3({
+        action: 'getPublicUrl',
+        key: 'test/file.txt'
+      });
+
+      // Should succeed without credentials
+      expect(result).toHaveProperty('success', true);
+      expect(result).toHaveProperty('url');
+      expect(result.url).toContain('my-public-bucket');
+    });
+
+    it('should work with different regions', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
+
+      process.env.AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.AWS_S3_REGION = 'ap-southeast-2';
+      delete process.env.AWS_ACCESS_KEY_ID;
+      delete process.env.AWS_SECRET_ACCESS_KEY;
+
+      const result = await awsS3({
+        action: 'getPublicUrl',
+        key: 'images/photo.jpg'
+      });
+
+      expect(result).toHaveProperty('success', true);
+      expect(result.url).toBe('https://my-public-bucket.s3.ap-southeast-2.amazonaws.com/images/photo.jpg');
     });
   });
 

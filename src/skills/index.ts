@@ -97,12 +97,13 @@ export const skillRegistry = {
   },
   'aws-s3': {
     name: 'AWS S3',
-    description: 'Upload files to S3 and generate presigned URLs for access',
+    description: 'Upload files to S3 and generate URLs for access (presigned for private buckets, public URLs for public buckets)',
     version: '1.0.0',
     params: {
-      action: { type: 'string', enum: ['upload', 'getUrl'], required: true, description: 'Action to perform: upload or getUrl' },
+      action: { type: 'string', enum: ['upload', 'getUrl', 'getPublicUrl'], required: true, description: 'Action to perform: upload, getUrl, or getPublicUrl' },
       key: { type: 'string', required: true, description: 'S3 object key (path in bucket)' },
       content: { type: 'string', description: 'Content to upload (required for upload action)' },
+      filePath: { type: 'string', description: 'Path to file on disk (alternative to content for upload action)' },
       contentType: { type: 'string', default: 'application/octet-stream', description: 'MIME type of the content' },
       expiresIn: { type: 'number', default: 3600, description: 'URL expiration time in seconds (for getUrl action)' }
     }

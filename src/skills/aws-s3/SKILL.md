@@ -1,11 +1,11 @@
 ---
 name: aws-s3
-description: Use this skill to upload files to AWS S3 buckets and generate time-limited presigned URLs for accessing uploaded files, especially if it's required to: upload files to cloud storage, generate shareable URLs, persist generated artifacts (reports, documents, images), share files with external users.
+description: Use this skill to upload files to AWS S3 buckets and generate URLs for accessing uploaded files (presigned URLs for private buckets, public URLs for public buckets), especially if it's required to: upload files to cloud storage, generate shareable URLs, persist generated artifacts (reports, documents, images), share files with external users.
 ---
 
 # AWS S3 Skill
 
-Use this skill to upload files to AWS S3 buckets and generate time-limited presigned URLs for accessing uploaded files.
+Use this skill to upload files to AWS S3 buckets and generate URLs for accessing uploaded files.
 
 ## When to Use
 
@@ -27,7 +27,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{"action":"upload","
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| action | string | Yes | - | Action to perform: `upload` or `getUrl` |
+| action | string | Yes | - | Action to perform: `upload`, `getUrl`, or `getPublicUrl` |
 | key | string | Yes | - | S3 object key (path in bucket) |
 | content | string/Buffer | No* | - | Content to upload (string or Buffer). Mutually exclusive with `filePath`. |
 | filePath | string | No* | - | Path to file on disk. Mutually exclusive with `content`. Auto-detects content type from extension. |
@@ -86,6 +86,28 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 }'
 ```
 
+### GetPublicUrl
+
+Generates a permanent public URL for an object in a publicly accessible S3 bucket.
+
+**Use this when:**
+- The bucket has public read access enabled
+- You need a permanent URL (no expiration)
+- You don't have AWS credentials configured
+
+**Parameters:**
+- `key`: S3 object key
+
+**Example:**
+```bash
+node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+  "action": "getPublicUrl",
+  "key": "public-images/logo.png"
+}'
+```
+
+**Note:** This action does NOT require AWS credentials. It simply constructs the public URL using the bucket name and region. Only use this for buckets with public read access enabled.
+
 ## Output
 
 ### Upload Response
@@ -106,6 +128,15 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 }
 ```
 
+### GetPublicUrl Response
+```json
+{
+  "success": true,
+  "key": "public-images/logo.png",
+  "url": "https://my-bucket.s3.us-east-1.amazonaws.com/public-images/logo.png"
+}
+```
+
 ### Error Response
 ```json
 {
@@ -116,10 +147,13 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ## Environment Variables
 
-Required:
+Required (for `upload` and `getUrl` actions):
 - `AWS_S3_BUCKET`: S3 bucket name
 - `AWS_ACCESS_KEY_ID`: AWS access key ID
 - `AWS_SECRET_ACCESS_KEY`: AWS secret access key
+
+Required (for `getPublicUrl` action):
+- `AWS_S3_BUCKET`: S3 bucket name (credentials not required)
 
 Optional:
 - `AWS_S3_REGION`: S3 region (default: us-east-1)
@@ -188,6 +222,14 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 }'
 ```
 
+### Get Public URL (No Credentials Required)
+```bash
+node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+  "action": "getPublicUrl",
+  "key": "public-images/logo.png"
+}'
+```
+
 ## Notes
 
 - Files are stored with the exact key provided (no path normalization)
@@ -198,3 +240,5 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 - Content-Type is auto-detected from file extension when using `filePath`
 - The bucket must exist before uploading files
 - Ensure IAM policies allow `s3:PutObject` and `s3:GetObject` actions
+- `getPublicUrl` does NOT require AWS credentials - it constructs a URL for public buckets
+- Only use `getPublicUrl` for buckets with public read access enabled

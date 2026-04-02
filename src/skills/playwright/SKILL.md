@@ -1,6 +1,6 @@
 ---
 name: playwright
-description: Visit websites and interact with them using playwright
+description: Use this skill to open and visit complex websites, interact with graphical interfaces of websites, take screenshots, and perform web automations. Use it always when speciffically asked to use playwright or browser. Trigger words are: playwright, browser.
 ---
 
 # Playwright Skill

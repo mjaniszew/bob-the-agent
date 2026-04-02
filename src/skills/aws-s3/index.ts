@@ -30,52 +30,8 @@ const MIME_TYPES: Record<string, string> = {
   '.wav': 'audio/wav'
 };
 
-// Skill registry metadata
-export const skillRegistry = {
-  'aws-s3': {
-    name: 'AWS S3',
-    description: 'Upload files to S3 and generate presigned URLs for access',
-    version: '1.0.0',
-    params: {
-      action: {
-        type: 'string',
-        enum: ['upload', 'getUrl'],
-        required: true,
-        description: 'Action to perform: upload or getUrl'
-      },
-      key: {
-        type: 'string',
-        required: true,
-        description: 'S3 object key (path in bucket)'
-      },
-      content: {
-        type: 'string',
-        required: false,
-        description: 'Content to upload (base64 string or buffer, required for upload action if filePath not provided)'
-      },
-      filePath: {
-        type: 'string',
-        required: false,
-        description: 'Path to file on disk (alternative to content parameter, mutually exclusive with content)'
-      },
-      contentType: {
-        type: 'string',
-        required: false,
-        default: 'application/octet-stream',
-        description: 'MIME type of the content'
-      },
-      expiresIn: {
-        type: 'number',
-        required: false,
-        default: 3600,
-        description: 'URL expiration time in seconds (for getUrl action)'
-      }
-    }
-  }
-};
-
 interface AwsS3Params {
-  action: 'upload' | 'getUrl';
+  action: 'upload' | 'getUrl' | 'getPublicUrl';
   key: string;
   content?: string | Buffer;
   filePath?: string;
@@ -171,6 +127,13 @@ async function generatePresignedUrl(
   return { url, expiresAt };
 }
 
+// Generate public URL for object in public bucket
+function getPublicUrlFor(bucket: string, key: string, region: string): string {
+  // Encode the key but preserve forward slashes (they are path separators in S3)
+  const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+  return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
+}
+
 // Main skill function
 export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
   const { action, key, content, filePath, contentType, expiresIn = 3600 } = params;
@@ -183,18 +146,7 @@ export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
     };
   }
 
-  // Check AWS credentials
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-
-  if (!accessKeyId || !secretAccessKey) {
-    return {
-      success: false,
-      error: 'AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.'
-    };
-  }
-
-  // Check bucket configuration
+  // Check bucket configuration (required for all actions)
   let bucket: string;
   try {
     bucket = getBucketName();
@@ -202,6 +154,28 @@ export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'S3 bucket configuration error'
+    };
+  }
+
+  // getPublicUrl doesn't need credentials - it just constructs a URL
+  if (action === 'getPublicUrl') {
+    const region = process.env.AWS_S3_REGION || 'us-east-1';
+    const url = getPublicUrlFor(bucket, key, region);
+    return {
+      success: true,
+      key,
+      url
+    };
+  }
+
+  // Check AWS credentials (required for upload and getUrl)
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+  if (!accessKeyId || !secretAccessKey) {
+    return {
+      success: false,
+      error: 'AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.'
     };
   }
 
@@ -269,7 +243,7 @@ export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
       default:
         return {
           success: false,
-          error: `Invalid action: ${action}. Must be 'upload' or 'getUrl'.`
+          error: `Invalid action: ${action}. Must be 'upload', 'getUrl', or 'getPublicUrl'.`
         };
     }
   } catch (error) {

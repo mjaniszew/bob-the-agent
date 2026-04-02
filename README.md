@@ -8,7 +8,7 @@ A containerized AI agent that runs 24/7 autonomously via Docker/Docker Compose. 
 - **Multiple Interfaces**: CLI, Discord bot, and web dashboard
 - **Local LLM**: Uses Ollama for cost-effective inference
 - **Cloud Fallback**: Supports Anthropic and OpenAI APIs
-- **Skills**: Web search, data extraction, math operations, document creation, notifications, scheduling
+- **Skills**: Web search, data extraction, math operations, document creation, notifications, scheduling, Grok search, AWS S3, Playwright
 - **Docker**: Easy deployment with Docker Compose
 
 ## Quick Start
@@ -218,6 +218,51 @@ Schedule recurring tasks.
     "task": { "name": "Daily Report", "skill": "web-search", ... }
   }
 }
+```
+
+### Grok Search
+
+Search web and X.com (Twitter) using x.AI's Grok API.
+
+```json
+{
+  "skill": "grok-search",
+  "parameters": {
+    "query": "AI news 2026",
+    "mode": "both",
+    "maxResults": 15
+  }
+}
+```
+
+### AWS S3
+
+Upload files and generate URLs for S3 objects.
+
+```json
+{
+  "skill": "aws-s3",
+  "parameters": {
+    "action": "upload",
+    "key": "reports/report.pdf",
+    "filePath": "/data/report.pdf"
+  }
+}
+```
+
+Actions:
+- `upload` - Upload files to S3
+- `getUrl` - Generate time-limited presigned URL
+- `getPublicUrl` - Generate public URL (no credentials needed)
+
+### Playwright
+
+Browser automation using playwright-cli.
+
+```bash
+playwright-cli open https://example.com
+playwright-cli screenshot --filename=screenshot.png
+playwright-cli close
 ```
 
 ## API Reference

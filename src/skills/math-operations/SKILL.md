@@ -1,9 +1,6 @@
 ---
 name: math-operations
-description: Perform mathematical calculations and statistical analysis
-version: 1.0.0
-trigger: "calculate|compute|math|statistics|convert|evaluate"
-tools: [shell]
+description: Use this skill to perform mathematical calculations, statistical analysis, and unit conversions with high precision. Use it always for any kind of mathematical operations instead of trying to calculate on your own.
 ---
 
 # Math Operations Skill

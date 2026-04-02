@@ -1,6 +1,6 @@
 ---
 name: web-search
-description: Search the web using DuckDuckGo, Google, or Bing to find information
+description: Use this skill when you need to find information on the web using classic way, not through AI. It supports multiple search engines and can optionally fetch full content from result pages. Try to use it as a first choic above anything else, unless specifically asked to use particular tool like x.ai. Trigger word: search, web search, google, bing, duckduckgo.
 ---
 
 # Web Search Skill

@@ -1,6 +1,6 @@
 ---
 name: document-creation
-description: Create documents in PDF or DOCX format with customizable templates
+description: Use this skill to create documents in various formats with customizable templates. Supports PDF and DOCX formats. Use this skill when: You need to generate a report, You need to create a formal document, You need to export content to PDF or DOCX, You need to create formatted documentation.
 ---
 
 # Document Creation Skill
