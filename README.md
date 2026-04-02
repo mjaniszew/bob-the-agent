@@ -1,6 +1,6 @@
-# Mini Agent
+# BOB The Agent
 
-A containerized AI agent that runs 24/7 autonomously via Docker/Docker Compose. Built with OpenClaw framework and Ollama for local LLM inference.
+A containerized AI agent orchestrator that runs 24/7 autonomously via Docker/Docker Compose. Built with OpenClaw framework and Ollama for local LLM inference.
 
 ## Features
 
