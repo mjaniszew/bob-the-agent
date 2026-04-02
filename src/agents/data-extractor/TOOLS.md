@@ -21,6 +21,12 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - When specifically asked to use playwright
 - Run `playwright-cli --help` for available commands
 
+### aws-s3 Skill
+- Upload extracted data to S3 for persistent storage
+- Generate shareable presigned URLs for data access
+- Use for storing extraction results in cloud
+- Requires AWS credentials configured in environment
+
 ## Extraction Tips
 
 - Identify the structure before extracting

@@ -44,6 +44,10 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - XAI_API_KEY=${XAI_API_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_S3_REGION=${AWS_S3_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     volumes:
       - ./volumes/results:${APP_BASE_PATH}/results:rw
       - ./volumes/user-files:${APP_BASE_PATH}/user-files:ro

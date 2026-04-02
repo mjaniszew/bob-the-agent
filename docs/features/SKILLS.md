@@ -4,20 +4,29 @@ This file describes which skills should be used by agent to perform various task
 
 ## Current Implementation Status
 
-The skills in `src/skills/` are TypeScript implementations for the agent's capability layer. They are **NOT currently integrated** with the OpenClaw agent.
+The skills in `src/skills/` are TypeScript implementations for the agent's capability layer.
 
-**Integration Status:**
-- ✅ Skills code exists with proper TypeScript types and interfaces
-- ⚠️ Skills lack OpenClaw skill loader mechanism
-- ⚠️ Scheduling skill imports from web API's database (separate container)
-- 📋 No mechanism for OpenClaw to discover/use these skills
+**Implemented Skills (TypeScript):**
+| Skill | Status | Description |
+|-------|--------|-------------|
+| web-search | ✅ Implemented | Web search with multiple sources |
+| data-extraction | ✅ Implemented | Extract data from files and URLs |
+| math-operations | ✅ Implemented | Mathematical calculations |
+| document-creation | ✅ Implemented | PDF and DOCX generation |
+| notifications | ✅ Implemented | Discord, email notifications |
+| scheduling | ✅ Implemented | Cron-based task scheduling |
+| grok-search | ✅ Implemented | X.AI Grok search for web and X.com |
+| aws-s3 | ✅ Implemented | S3 upload and URL generation |
 
-These implementations serve as:
-1. **Documentation** of expected skill interfaces
-2. **Reference implementations** for skill contracts
-3. **Basis** for future OpenClaw integration work
+**System Tool Skills (SKILL.md only):**
+| Skill | Status | Description |
+|-------|--------|-------------|
+| playwright | ✅ Available | Browser automation via playwright-cli |
 
-**Follow-up Task:** See `docs/tasks/3-integrate-skills.md` for the task to integrate these skills with OpenClaw.
+**Environment Variables Required:**
+- `XAI_API_KEY` - For Grok Search
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_REGION` - For AWS S3
+- `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
 
 ---
 
@@ -52,3 +61,24 @@ These implementations serve as:
 1. Agent should be able to schedulre running particular actions based on task defined by user
 2. Agent should be able to provide possibility to manage scheduled tasks: add, remove, list etc. Managment can be done via CLI
 3. Schedule managemnt should be possible via CLI eg. after connecting to docker container via ssh, or via Discord bot
+
+## Grok Search
+1. Agent should be able to search web and X.com (Twitter) using x.AI's Grok API
+2. Should support parallel searching of both web and social media
+3. Should support filtering by domains, X handles, and date ranges
+4. Should support image and video understanding for X.com results
+5. Requires XAI_API_KEY environment variable
+
+## AWS S3
+1. Agent should be able to upload files to AWS S3 buckets
+2. Should generate presigned URLs for time-limited access to private objects
+3. Should generate public URLs for objects in public buckets (no credentials required)
+4. Should support both direct content upload and file path upload
+5. Requires AWS credentials and bucket configuration via environment variables
+
+## Playwright (Browser Automation)
+1. Agent should be able to open and visit complex websites using playwright-cli
+2. Should interact with graphical interfaces of websites, take screenshots
+3. Should perform web automations, execute scripts in browser
+4. This skill uses playwright-cli system tool, not TypeScript implementation
+5. Requires playwright-cli to be installed and available in PATH

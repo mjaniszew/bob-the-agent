@@ -1,6 +1,6 @@
 ---
 name: data-extraction
-description: Extract structured data from URLs and various file formats
+description: Use this skill to extract structured data from web pages and documents. It can extract text, tables, and other content from URLs or files.
 ---
 
 # Data Extraction Skill
