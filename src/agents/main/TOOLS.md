@@ -11,6 +11,13 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - When specifically asked to use playwright
 - Run `playwright-cli --help` for available commands
 
+### aws-s3 Skill
+- Upload files to AWS S3 cloud storage
+- Generate presigned URLs for time-limited file access
+- Use for persisting generated artifacts and reports
+- Useful for sharing files with external users
+- Requires AWS credentials configured in environment
+
 ## What Goes Here
 
 Things like:

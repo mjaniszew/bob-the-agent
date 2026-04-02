@@ -69,6 +69,9 @@
           }
         ]
       }
+    },
+    "bedrockDiscovery": {
+      "enabled": false
     }
   },
   "agents": {

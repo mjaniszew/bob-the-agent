@@ -10,6 +10,7 @@ export { documentCreation } from './document-creation/index.js';
 export { notifications } from './notifications/index.js';
 export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
 export { grokSearch } from './grok-search/index.js';
+export { awsS3 } from './aws-s3/index.js';
 
 // Skill metadata for registration
 export const skillRegistry = {
@@ -93,6 +94,18 @@ export const skillRegistry = {
       enableVideoUnderstanding: { type: 'boolean', default: false, description: 'Enable video understanding for X.com' },
       maxResults: { type: 'number', default: 10, description: 'Maximum results per source' }
     }
+  },
+  'aws-s3': {
+    name: 'AWS S3',
+    description: 'Upload files to S3 and generate presigned URLs for access',
+    version: '1.0.0',
+    params: {
+      action: { type: 'string', enum: ['upload', 'getUrl'], required: true, description: 'Action to perform: upload or getUrl' },
+      key: { type: 'string', required: true, description: 'S3 object key (path in bucket)' },
+      content: { type: 'string', description: 'Content to upload (required for upload action)' },
+      contentType: { type: 'string', default: 'application/octet-stream', description: 'MIME type of the content' },
+      expiresIn: { type: 'number', default: 3600, description: 'URL expiration time in seconds (for getUrl action)' }
+    }
   }
 };
 
@@ -142,6 +155,10 @@ export async function executeSkill(skillName: string, params: Record<string, any
     case 'grok-search': {
       const { grokSearch } = await import('./grok-search/index.js');
       return grokSearch(params as any);
+    }
+    case 'aws-s3': {
+      const { awsS3 } = await import('./aws-s3/index.js');
+      return awsS3(params as any);
     }
     default:
       throw new Error(`Skill not implemented: ${skillName}`);

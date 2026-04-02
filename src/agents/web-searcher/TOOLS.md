@@ -26,6 +26,12 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - When specifically asked to use playwright
 - Run `playwright-cli --help` for available commands
 
+### aws-s3 Skill
+- Upload search results or extracted data to S3
+- Generate shareable presigned URLs for findings
+- Use for persisting research artifacts
+- Requires AWS credentials configured in environment
+
 ## Search Tips
 
 - Use `site:` operator to search within specific domains
