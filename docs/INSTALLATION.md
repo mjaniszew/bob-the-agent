@@ -65,11 +65,6 @@ LOG_LEVEL=info
 DEFAULT_PROVIDER=ollama
 OLLAMA_MODEL=llama3.2
 
-# Web Interface
-WEB_USERNAME=admin
-WEB_PASSWORD=your-secure-password
-SESSION_SECRET=your-random-32-char-secret
-
 # Optional: Cloud Providers
 ANTHROPIC_API_KEY=your-key
 OPENAI_API_KEY=your-key
@@ -107,9 +102,6 @@ curl http://localhost:11434/api/tags
 
 # Check agent health
 curl http://localhost:18789/healthz
-
-# Check web interface
-curl http://localhost:8080/health
 ```
 
 ## Platform-Specific Notes

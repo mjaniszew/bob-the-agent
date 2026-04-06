@@ -17,12 +17,6 @@ DEFAULT_PROVIDER=ollama
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=llama3.2
 
-# Web Interface
-WEB_USERNAME=admin
-WEB_PASSWORD=your-secure-password
-SESSION_SECRET=your-random-32-char-secret
-ALLOWED_ORIGINS=http://localhost:8080
-
 # Cloud Providers (Optional)
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
@@ -103,16 +97,6 @@ Any `${VAR_NAME}` in the template is replaced with the corresponding environment
 | `ANTHROPIC_API_KEY` | string | Anthropic API key |
 | `OPENAI_API_KEY` | string | OpenAI API key |
 
-### Web Interface
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `WEB_USERNAME` | string | `admin` | Web UI username |
-| `WEB_PASSWORD` | string | - | Web UI password |
-| `SESSION_SECRET` | string | - | JWT signing secret |
-| `ALLOWED_ORIGINS` | string | - | CORS origins (comma-separated) |
-| `JWT_EXPIRATION` | number | `86400` | Token expiry in seconds |
-
 ### Discord Bot
 
 | Variable | Type | Description |
@@ -169,7 +153,6 @@ services:
 |-----------|---------------|---------|
 | `11434` | `11434` | Ollama API |
 | `18789` | `18789` | Agent Gateway |
-| `8080` | `80` | Web Interface |
 
 ## Model Configuration
 
@@ -231,7 +214,6 @@ services:
 
 - Use strong passwords (16+ characters)
 - Change default credentials immediately
-- Use `SESSION_SECRET` for JWT signing
 
 ### Network Security
 

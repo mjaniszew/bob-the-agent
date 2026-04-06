@@ -23,9 +23,3 @@ This file describes general features and requirements that agent should have.
 2. Discord bot should allow to add, run or delete tasks defined by user
 3. Discord bot should allow to display tasks results either directly, or allow to download files with results
 
-## Web Interface
-1. Agent should have simple web interface served from same Docker Container over configured port, deault being 81234
-2. Interface should be simple with basic authorization with username and password
-3. Interface should list all the tasks that were run by agent and are being processed or scheduled, with possibility to see their results
-4. Interface should display basic information about agent, like version, number of tasks, some basic diagnostic informations eg. about cpu and memory usage
-5. Interface should be build using React and Node.js, served with nginx in container

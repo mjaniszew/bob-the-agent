@@ -62,35 +62,6 @@ services:
       retries: 3
       start_period: 60s
 
-  # ===========================================
-  # Web Interface - React dashboard with Node.js API
-  # ===========================================
-  web:
-    build:
-      context: .
-      dockerfile: dockerfiles/Dockerfile.web
-    container_name: bob-the-agent-web
-    restart: unless-stopped
-    depends_on:
-      agent:
-        condition: service_healthy
-    environment:
-      - AGENT_API_URL=http://agent:18789
-      - NODE_ENV=production
-      - WEB_APP_BASE_PATH=${APP_BASE_PATH}
-      - WEB_DATABASE_PATH=${WEB_DATABASE_PATH}
-      - WEB_USERNAME=${WEB_USERNAME}
-      - WEB_PASSWORD=${WEB_PASSWORD}
-    volumes:
-      - ./volumes/results:${APP_BASE_PATH}/results:ro
-    ports:
-      - "8080:80"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 # ===========================================
 # Named Volumes
 # ===========================================
