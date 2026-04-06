@@ -14,7 +14,7 @@ import * as path from 'path';
 
 // Configuration
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DOCKER_COMPOSE_FILE = path.join(PROJECT_ROOT, 'docker-compose.yml');
+const DOCKER_COMPOSE_FILE = path.join(PROJECT_ROOT, 'compose.yaml');
 const TIMEOUT_MS = 300000; // 5 minutes for build operations
 
 // Helper to run docker compose commands
