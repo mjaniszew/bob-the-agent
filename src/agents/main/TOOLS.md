@@ -4,7 +4,19 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 ## Your Primary Tools
 
-### playwright Skill
+### SearXNG Web Search (searxng-search)
+- Primary web search tool - FREE, no tokens consumed
+- Privacy-respecting metasearch engine
+- Use for ALL general web searches
+- Runs as Docker container alongside agent
+
+### Grok Search Skill
+- Specialized for X.com (Twitter) search ONLY
+- Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY)
+- Real-time discussions and trends from Twitter
+- NOT for general web search - use SearXNG instead
+
+### Playwright Skill
 - Headless browser for website interaction and automation
 - Take screenshots for visual evidence
 - Use for JavaScript-heavy sites that WebFetch cannot parse
