@@ -62,6 +62,44 @@ services:
       retries: 3
       start_period: 60s
 
+  # ===========================================
+  # SearXNG - Privacy-respecting metasearch engine
+  # ===========================================
+  searxng:
+    image: searxng/searxng:latest
+    container_name: bob-the-agent-searxng
+    restart: unless-stopped
+    depends_on:
+      valkey:
+        condition: service_healthy
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-searxng-secret-change-me}
+    volumes:
+      - searxng_config:/etc/searxng
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ===========================================
+  # Valkey - Redis-compatible cache for SearXNG
+  # ===========================================
+  valkey:
+    image: valkey/valkey:8.0-alpine
+    container_name: bob-the-agent-valkey
+    restart: unless-stopped
+    volumes:
+      - valkey_data:/data
+    command: valkey-server --save 30 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 # ===========================================
 # Named Volumes
 # ===========================================
@@ -69,6 +107,10 @@ volumes:
   ollama_data:
     driver: local
   agent_workspace:
+    driver: local
+  searxng_config:
+    driver: local
+  valkey_data:
     driver: local
 
 # ===========================================
