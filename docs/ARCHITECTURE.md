@@ -10,13 +10,13 @@ The system runs as multiple Docker containers managed by Docker Compose:
 ┌─────────────────────────────────────────────────────────────┐
 │                     Docker Compose                          │
 │                                                             │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐               │
-│  │ ollama  │    │  agent  │    │   web   │               │
-│  │ :11434  │◄───│ OpenClaw │───►│  nginx  │               │
-│  │         │    │  :18789  │    │  :8080  │               │
-│  └─────────┘    └─────────┘    └─────────┘               │
-│       │              │               │                     │
-│       ▼              ▼               ▼                     │
+│  ┌─────────┐    ┌─────────┐                               │
+│  │ ollama  │    │  agent  │                               │
+│  │ :11434  │◄───│ OpenClaw │                               │
+│  │         │    │  :18789  │                               │
+│  └─────────┘    └─────────┘                               │
+│       │              │                                     │
+│       ▼              ▼                                     │
 │  ┌─────────────────────────────────────────────────────┐  │
 │  │                  Docker Volumes                      │  │
 │  │  - ollama_data (models)                            │  │
@@ -33,7 +33,6 @@ The system runs as multiple Docker containers managed by Docker Compose:
 |---------|-------------|------|
 | `ollama` | Local LLM inference engine | 11434 |
 | `agent` | OpenClaw-based autonomous agent | 18789 (gateway) |
-| `web` | Nginx web interface (optional) | 8080 |
 
 ## Configuration Flow
 
@@ -118,7 +117,7 @@ These implementations serve as:
 ┌────────────────────────────────────────────────────────────┐
 │                      Data Flow                             │
 │                                                            │
-│  User → Discord/Web UI → Agent Gateway (18789)             │
+│  User → Discord → Agent Gateway (18789)                    │
 │                           │                                │
 │                           ▼                                │
 │                     OpenClaw Agent                         │
