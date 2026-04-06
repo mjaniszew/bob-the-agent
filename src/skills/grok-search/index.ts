@@ -1,40 +1,21 @@
 /**
  * Grok Search Skill Implementation
- * Searches web and X.com (Twitter) using x.AI's Grok API
+ * Searches X.com (Twitter) using x.AI's Grok API
+ *
+ * Note: Web search functionality has been moved to SearXNG.
+ * This skill is now dedicated to X.com (Twitter) search only.
  */
 
 interface GrokSearchResult {
-  source: 'web' | 'x';
+  source: 'x';
   url: string;
   title: string;
   content: string;
   metadata?: Record<string, unknown>;
 }
 
-interface GrokWebSearchParams {
-  query: string;
-  allowedDomains?: string[];
-  excludedDomains?: string[];
-  enableImageUnderstanding?: boolean;
-  maxResults?: number;
-}
-
 interface GrokXSearchParams {
   query: string;
-  allowedXHandles?: string[];
-  excludedXHandles?: string[];
-  fromDate?: string;
-  toDate?: string;
-  enableImageUnderstanding?: boolean;
-  enableVideoUnderstanding?: boolean;
-  maxResults?: number;
-}
-
-interface GrokSearchParams {
-  query: string;
-  mode: 'web' | 'x' | 'both';
-  allowedDomains?: string[];
-  excludedDomains?: string[];
   allowedXHandles?: string[];
   excludedXHandles?: string[];
   fromDate?: string;
@@ -61,75 +42,15 @@ interface SearchResult {
 const XAI_API_BASE = 'https://api.x.ai/v1';
 
 /**
- * Search the web using x.AI's web-search tool
- */
-async function grokWebSearch(params: GrokWebSearchParams): Promise<SearchResult> {
-  const apiKey = process.env.XAI_API_KEY;
-
-  if (!apiKey) {
-    return { results: [], error: 'XAI_API_KEY environment variable is not set' };
-  }
-
-  const requestBody: Record<string, unknown> = {
-    query: params.query,
-    max_results: params.maxResults || 10
-  };
-
-  if (params.allowedDomains && params.allowedDomains.length > 0) {
-    requestBody.allowed_domains = params.allowedDomains;
-  }
-
-  if (params.excludedDomains && params.excludedDomains.length > 0) {
-    requestBody.excluded_domains = params.excludedDomains;
-  }
-
-  if (params.enableImageUnderstanding) {
-    requestBody.enable_image_understanding = true;
-  }
-
-  try {
-    const response = await fetch(`${XAI_API_BASE}/web-search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = (errorData as any).error?.message || `API error: ${response.status}`;
-      console.error('Grok Web Search API error:', response.status, errorData);
-      return { results: [], error: errorMessage };
-    }
-
-    const data = await response.json() as GrokSearchResponse;
-
-    return {
-      results: (data.results || []).map(result => ({
-        source: 'web' as const,
-        url: result.url,
-        title: result.title,
-        content: result.content,
-        metadata: result.metadata
-      }))
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    console.error('Grok Web Search error:', error);
-    return { results: [], error: errorMessage };
-  }
-}
-
-/**
  * Search X.com (Twitter) using x.AI's x_search tool
+ * Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY to avoid token consumption)
  */
 async function grokXSearch(params: GrokXSearchParams): Promise<SearchResult> {
-  const apiKey = process.env.XAI_API_KEY;
+  // Use XAI_SEARCH_API_KEY for search (separate from main XAI_API_KEY)
+  const apiKey = process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY;
 
   if (!apiKey) {
-    return { results: [], error: 'XAI_API_KEY environment variable is not set' };
+    return { results: [], error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is not set. Use XAI_SEARCH_API_KEY (recommended) to avoid consuming tokens for web search via OpenClaw.' };
   }
 
   const requestBody: Record<string, unknown> = {
@@ -198,7 +119,6 @@ async function grokXSearch(params: GrokXSearchParams): Promise<SearchResult> {
 
 interface GrokSearchOutput {
   query: string;
-  mode: string;
   results: GrokSearchResult[];
   totalFound: number;
   executionTime: number;
@@ -207,74 +127,52 @@ interface GrokSearchOutput {
 
 /**
  * Main Grok Search function
- * Searches web and/or X.com (Twitter) using x.AI's Grok API
+ * Searches X.com (Twitter) using x.AI's Grok API
+ *
+ * Note: For web search, use SearXNG instead (free, no token consumption).
+ * This skill is dedicated to X.com (Twitter) search.
  */
-export async function grokSearch(params: GrokSearchParams): Promise<GrokSearchOutput> {
+export async function grokSearch(params: { query: string; allowedXHandles?: string[]; excludedXHandles?: string[]; fromDate?: string; toDate?: string; enableImageUnderstanding?: boolean; enableVideoUnderstanding?: boolean; maxResults?: number }): Promise<GrokSearchOutput> {
   const startTime = Date.now();
-  const apiKey = process.env.XAI_API_KEY;
+  const apiKey = process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY;
 
-  console.log("Doing Grok Search");
+  console.log("Doing Grok X Search");
 
   if (!apiKey) {
     return {
       query: params.query,
-      mode: params.mode,
       results: [],
       totalFound: 0,
       executionTime: Date.now() - startTime,
-      error: 'XAI_API_KEY environment variable is not set. Please configure your x.AI API key.'
+      error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is not set. Use XAI_SEARCH_API_KEY (recommended) to avoid consuming tokens for web search via OpenClaw.'
     };
   }
 
-  const allResults: GrokSearchResult[] = [];
-  const errors: string[] = [];
   const maxResults = params.maxResults || 10;
 
   try {
-    if (params.mode === 'web' || params.mode === 'both') {
-      const webResult = await grokWebSearch({
-        query: params.query,
-        allowedDomains: params.allowedDomains,
-        excludedDomains: params.excludedDomains,
-        enableImageUnderstanding: params.enableImageUnderstanding,
-        maxResults
-      });
-      allResults.push(...webResult.results);
-      if (webResult.error) {
-        errors.push(webResult.error);
-      }
-    }
-
-    if (params.mode === 'x' || params.mode === 'both') {
-      const xResult = await grokXSearch({
-        query: params.query,
-        allowedXHandles: params.allowedXHandles,
-        excludedXHandles: params.excludedXHandles,
-        fromDate: params.fromDate,
-        toDate: params.toDate,
-        enableImageUnderstanding: params.enableImageUnderstanding,
-        enableVideoUnderstanding: params.enableVideoUnderstanding,
-        maxResults
-      });
-      allResults.push(...xResult.results);
-      if (xResult.error) {
-        errors.push(xResult.error);
-      }
-    }
+    const xResult = await grokXSearch({
+      query: params.query,
+      allowedXHandles: params.allowedXHandles,
+      excludedXHandles: params.excludedXHandles,
+      fromDate: params.fromDate,
+      toDate: params.toDate,
+      enableImageUnderstanding: params.enableImageUnderstanding,
+      enableVideoUnderstanding: params.enableVideoUnderstanding,
+      maxResults
+    });
 
     return {
       query: params.query,
-      mode: params.mode,
-      results: allResults.slice(0, maxResults),
-      totalFound: allResults.length,
+      results: xResult.results.slice(0, maxResults),
+      totalFound: xResult.results.length,
       executionTime: Date.now() - startTime,
-      error: errors.length > 0 ? errors.join('; ') : undefined
+      error: xResult.error
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return {
       query: params.query,
-      mode: params.mode,
       results: [],
       totalFound: 0,
       executionTime: Date.now() - startTime,

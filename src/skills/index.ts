@@ -3,7 +3,6 @@
  * Exports all available skills for the agent
  */
 
-export { webSearch } from './web-search/index.js';
 export { dataExtraction } from './data-extraction/index.js';
 export { mathOperations } from './math-operations/index.js';
 export { documentCreation } from './document-creation/index.js';
@@ -14,17 +13,6 @@ export { awsS3 } from './aws-s3/index.js';
 
 // Skill metadata for registration
 export const skillRegistry = {
-  'web-search': {
-    name: 'Web Search',
-    description: 'Search the web using multiple sources and aggregate results',
-    version: '1.0.0',
-    params: {
-      query: { type: 'string', required: true, description: 'Search query' },
-      sources: { type: 'array', default: ['duckduckgo'], description: 'Search sources to use' },
-      deep: { type: 'boolean', default: false, description: 'Enable deep search for full content' },
-      maxResults: { type: 'number', default: 10, description: 'Maximum results per source' }
-    }
-  },
   'data-extraction': {
     name: 'Data Extraction',
     description: 'Extract structured data from various file formats and web sources',
@@ -79,20 +67,17 @@ export const skillRegistry = {
   },
   'grok-search': {
     name: 'Grok Search',
-    description: 'Search web and X.com (Twitter) using x.AI Grok API',
-    version: '1.0.0',
+    description: 'Search X.com (Twitter) using x.AI Grok API. Use SearXNG (via OpenClaw searxng-search tool) for web search.',
+    version: '1.1.0',
     params: {
       query: { type: 'string', required: true, description: 'Search query' },
-      mode: { type: 'string', enum: ['web', 'x', 'both'], default: 'web', description: 'Search mode: web, x (Twitter), or both' },
-      allowedDomains: { type: 'array', description: 'Domains to include in results' },
-      excludedDomains: { type: 'array', description: 'Domains to exclude from results' },
       allowedXHandles: { type: 'array', description: 'X.com handles to include' },
       excludedXHandles: { type: 'array', description: 'X.com handles to exclude' },
-      fromDate: { type: 'string', description: 'Start date for X.com results (YYYY-MM-DD)' },
-      toDate: { type: 'string', description: 'End date for X.com results (YYYY-MM-DD)' },
+      fromDate: { type: 'string', description: 'Start date for results (YYYY-MM-DD)' },
+      toDate: { type: 'string', description: 'End date for results (YYYY-MM-DD)' },
       enableImageUnderstanding: { type: 'boolean', default: false, description: 'Enable image understanding' },
-      enableVideoUnderstanding: { type: 'boolean', default: false, description: 'Enable video understanding for X.com' },
-      maxResults: { type: 'number', default: 10, description: 'Maximum results per source' }
+      enableVideoUnderstanding: { type: 'boolean', default: false, description: 'Enable video understanding' },
+      maxResults: { type: 'number', default: 10, description: 'Maximum results' }
     }
   },
   'aws-s3': {
@@ -129,10 +114,6 @@ export async function executeSkill(skillName: string, params: Record<string, any
 
   // Execute the skill
   switch (skillName) {
-    case 'web-search': {
-      const { webSearch } = await import('./web-search/index.js');
-      return webSearch(params as any);
-    }
     case 'data-extraction': {
       const { dataExtraction } = await import('./data-extraction/index.js');
       return dataExtraction(params as any);

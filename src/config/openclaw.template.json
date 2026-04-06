@@ -1,6 +1,6 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.3.24",
+    "lastTouchedVersion": "2026.4.5",
     "lastTouchedAt": "2026-03-27T15:24:58.280Z"
   },
   "auth": {
@@ -21,7 +21,7 @@
         "models": [
           {
             "id": "qwen3.5:4b",
-            "name": "sorc/qwen3.5-claude-4.6-opus-q4:4b",
+            "name": "qwen3.5:4b",
             "reasoning": true,
             "input": [
               "text"
@@ -69,9 +69,6 @@
           }
         ]
       }
-    },
-    "bedrockDiscovery": {
-      "enabled": false
     }
   },
   "agents": {
@@ -80,8 +77,8 @@
         "ollama/minimax-m2.7:cloud": {
           "alias": "minimax-m2.7"
         },
-        "ollama/sorc/qwen3.5-claude-4.6-opus-q4:0.8b": {
-          "alias": "qwen3.5-claude-local"
+        "ollama/qwen3.5:4b": {
+          "alias": "qwen3.5-local"
         }
       },
       "subagents": {
@@ -99,7 +96,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
+            "ollama/qwen3.5:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -117,7 +114,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
+            "ollama/qwen3.5:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -132,7 +129,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
+            "ollama/qwen3.5:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -147,7 +144,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
+            "ollama/qwen3.5:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -165,7 +162,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/sorc/qwen3.5-claude-4.6-opus-q4:4b"
+            "ollama/qwen3.5:4b"
           ]
         },
         "thinkingDefault": "high",
@@ -176,6 +173,11 @@
   },
   "tools": {
     "profile": "full",
+    "web": {
+      "search": {
+        "provider": "searxng"
+      }
+    },
     "deny": [
       "gateway"
     ]
@@ -212,7 +214,6 @@
       "resetOnExit": false
     },
     "controlUi": {
-      "allowInsecureAuth": true,
       "allowedOrigins": ["http://localhost:18789","http://127.0.0.1:18789"]
     }
   },
@@ -222,9 +223,6 @@
       "nodeManager": "npm"
     },
     "entries": {
-      "web-search": {
-        "enabled": false
-      },
       "grok-search": {
         "enabled": true
       },
