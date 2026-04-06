@@ -47,7 +47,7 @@ describe('Mini Agent Integration Tests', () => {
       const taskData = {
         name: 'Test Task',
         description: 'A test task for integration testing',
-        skill: 'web-search'
+        skill: 'grok-search'
       };
 
       mockFetch({
@@ -115,7 +115,7 @@ describe('Mini Agent Integration Tests', () => {
       const scheduleData = {
         name: 'Daily Report',
         cron_expression: '0 9 * * *',
-        task_template: { skill: 'web-search', parameters: { query: 'daily news' } }
+        task_template: { skill: 'grok-search', parameters: { query: 'daily news from x.com' } }
       };
 
       mockFetch({
@@ -201,17 +201,16 @@ describe('Mini Agent Integration Tests', () => {
   });
 
   describe('Skills', () => {
-    it('should execute web search skill', async () => {
+    it('should execute grok search skill', async () => {
       const skillParams = {
         query: 'test query',
-        sources: ['duckduckgo'],
         maxResults: 5
       };
 
       mockFetch({
         query: skillParams.query,
         results: [
-          { source: 'duckduckgo', url: 'https://example.com', title: 'Result 1', snippet: 'Snippet 1' }
+          { source: 'x', url: 'https://x.com/status/123', title: 'Result 1', content: 'Content 1' }
         ],
         totalFound: 1,
         executionTime: 500
