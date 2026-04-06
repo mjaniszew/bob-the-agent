@@ -12,7 +12,6 @@
 1. Check logs: `docker compose logs`
 2. Verify port availability:
    ```bash
-   lsof -i :8080
    lsof -i :11434
    lsof -i :18789
    ```
@@ -114,36 +113,6 @@
    docker compose restart agent
    ```
 
-### Web Interface Issues
-
-#### Can't Access Dashboard
-
-**Symptoms**: Connection refused, timeout
-
-**Solutions**:
-1. Check web container: `docker compose ps web`
-2. Verify port 8080 is free
-3. Check nginx logs: `docker compose logs web`
-4. Try alternative port in `docker-compose.yml`
-
-#### Login Fails
-
-**Symptoms**: "Invalid credentials" error
-
-**Solutions**:
-1. Verify credentials in `.env`
-2. Clear browser cookies
-3. Restart container: `docker compose restart web`
-
-#### API Errors
-
-**Symptoms**: 500 errors, CORS issues
-
-**Solutions**:
-1. Check API logs: `docker compose logs agent`
-2. Verify `ALLOWED_ORIGINS` in `.env`
-3. Check JWT token expiration
-
 ### Discord Bot Issues
 
 #### Bot Offline
@@ -189,7 +158,7 @@
 
 **Solutions**:
 1. Check firewall rules
-2. Verify port binding: `0.0.0.0:8080:80` not `127.0.0.1:8080:80`
+2. Verify port binding is correct
 3. Use reverse proxy for production
 
 ## Diagnostic Commands
@@ -215,7 +184,6 @@ docker exec -it bob-the-agent bash
 
 # Test API endpoints
 curl http://localhost:18789/healthz
-curl http://localhost:3001/api/status
 
 # Check Ollama
 docker exec bob-the-agent-ollama ollama list
