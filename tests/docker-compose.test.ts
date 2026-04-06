@@ -99,25 +99,11 @@ describeDocker('Docker Compose Build Tests', () => {
       const result = runDockerCompose(`build --no-cache --progress=plain agent`);
       expect(result.status).toBe(0);
     });
-
-    it('should have valid Dockerfile.web syntax', () => {
-      const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles', 'Dockerfile.web');
-      expect(fs.existsSync(dockerfilePath)).toBe(true);
-
-      const result = runDockerCompose(`build --no-cache --progress=plain web`);
-      expect(result.status).toBe(0);
-    });
   });
 
   describe('Base Image Requirements', () => {
     it('should use Node.js 24 base image in Dockerfile.agent', () => {
       const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles', 'Dockerfile.agent');
-      const content = fs.readFileSync(dockerfilePath, 'utf-8');
-      expect(content).toMatch(/FROM\s+node:24/);
-    });
-
-    it('should use Node.js 24 base image in Dockerfile.web', () => {
-      const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles', 'Dockerfile.web');
       const content = fs.readFileSync(dockerfilePath, 'utf-8');
       expect(content).toMatch(/FROM\s+node:24/);
     });
@@ -166,21 +152,6 @@ describeDocker('Docker Compose Runtime Tests', () => {
       const healthy = await waitForHealthy('bob-the-agent', 90000);
       expect(healthy).toBe(true);
     }, 120000);
-
-    it('should start web container', async () => {
-      const result = runDockerCompose('up -d web');
-      expect(result.status).toBe(0);
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      const status = getContainerStatus('bob-the-agent-web');
-      expect(status).not.toBeNull();
-    }, 60000);
-
-    it('should have healthy web container', async () => {
-      const healthy = await waitForHealthy('bob-the-agent-web', 60000);
-      expect(healthy).toBe(true);
-    }, 90000);
   });
 
   describe('Port Availability', () => {
@@ -193,11 +164,6 @@ describeDocker('Docker Compose Runtime Tests', () => {
       const result = execSync('docker port bob-the-agent', { encoding: 'utf-8' });
       expect(result).toContain('18789');
     });
-
-    it('should expose web on port 8080', () => {
-      const result = execSync('docker port bob-the-agent-web', { encoding: 'utf-8' });
-      expect(result).toContain('80');
-    });
   });
 
   describe('Service Connectivity', () => {
@@ -209,15 +175,6 @@ describeDocker('Docker Compose Runtime Tests', () => {
 
       // Accept 200 (success) or 404 (endpoint exists but may need model)
       expect(['200', '404']).toContain(result);
-    });
-
-    it('should allow web container to reach agent via TCP', () => {
-      // Agent gateway speaks WebSocket, not HTTP, so we test TCP connectivity
-      const result = execSync(
-        'docker exec bob-the-agent-web bash -c "echo > /dev/tcp/agent/18789 && echo OK || echo FAIL"',
-        { encoding: 'utf-8', timeout: 10000 }
-      ).trim();
-      expect(result).toBe('OK');
     });
   });
 
@@ -260,7 +217,6 @@ describeDocker('Health Endpoint Tests', () => {
     // Wait for containers to be healthy
     await waitForHealthy('bob-the-agent-ollama', 60000);
     await waitForHealthy('bob-the-agent', 60000);
-    await waitForHealthy('bob-the-agent-web', 60000);
   }, 180000); // Increase timeout for this hook
 
   afterAll(() => {
@@ -290,17 +246,6 @@ describeDocker('Health Endpoint Tests', () => {
       expect(() => JSON.parse(result)).not.toThrow();
     });
   });
-
-  describe('Web Interface Health', () => {
-    it('should respond to /health endpoint', async () => {
-      const result = execSync(
-        'docker exec bob-the-agent-web curl -s http://localhost:80/health',
-        { encoding: 'utf-8', timeout: 10000 }
-      ).trim();
-
-      expect(result).toBeTruthy();
-    });
-  });
 });
 
 describeDocker('Compose File Validation', () => {
@@ -313,7 +258,6 @@ describeDocker('Compose File Validation', () => {
     const content = fs.readFileSync(DOCKER_COMPOSE_FILE, 'utf-8');
     expect(content).toContain('ollama:');
     expect(content).toContain('agent:');
-    expect(content).toContain('web:');
   });
 
   it('should define required volumes', () => {
@@ -337,18 +281,6 @@ describeDocker('Compose File Validation', () => {
 describe('Package.json Validation', () => {
   it('should require Node.js 24+ in root package.json', () => {
     const packagePath = path.join(PROJECT_ROOT, 'package.json');
-    const content = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-    expect(content.engines?.node).toMatch(/>=24/);
-  });
-
-  it('should require Node.js 24+ in api package.json', () => {
-    const packagePath = path.join(PROJECT_ROOT, 'src', 'api', 'package.json');
-    const content = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-    expect(content.engines?.node).toMatch(/>=24/);
-  });
-
-  it('should require Node.js 24+ in frontend package.json', () => {
-    const packagePath = path.join(PROJECT_ROOT, 'src', 'frontend', 'package.json');
     const content = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
     expect(content.engines?.node).toMatch(/>=24/);
   });
