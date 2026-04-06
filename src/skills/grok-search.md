@@ -1,57 +1,23 @@
 # Grok Search Skill
 
-Searches the web and X.com (Twitter) using x.AI's Grok API.
+Searches X.com (Twitter) using x.AI's Grok API.
+
+**NOTE:** This skill is for X.com (Twitter) search ONLY. For web search, use SearXNG via OpenClaw's `searxng-search` tool (free, no tokens).
 
 ## Features
 
-- **Web Search**: Search the web using x.AI's powerful search capabilities
 - **X.com Search**: Search Twitter/X posts with advanced filtering options
-- **Domain Filtering**: Restrict results to specific domains or exclude unwanted ones
 - **Handle Filtering**: Filter X.com results by specific user handles
 - **Date Range**: Filter X.com results by date range
 - **Media Understanding**: Optional image and video understanding capabilities
-- **Combined Search**: Search both web and X.com simultaneously
 
 ## Usage
-
-### Basic Web Search
-```yaml
-skill: grok-search
-parameters:
-  query: "search term"
-  mode: "web"
-  max_results: 10
-```
 
 ### Basic X.com Search
 ```yaml
 skill: grok-search
 parameters:
   query: "search term"
-  mode: "x"
-  max_results: 10
-```
-
-### Combined Search (Web + X.com)
-```yaml
-skill: grok-search
-parameters:
-  query: "search term"
-  mode: "both"
-  max_results: 20
-```
-
-### Web Search with Domain Filtering
-```yaml
-skill: grok-search
-parameters:
-  query: "search term"
-  mode: "web"
-  allowed_domains:
-    - "example.com"
-    - "docs.example.com"
-  excluded_domains:
-    - "spam.example.com"
   max_results: 10
 ```
 
@@ -60,12 +26,11 @@ parameters:
 skill: grok-search
 parameters:
   query: "search term"
-  mode: "x"
   allowed_x_handles:
     - "elonmusk"
     - "openai"
-  from_date: "2024-01-01"
-  to_date: "2024-12-31"
+  from_date: "2026-01-01"
+  to_date: "2026-04-01"
   enable_video_understanding: true
   max_results: 10
 ```
@@ -75,21 +40,18 @@ parameters:
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | query | string | Yes | - | Search query string |
-| mode | string | No | "web" | Search mode: "web", "x", or "both" |
-| allowed_domains | string[] | No | - | Domains to include in web results |
-| excluded_domains | string[] | No | - | Domains to exclude from web results |
 | allowed_x_handles | string[] | No | - | X.com handles to include |
 | excluded_x_handles | string[] | No | - | X.com handles to exclude |
-| from_date | string | No | - | Start date for X.com results (YYYY-MM-DD) |
-| to_date | string | No | - | End date for X.com results (YYYY-MM-DD) |
+| from_date | string | No | - | Start date for results (YYYY-MM-DD) |
+| to_date | string | No | - | End date for results (YYYY-MM-DD) |
 | enable_image_understanding | boolean | No | false | Enable image understanding in results |
 | enable_video_understanding | boolean | No | false | Enable video understanding in X.com results |
-| max_results | number | No | 10 | Maximum number of results per source |
+| max_results | number | No | 10 | Maximum number of results |
 
 ## Output
 
 Returns structured search results with:
-- source: "web" or "x"
+- source: "x" (always X.com)
 - url: Result URL
 - title: Result title
 - content: Result snippet/content
@@ -98,13 +60,17 @@ Returns structured search results with:
 ## Configuration
 
 Set the x.AI API key in environment variables:
-- XAI_API_KEY: Your x.AI API key
+- XAI_SEARCH_API_KEY: Recommended, separate from main XAI_API_KEY
+- XAI_API_KEY: Fallback if XAI_SEARCH_API_KEY not set
 
 Get your API key from: https://console.x.ai/
 
+## Why Separate API Key?
+
+Using `XAI_SEARCH_API_KEY` instead of `XAI_API_KEY` prevents OpenClaw from consuming tokens when using its built-in web search. SearXNG is the preferred web search method (free), while Grok is used only for X.com search.
+
 ## Pricing
 
-- Web Search: $5 per 1,000 calls
 - X Search: $5 per 1,000 calls
 
 See x.AI documentation for current pricing: https://docs.x.ai/docs/models
@@ -119,6 +85,6 @@ The skill gracefully handles:
 
 ## Notes
 
-- This skill is separate from the `web-search` skill which uses DuckDuckGo, Google, and Bing
-- You can use both skills together for comprehensive search coverage
+- For general web search, use SearXNG via OpenClaw's `searxng-search` tool - it's free and doesn't consume tokens
+- This skill is specifically for X.com (Twitter) search
 - The X.com search is exclusive to Grok and provides unique capabilities not available in other search APIs
