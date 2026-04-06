@@ -222,9 +222,6 @@
       "nodeManager": "npm"
     },
     "entries": {
-      "web-search": {
-        "enabled": false
-      },
       "grok-search": {
         "enabled": true
       },
