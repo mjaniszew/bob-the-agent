@@ -9,6 +9,7 @@ export { documentCreation } from './document-creation/index.js';
 export { notifications } from './notifications/index.js';
 export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
 export { grokSearch } from './grok-search/index.js';
+export { xComSearch } from './x-com/index.js';
 export { awsS3 } from './aws-s3/index.js';
 
 // Skill metadata for registration
@@ -92,6 +93,25 @@ export const skillRegistry = {
       contentType: { type: 'string', default: 'application/octet-stream', description: 'MIME type of the content' },
       expiresIn: { type: 'number', default: 3600, description: 'URL expiration time in seconds (for getUrl action)' }
     }
+  },
+  'x-com': {
+    name: 'X.com Search',
+    description: 'Search X.com (Twitter) directly via X API for posts, users, and timelines. More cost-effective than Grok for X.com searches.',
+    version: '1.0.0',
+    params: {
+      action: { type: 'string', enum: ['searchPosts', 'searchPostsAll', 'searchUsers', 'getUserTimeline'], required: true, description: 'Action to perform: searchPosts, searchPostsAll, searchUsers, or getUserTimeline' },
+      query: { type: 'string', required: true, description: 'Search query (can include operators like from:user, #hashtag)' },
+      maxResults: { type: 'number', default: 10, description: 'Maximum results to return (10-100 for posts, up to 1000 for users)' },
+      nextToken: { type: 'string', description: 'Pagination token for next page of results' },
+      startTime: { type: 'string', description: 'ISO datetime for start of time range (posts search)' },
+      endTime: { type: 'string', description: 'ISO datetime for end of time range (posts search)' },
+      sinceId: { type: 'string', description: 'Return posts newer than this ID' },
+      untilId: { type: 'string', description: 'Return posts older than this ID' },
+      tweetFields: { type: 'array', description: 'Tweet fields to include (created_at, public_metrics, entities, etc.)' },
+      userFields: { type: 'array', description: 'User fields to include (description, public_metrics, verified, etc.)' },
+      userId: { type: 'string', description: 'User ID for getUserTimeline action' },
+      username: { type: 'string', description: 'Username for getUserTimeline action (alternative to userId)' }
+    }
   }
 };
 
@@ -137,6 +157,10 @@ export async function executeSkill(skillName: string, params: Record<string, any
     case 'grok-search': {
       const { grokSearch } = await import('./grok-search/index.js');
       return grokSearch(params as any);
+    }
+    case 'x-com': {
+      const { xComSearch } = await import('./x-com/index.js');
+      return xComSearch(params as any);
     }
     case 'aws-s3': {
       const { awsS3 } = await import('./aws-s3/index.js');

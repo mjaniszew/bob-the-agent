@@ -15,6 +15,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | notifications | ✅ Implemented | Discord, email notifications |
 | scheduling | ✅ Implemented | Cron-based task scheduling |
 | grok-search | ✅ Implemented | X.AI Grok search for X.com (Twitter) |
+| x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
 
 **System Tool Skills (SKILL.md only):**
@@ -29,7 +30,8 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | WebSearch | ⚠️ Disabled | Uses Grok tokens - prefer SearXNG |
 
 **Environment Variables Required:**
-- `XAI_SEARCH_API_KEY` - For Grok Search (X.com only, separate from main XAI_API_KEY)
+- `XAI_SEARCH_API_KEY` - For X.com API access (x-com skill) and Grok Search (recommended, separate from XAI_API_KEY)
+- `XAI_API_KEY` - Fallback for X.com and Grok search if XAI_SEARCH_API_KEY not set
 - `SEARXNG_SECRET_KEY` - For SearXNG configuration
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_REGION` - For AWS S3
 - `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
@@ -42,6 +44,26 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 2. Available via OpenClaw's built-in `searxng-search` tool
 3. Runs as a Docker container alongside the agent
 4. No API key required - privacy-respecting metasearch
+
+## X.com Search (x-com skill)
+
+1. Direct X.com API access for posts, users, and timelines
+2. Cost-effective alternative to Grok for X.com searches
+3. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid token consumption)
+4. Actions:
+   - `searchPosts` - Search recent posts (last 7 days)
+   - `searchPostsAll` - Search full archive (requires elevated access)
+   - `searchUsers` - Search users by query
+   - `getUserTimeline` - Get user's tweets
+5. Supports pagination with `nextToken` for large result sets
+6. Query operators: `from:user`, `#hashtag`, `has:images`, `lang:en`, etc.
+
+## Grok Search
+
+1. Alternative X.com (Twitter) search using x.AI's Grok API
+2. Use when Grok's AI analysis capabilities are needed for X.com results
+3. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid token consumption)
+4. For most X.com searches, prefer the `x-com` skill as it's more cost-effective
 
 ## Data Extraction and Deep Analysis
 1. Agent should be able to extract data from any source, including web search results, pdf and other documents
@@ -66,13 +88,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 1. Agent should be able to schedulre running particular actions based on task defined by user
 2. Agent should be able to provide possibility to manage scheduled tasks: add, remove, list etc. Managment can be done via CLI
 3. Schedule managemnt should be possible via CLI eg. after connecting to docker container via ssh, or via Discord bot
-
-## Grok Search (X.com Only)
-1. Agent should be able to search X.com (Twitter) using x.AI's Grok API
-2. Should support filtering by X handles and date ranges
-3. Should support image and video understanding for X.com results
-4. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid token consumption)
-5. **For web search, use SearXNG instead** - it's free and doesn't consume tokens
 
 ## AWS S3
 1. Agent should be able to upload files to AWS S3 buckets
