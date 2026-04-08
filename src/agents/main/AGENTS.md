@@ -235,7 +235,7 @@ You are the orchestrator agent. Your job is to delegate specialized tasks to sub
 
 | Agent | Emoji | Purpose | When to Use |
 |-------|-------|---------|-------------|
-| `web-searcher` | 🔍 | Web search and information gathering | Searching the web, finding current information, Grok searches for X/Twitter |
+| `web-searcher` | 🔍 | Web search and information gathering | Searching the web, finding current information, X.com searches |
 | `data-extractor` | 📊 | Data extraction from websites/documents | Extracting structured data, parsing content, scraping |
 | `research-analyzer` | 🔬 | Research and analysis | Analyzing data, cross-referencing sources, synthesis |
 | `document-creator` | 📄 | Document creation | Creating PDF/DOCX documents, reports, formatted output |

@@ -7,14 +7,18 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 ### SearXNG Web Search (searxng-search)
 - Primary web search tool - FREE, no tokens consumed
 - Privacy-respecting metasearch engine
-- Use for ALL general web searches
+- Use for ALL web searches
 - Runs as Docker container alongside agent
 
-### Grok Search Skill
-- Specialized for X.com (Twitter) search ONLY
-- Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY)
-- Real-time discussions and trends from Twitter
-- NOT for general web search - use SearXNG instead
+### X.com Search Skill (x-com)
+- Direct X.com (Twitter) API access for posts, users, and timelines
+- Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
+- Search recent posts (last 7 days) and full archive
+- Search users by query
+- Retrieve user timelines
+- Supports pagination for large result sets
+- Use for X.com/Twitter specific searches
+- For general web search, use SearXNG instead
 
 ### Playwright Skill
 - Headless browser for website interaction and automation
@@ -24,45 +28,19 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Run `playwright-cli --help` for available commands
 
 ### aws-s3 Skill
-- Upload files to AWS S3 cloud storage
-- Generate presigned URLs for time-limited file access
-- Use for persisting generated artifacts and reports
-- Useful for sharing files with external users
+- Upload search results or extracted data to S3
+- Generate shareable presigned URLs for findings
+- Use for persisting research artifacts
 - Requires AWS credentials configured in environment
 
-## What Goes Here
+## Search Tips
 
-Things like:
-
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
-
-## Examples
-
-```markdown
-### Cameras
-
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
-
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
-```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
+- Use SearXNG (searxng-search tool) for ALL general web searches
+- Use X.com Search (x-com) for direct Twitter/X searches - more cost-effective
+- Use `site:` operator to search within specific domains
+- Use quotes for exact phrase matching
+- Include year for time-sensitive queries
+- Combine operators for precision: `site:docs.example.com "API reference" 2026`
 
 ---
-
 Add whatever helps you do your job. This is your cheat sheet.

@@ -29,7 +29,7 @@ You are a specialized agent for web search tasks. Your capabilities:
 
 - **Primary tool:** `web_search` (built-in)
 - **Tools:** `web_fetch`
-- **Skills:** `grok-search`, `web_fetch`, `playwright`
+- **Skills:** `x-com`, `web_fetch`, `playwright`
 - **Fallback:** If primary tools fail, suggest alternative approaches
 
 ### When to Use Each Tool
@@ -38,7 +38,7 @@ You are a specialized agent for web search tasks. Your capabilities:
 |------|----------|
 | `web_search` | General web search, current events, documentation |
 | `web_fetch` skill | Simple Web fetching, HTML parsing |
-| `grok-search` skill | X/Twitter content, real-time discussions |
+| `x-com` skill | X/Twitter content, real-time discussions |
 | `playwright` skill | JavaScript-heavy sites, interactive content, when web fetch fails or specifically asked to use playwright |
 
 ### Search Best Practices
