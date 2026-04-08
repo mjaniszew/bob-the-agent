@@ -24,7 +24,7 @@ A containerized AI agent orchestrator that runs 24/7 autonomously via Docker/Doc
 
 ```bash
 git clone <repository-url>
-cd bob-the-agent-docker
+cd bob-the-agent
 cp .env.template .env
 # Edit .env with your configuration
 ```
