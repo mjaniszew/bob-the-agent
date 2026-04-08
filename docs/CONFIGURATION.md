@@ -25,11 +25,10 @@ OPENAI_API_KEY=
 DISCORD_BOT_TOKEN=
 DISCORD_CLIENT_ID=
 
-# Notifications (Optional)
+# AWS S3 (Optional)
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_REGION=us-east-1
-NOTIFICATION_EMAIL=
 ```
 
 ### openclaw.template.json
@@ -103,15 +102,6 @@ Any `${VAR_NAME}` in the template is replaced with the corresponding environment
 |----------|------|-------------|
 | `DISCORD_BOT_TOKEN` | string | Discord bot token |
 | `DISCORD_CLIENT_ID` | string | Discord application ID |
-
-### Notifications
-
-| Variable | Type | Description |
-|----------|------|-------------|
-| `AWS_ACCESS_KEY_ID` | string | AWS access key for SES |
-| `AWS_SECRET_ACCESS_KEY` | string | AWS secret key |
-| `AWS_REGION` | string | AWS region |
-| `NOTIFICATION_EMAIL` | string | Notification recipient email |
 
 ## Docker Compose Configuration
 

@@ -7,24 +7,26 @@ This document describes the architecture of the Mini Agent system.
 The system runs as multiple Docker containers managed by Docker Compose:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Docker Compose                          │
-│                                                             │
-│  ┌─────────┐    ┌─────────┐                               │
-│  │ ollama  │    │  agent  │                               │
-│  │ :11434  │◄───│ OpenClaw │                               │
-│  │         │    │  :18789  │                               │
-│  └─────────┘    └─────────┘                               │
-│       │              │                                     │
-│       ▼              ▼                                     │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │                  Docker Volumes                      │  │
-│  │  - ollama_data (models)                            │  │
-│  │  - ./volumes/data (database, logs)                 │  │
-│  │  - ./volumes/results (task outputs)                │  │
-│  │  - ./volumes/user-files (input files)              │  │
-│  └─────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Docker Compose                                │
+│                                                                     │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐         │
+│  │ ollama  │    │  agent  │    │ searxng │    │ valkey  │         │
+│  │ :11434  │◄───│ OpenClaw │───►│ :8888   │◄───│ :6379   │         │
+│  │         │    │  :18789  │    │         │    │         │         │
+│  └─────────┘    └─────────┘    └─────────┘    └─────────┘         │
+│       │              │              │              │               │
+│       ▼              ▼              ▼              ▼               │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                      Docker Volumes                          │  │
+│  │  - ollama_data (models)                                      │  │
+│  │  - searxng_config, searxng_data (search engine)              │  │
+│  │  - valkey_data (cache)                                       │  │
+│  │  - ./volumes/data (database, logs)                          │  │
+│  │  - ./volumes/results (task outputs)                          │  │
+│  │  - ./volumes/user-files (input files)                       │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Services
@@ -33,6 +35,14 @@ The system runs as multiple Docker containers managed by Docker Compose:
 |---------|-------------|------|
 | `ollama` | Local LLM inference engine | 11434 |
 | `agent` | OpenClaw-based autonomous agent | 18789 (gateway) |
+| `searxng` | Privacy-respecting metasearch engine | 8888 |
+| `valkey` | Redis-compatible cache for SearXNG | 6379 |
+
+### Service Dependencies
+
+- `agent` depends on `ollama` (LLM inference)
+- `searxng` depends on `valkey` (caching)
+- `agent` connects to `searxng` for web search capabilities
 
 ## Configuration Flow
 
@@ -85,26 +95,20 @@ src/skills/
 ├── math-operations/
 │   ├── index.ts
 │   └── math-operations.md
-├── document-creation/
-│   ├── index.ts
-│   └── document-creation.md
-├── notifications/
-│   ├── index.ts
-│   └── notifications.md
-└── scheduling/
-    ├── index.ts
-    └── scheduling.md
 ```
 
 ### Current Integration Status
 
 **⚠️ Important:** The skills in `src/skills/` are TypeScript implementations that are NOT currently integrated with the OpenClaw agent.
 
-| Status | Description |
-|--------|-------------|
-| ✅ Implemented | Skill code exists with proper TypeScript types |
-| ⚠️ Not Integrated | Skills lack OpenClaw skill loader mechanism |
-| 📋 See Task 3 | `docs/tasks/3-integrate-skills.md` for follow-up work |
+**Current Integration Status:**
+
+| Skill | Status | Description |
+|-------|--------|-------------|
+| data-extraction | ✅ Implemented | Extract structured data from websites/documents |
+| math-operations | ✅ Implemented | Mathematical calculations and operations |
+| x-com | ✅ Implemented | X.com (Twitter) API integration for posts and searches |
+| aws-s3 | ✅ Implemented | Upload files and generate presigned URLs |
 
 These implementations serve as:
 1. **Documentation** of expected skill interfaces
@@ -114,37 +118,52 @@ These implementations serve as:
 ## Data Flow
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                      Data Flow                             │
-│                                                            │
-│  User → Discord → Agent Gateway (18789)                    │
-│                           │                                │
-│                           ▼                                │
-│                     OpenClaw Agent                         │
-│                           │                                │
-│              ┌────────────┼────────────┐                   │
-│              ▼            ▼            ▼                   │
-│         Skills      Task Queue     Memory                  │
-│              │            │            │                   │
-│              │            ▼            │                   │
-│              │      SQLite DB         │                   │
-│              │       (tasks.db)        │                   │
-│              │                         │                   │
-│              ▼                         ▼                   │
-│         Provider API            File Storage               │
-│         (Ollama/Cloud)          (/app/workspace)            │
-└────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                        Data Flow                              │
+│                                                              │
+│  User → Discord → Agent Gateway (18789)                      │
+│                           │                                  │
+│                           ▼                                  │
+│                     OpenClaw Agent                           │
+│                           │                                  │
+│              ┌────────────┼────────────┐                     │
+│              ▼            ▼            ▼                     │
+│         Skills      Task Queue     Memory                     │
+│              │            │            │                     │
+│              │            ▼            │                     │
+│              │      SQLite DB         │                     │
+│              │       (tasks.db)        │                     │
+│              │                         │                     │
+│              ▼                         ▼                     │
+│         Provider API            File Storage                 │
+│         (Ollama/Cloud)          (/app/workspace)              │
+│              │                                                │
+│              ▼                                                │
+│         ┌────────────────────────────────────┐               │
+│         │         External Services          │               │
+│         │  ┌─────────┐  ┌───────────────┐  │               │
+│         │  │ SearXNG │  │ X.com API     │  │               │
+│         │  │ :8888   │  │ (via x-com)   │  │               │
+│         │  └─────────┘  └───────────────┘  │               │
+│         │  ┌─────────┐  ┌───────────────┐  │               │
+│         │  │ AWS S3  │  │ Other APIs    │  │               │
+│         │  └─────────┘  └───────────────┘  │               │
+│         └────────────────────────────────────┘               │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Storage Locations
 
 | Path (Container) | Path (Host) | Purpose |
 |-------------------|-------------|---------|
-| `/app/workspace` | `./volumes/workspace` | Working directory for tasks |
+| `/app/workspace` | `agent_workspace` volume | Working directory for tasks |
 | `/app/results` | `./volumes/results` | Task output files |
 | `/app/user-files` | `./volumes/user-files` | Input files from user |
 | `/app/data` | `./volumes/data` | Database, logs, memory |
 | `/root/.ollama` | `ollama_data` volume | Downloaded models |
+| `/etc/searxng` | `searxng_config` volume | SearXNG configuration |
+| `/var/cache/searxng` | `searxng_data` volume | SearXNG cache |
+| `/data` | `valkey_data` volume | Valkey/Redis data |
 
 ## Environment Variables
 
@@ -152,8 +171,14 @@ See `.env.template` for all configurable variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `OLLAMA_API_KEY` | No | Ollama API key for cloud models |
 | `DISCORD_BOT_TOKEN` | For Discord | Bot token from Discord Developer Portal |
-| `OLLAMA_BASE_URL` | No | Defaults to `http://ollama:11434` |
+| `SEARXNG_BASE_URL` | No | SearXNG URL (defaults to http://searxng:8888) |
+| `X_COM_API_TOKEN` | For X.com | X.com API token for x-com skill |
+| `AWS_ACCESS_KEY_ID` | For AWS S3 | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
+| `AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
+| `AWS_S3_REGION` | For AWS S3 | S3 bucket region |
 
 Environment variables are substituted at container startup via the `generate-config.mjs` script.
 

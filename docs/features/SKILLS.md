@@ -11,9 +11,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 |-------|--------|-------------|
 | data-extraction | ✅ Implemented | Extract data from files and URLs |
 | math-operations | ✅ Implemented | Mathematical calculations |
-| document-creation | ✅ Implemented | PDF and DOCX generation |
-| notifications | ✅ Implemented | Discord, email notifications |
-| scheduling | ✅ Implemented | Cron-based task scheduling |
 | x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
 
@@ -64,20 +61,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 ## Math operations
 1. Agent should be able to use proper and accurate math operations to perform calculations and complex data analysis
 2. Agent should be able to choose separate math models depending on task to perform better calculations
-
-## Documents creation
-1. Agent should be able to create documents in various formats, including pdf, docx
-2. Documents should be possible to be created in various languages, including English, Polish
-3. Documents should be possible to be created in varius structures eg. serving purposes of reports, articles, economic analysis, etc.
-
-## Notifications
-1. Agent should have possibility to send notifications to user when task is being performed or in other cases defined in task by user
-2. Notifications can be: push notifications, Discord bot notifications, email notifications via amazon ses etc. Type of notification should be also be decided based on task definition provided by user
-
-## Scheduling
-1. Agent should be able to schedulre running particular actions based on task defined by user
-2. Agent should be able to provide possibility to manage scheduled tasks: add, remove, list etc. Managment can be done via CLI
-3. Schedule managemnt should be possible via CLI eg. after connecting to docker container via ssh, or via Discord bot
 
 ## AWS S3
 1. Agent should be able to upload files to AWS S3 buckets

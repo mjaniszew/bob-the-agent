@@ -122,21 +122,6 @@
         "fastModeDefault": false
       },
       {
-        "id": "document-creator",
-        "name": "document-creator",
-        "workspace": "/app/workspace/document-creator",
-        "agentDir": "/home/node/.openclaw/agents/document-creator/agent",
-        "model": {
-          "primary": "ollama/minimax-m2.7:cloud",
-          "fallbacks": [
-            "ollama/qwen3.5:4b"
-          ]
-        },
-        "thinkingDefault": "high",
-        "reasoningDefault": "on",
-        "fastModeDefault": false
-      },
-      {
         "id": "research-analyzer",
         "name": "research-analyzer",
         "workspace": "/app/workspace/research-analyzer",
@@ -228,15 +213,6 @@
       },
       "math-operations": {
         "enabled": true
-      },
-      "document-creation": {
-        "enabled": true
-      },
-      "notifications": {
-        "enabled": false
-      },
-      "scheduling": {
-        "enabled": false
       },
       "playwright": {
         "enabled": true

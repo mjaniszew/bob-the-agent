@@ -38,8 +38,7 @@ const commands = [
               { name: 'Web Search', value: 'web-search' },
               { name: 'Data Extraction', value: 'data-extraction' },
               { name: 'Math Operations', value: 'math-operations' },
-              { name: 'Document Creation', value: 'document-creation' },
-              { name: 'Notifications', value: 'notifications' }
+              { name: 'AWS S3', value: 'aws-s3' }
             )
         )
     )
