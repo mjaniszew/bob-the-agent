@@ -13,7 +13,7 @@ ARG GROUP_ID=1000
 ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/node
 
-# Install system dependencies (python, make, g++ for native modules like better-sqlite3)
+# Install system dependencies (python, make, g++ for native modules)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \

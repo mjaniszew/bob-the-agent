@@ -15,7 +15,7 @@ This project builds a containerized AI agent that runs 24/7 autonomously via Doc
 - **docs/features/** - Feature specifications that serve as additional context when building new capabilities:
   - `GENERAL.md` - Autonomy, CLI, Discord bot, web interface requirements
   - `PROVIDERS.md` - Ollama integration and model provider configuration
-  - `SKILLS.md` - Web search, data extraction, math operations, document creation, notifications, scheduling
+  - `SKILLS.md` - Web search, data extraction, math operations, AWS S3, Playwright
 - **docs/tasks/** - Specific task definitions to execute (work on one task at a time when specified)
 - **dockerfiles/** - Docker-related build files
 

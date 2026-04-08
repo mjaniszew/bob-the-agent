@@ -8,7 +8,7 @@ A containerized AI agent orchestrator that runs 24/7 autonomously via Docker/Doc
 - **Multiple Interfaces**: CLI, Discord bot, and web dashboard
 - **Local LLM**: Uses Ollama for cost-effective inference
 - **Cloud Fallback**: Supports Anthropic and OpenAI APIs
-- **Skills**: Web search, data extraction, math operations, document creation, notifications, scheduling, AWS S3, Playwright
+- **Skills**: Web search, data extraction, math operations, AWS S3, Playwright
 - **Docker**: Easy deployment with Docker Compose
 
 ## Quick Start
@@ -34,34 +34,42 @@ cp .env.template .env
 docker compose up -d
 ```
 
-### 3. Access the Dashboard
-
-Open http://localhost:8080 in your browser.
-
-Default credentials:
-- Username: `admin`
-- Password: `change-me-secure-password`
-
-### 4. Pull a Model
+### 3. Pull a Model
 
 ```bash
 # Pull the default model
 docker exec bob-the-agent-ollama ollama pull llama3.2
 ```
 
+### 4. Sign in to Ollama (First Run)
+
+```bash
+# Sign in to Ollama in the ollama container
+docker exec -it bob-the-agent-ollama ollama signin
+```
+
+### 5. Pair Discord Bot (Optional)
+
+If using Discord bot:
+
+```bash
+# Pair Discord bot in the agent container
+docker exec -it bob-the-agent openclaw pairing approve discord
+```
+
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Docker Network                       │
-├─────────────────┬─────────────────┬─────────────────────┤
-│                 │                 │                     │
-│   Ollama        │   Agent         │   Web Interface    │
-│   Port: 11434   │   Port: 18789   │   Port: 8080       │
-│                 │                 │                     │
-│   LLM Inference │   OpenClaw      │   React + Node.js  │
-│                 │   Gateway       │   + Nginx          │
-└─────────────────┴─────────────────┴─────────────────────┘
+┌───────────────────────────────────────┐
+│            Docker Network              │
+├─────────────────┬─────────────────────┤
+│                 │                     │
+│   Ollama        │   Agent             │
+│   Port: 11434   │   Port: 18789      │
+│                 │                     │
+│   LLM Inference │   OpenClaw          │
+│                 │   Gateway           │
+└─────────────────┴─────────────────────┘
 ```
 
 ## Configuration
@@ -117,16 +125,6 @@ openclaw schedule add --cron "0 9 * * *" "Daily report"
 4. Invite the bot to your server
 5. Use slash commands: `/task`, `/schedule`, `/status`, `/result`
 
-### Web Dashboard
-
-Access at http://localhost:8080
-
-- View task status and history
-- Create and run tasks
-- Manage schedules
-- Download results
-- View system diagnostics
-
 ## Skills
 
 ### Web Search
@@ -168,54 +166,6 @@ Calculate expressions and statistics.
   "parameters": {
     "operation": "calculate",
     "expression": "sqrt(2) * pi"
-  }
-}
-```
-
-### Document Creation
-
-Generate PDF and DOCX documents.
-
-```json
-{
-  "skill": "document-creation",
-  "parameters": {
-    "format": "pdf",
-    "template": "report",
-    "language": "en",
-    "content": {
-      "title": "Report Title",
-      "sections": [...]
-    }
-  }
-}
-```
-
-### Notifications
-
-Send notifications via Discord or email.
-
-```json
-{
-  "skill": "notifications",
-  "parameters": {
-    "channels": [{ "type": "discord", "webhook_url": "..." }],
-    "message": { "title": "Task Complete", "body": "..." }
-  }
-}
-```
-
-### Scheduling
-
-Schedule recurring tasks.
-
-```json
-{
-  "skill": "scheduling",
-  "parameters": {
-    "mode": "cron",
-    "schedule": { "expression": "0 9 * * *" },
-    "task": { "name": "Daily Report", "skill": "web-search", ... }
   }
 }
 ```
@@ -358,10 +308,3 @@ docker compose logs web
 ## License
 
 MIT License
-
-## Acknowledgments
-
-- [OpenClaw](https://github.com/openclaw/openclaw) - AI agent framework
-- [Ollama](https://ollama.com) - Local LLM inference
-- [React](https://react.dev) - Frontend framework
-- [Express](https://expressjs.com) - Backend framework

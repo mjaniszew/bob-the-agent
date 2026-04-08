@@ -54,9 +54,6 @@ Available skills:
   - x-com               Search X.com using x.AI API
   - data-extraction     Extract data from URLs and files
   - math-operations     Perform calculations and statistical analysis
-  - document-creation  Create PDF or DOCX documents
-  - notifications       Send notifications via Discord, email, push
-  - scheduling         Schedule tasks for later execution
   - aws-s3             Upload files to S3 and generate presigned URLs
 
 Examples:
@@ -94,9 +91,6 @@ const skillRegistry = {
   'x-com': () => import(`${SKILLS_DIST}/x-com/index.js`).then(m => m.default),
   'data-extraction': () => import(`${SKILLS_DIST}/data-extraction/index.js`).then(m => m.default),
   'math-operations': () => import(`${SKILLS_DIST}/math-operations/index.js`).then(m => m.default),
-  'document-creation': () => import(`${SKILLS_DIST}/document-creation/index.js`).then(m => m.default),
-  'notifications': () => import(`${SKILLS_DIST}/notifications/index.js`).then(m => m.default),
-  'scheduling': () => import(`${SKILLS_DIST}/scheduling/index.js`).then(m => m.default),
   'aws-s3': () => import(`${SKILLS_DIST}/aws-s3/index.js`).then(m => m.default)
 };
 

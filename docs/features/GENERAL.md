@@ -14,9 +14,8 @@ This file describes general features and requirements that agent should have.
 1. Agent should have CLI possible to be accessed via ssh to Docker compose
 2. CLI can be something that comes with particular agent solution if fits the requirement eg. Claude Code CLI, or OpenClaw CLI
 3. CLI should allow to add, run or delete tasks defined by user
-4. CLI should allow to manage scheduling of tasks: add, list, remove etc.
-5. CLI should allow to manage agent's skills, capabilities etc.
-6. CLI should allow to select/change models providers
+4. CLI should allow to manage agent's skills, capabilities etc.
+5. CLI should allow to select/change models providers
 
 ## Discord Bot
 1. Agent should have connection with Discord bot that can be used to communicate

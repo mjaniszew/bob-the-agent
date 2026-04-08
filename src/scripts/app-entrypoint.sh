@@ -22,7 +22,7 @@ for skill_dir in /app/skills/*/; do
   fi
 done
 
-# Ensure data directory exists for scheduling database
+# Ensure data directory exists for agent database
 mkdir -p /app/data
 
 # Execute the main command

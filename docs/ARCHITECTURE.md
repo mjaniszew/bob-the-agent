@@ -85,26 +85,20 @@ src/skills/
 ├── math-operations/
 │   ├── index.ts
 │   └── math-operations.md
-├── document-creation/
-│   ├── index.ts
-│   └── document-creation.md
-├── notifications/
-│   ├── index.ts
-│   └── notifications.md
-└── scheduling/
-    ├── index.ts
-    └── scheduling.md
 ```
 
 ### Current Integration Status
 
 **⚠️ Important:** The skills in `src/skills/` are TypeScript implementations that are NOT currently integrated with the OpenClaw agent.
 
-| Status | Description |
-|--------|-------------|
-| ✅ Implemented | Skill code exists with proper TypeScript types |
-| ⚠️ Not Integrated | Skills lack OpenClaw skill loader mechanism |
-| 📋 See Task 3 | `docs/tasks/3-integrate-skills.md` for follow-up work |
+**Current Integration Status:**
+
+| Skill | Status | Description |
+|-------|--------|-------------|
+| data-extraction | ✅ Implemented | Extract structured data from websites/documents |
+| math-operations | ✅ Implemented | Mathematical calculations and operations |
+| x-com | ✅ Implemented | X.com (Twitter) API integration for posts and searches |
+| aws-s3 | ✅ Implemented | Upload files and generate presigned URLs |
 
 These implementations serve as:
 1. **Documentation** of expected skill interfaces

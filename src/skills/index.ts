@@ -5,9 +5,6 @@
 
 export { dataExtraction } from './data-extraction/index.js';
 export { mathOperations } from './math-operations/index.js';
-export { documentCreation } from './document-creation/index.js';
-export { notifications } from './notifications/index.js';
-export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
 export { xComSearch } from './x-com/index.js';
 export { awsS3 } from './aws-s3/index.js';
 
@@ -32,37 +29,6 @@ export const skillRegistry = {
       expression: { type: 'string', description: 'Mathematical expression to evaluate' },
       data: { type: 'array', description: 'Data array for statistics' },
       precision: { type: 'number', default: 4, description: 'Decimal precision' }
-    }
-  },
-  'document-creation': {
-    name: 'Document Creation',
-    description: 'Create documents in various formats with customizable templates',
-    version: '1.0.0',
-    params: {
-      format: { type: 'string', enum: ['pdf', 'docx'], required: true },
-      template: { type: 'string', enum: ['report', 'article', 'analysis', 'letter', 'custom'], default: 'report' },
-      language: { type: 'string', enum: ['en', 'pl'], default: 'en' },
-      content: { type: 'object', required: true, description: 'Document content structure' }
-    }
-  },
-  'notifications': {
-    name: 'Notifications',
-    description: 'Send notifications through various channels',
-    version: '1.0.0',
-    params: {
-      channels: { type: 'array', required: true, description: 'Notification channels' },
-      message: { type: 'object', required: true, description: 'Message content' },
-      retryCount: { type: 'number', default: 3, description: 'Retry attempts' }
-    }
-  },
-  'scheduling': {
-    name: 'Scheduling',
-    description: 'Manage scheduled task execution',
-    version: '1.0.0',
-    params: {
-      mode: { type: 'string', enum: ['cron', 'interval', 'once'], required: true },
-      schedule: { type: 'object', required: true, description: 'Schedule configuration' },
-      task: { type: 'object', required: true, description: 'Task to execute' }
     }
   },
   'aws-s3': {
@@ -125,18 +91,6 @@ export async function executeSkill(skillName: string, params: Record<string, any
     case 'math-operations': {
       const { mathOperations } = await import('./math-operations/index.js');
       return mathOperations(params as any);
-    }
-    case 'document-creation': {
-      const { documentCreation } = await import('./document-creation/index.js');
-      return documentCreation(params as any);
-    }
-    case 'notifications': {
-      const { notifications } = await import('./notifications/index.js');
-      return notifications(params as any);
-    }
-    case 'scheduling': {
-      const { scheduling } = await import('./scheduling/index.js');
-      return scheduling(params as any);
     }
     case 'x-com': {
       const { xComSearch } = await import('./x-com/index.js');
