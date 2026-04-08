@@ -1,4 +1,5 @@
 # BOB The Agent
+![Bob The Agent](img/bob-logo-sm.png)
 
 A containerized AI agent orchestrator that runs 24/7 autonomously via Docker/Docker Compose. Built with OpenClaw framework and Ollama for local LLM inference.
 
@@ -129,21 +130,6 @@ openclaw schedule add --cron "0 9 * * *" "Daily report"
 
 ## Skills
 
-### Web Search
-
-Search multiple sources simultaneously.
-
-```json
-{
-  "skill": "web-search",
-  "parameters": {
-    "query": "latest AI developments",
-    "sources": ["duckduckgo", "google"],
-    "maxResults": 10
-  }
-}
-```
-
 ### Data Extraction
 
 Extract data from PDFs, web pages, and DOCX files.
@@ -208,14 +194,13 @@ playwright-cli close
 
 ```
 bob-the-agent-docker/
-├── docker-compose.yml       # Service orchestration
+├── compose.yaml       # Service orchestration
 ├── dockerfiles/
 │   ├── Dockerfile.agent     # Agent container
-│   └── Dockerfile.web       # Web interface container
 ├── src/
-│   ├── api/                 # Node.js API server
-│   ├── frontend/            # React web interface
-│   ├── config/              # OpenClaw & Nginx configuration
+│   ├── agents/              # Agents definitions
+│   ├── config/              # OpenClaw configuration
+│   ├── scripts/             # Global scripts for agents and containers setup
 │   ├── skills/              # Skill implementations
 │   └── discord/             # Discord bot
 ├── volumes/
