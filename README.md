@@ -38,7 +38,7 @@ docker compose up -d
 
 ```bash
 # Pull the default model
-docker exec bob-the-agent-ollama ollama pull llama3.2
+docker exec bob-the-agent-ollama ollama pull qwen3.5:4b
 ```
 
 ### 4. Sign in to Ollama (First Run)
@@ -54,22 +54,22 @@ If using Discord bot:
 
 ```bash
 # Pair Discord bot in the agent container
-docker exec -it bob-the-agent openclaw pairing approve discord
+docker exec -it bob-the-agent openclaw pairing approve discord <pairing-token>
 ```
 
 ## Architecture
 
 ```
-┌───────────────────────────────────────┐
-│            Docker Network              │
-├─────────────────┬─────────────────────┤
-│                 │                     │
-│   Ollama        │   Agent             │
-│   Port: 11434   │   Port: 18789      │
-│                 │                     │
-│   LLM Inference │   OpenClaw          │
-│                 │   Gateway           │
-└─────────────────┴─────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                       Docker Network                    │
+├─────────────────┬───────────────────┬───────────────────┤
+│                 │                   │                   │
+│   Ollama        │   Agent           │   SearXNG         │
+│   Port: 11434   │   Port: 18789     │   Port: 8888      │
+│                 │                   │                   │
+│   LLM Inference │   OpenClaw        │   Search Engine   │
+│                 │   Gateway         │                   │
+└─────────────────┴───────────────────┴───────────────────┘
 ```
 
 ## Configuration
@@ -81,12 +81,14 @@ docker exec -it bob-the-agent openclaw pairing approve discord
 | `LOG_LEVEL` | Logging level | `info` |
 | `DEFAULT_PROVIDER` | Primary model provider | `ollama` |
 | `OLLAMA_BASE_URL` | Ollama API URL | `http://ollama:11434` |
-| `OLLAMA_MODEL` | Default model | `llama3.2` |
-| `WEB_USERNAME` | Web UI username | `admin` |
-| `WEB_PASSWORD` | Web UI password | `change-me-secure-password` |
+| `OLLAMA_MODEL` | Default model | `qwen3.5:4b` |
+| `OLLAMA_API_KEY` | Ollama API Key | - |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
 | `ANTHROPIC_API_KEY` | Anthropic API key | - |
-| `OPENAI_API_KEY` | OpenAI API key | - |
+| `AWS_S3_BUCKET` | AWS S3 Bucket to upload files to | - |
+| `AWS_S3_REGION` | AWS S3 Region | - |
+| `AWS_ACCESS_KEY_ID` | AWS S3 Access Key | - |
+| `AWS_SECRET_ACCESS_KEY` | AWS S3 Access Key Secret | - |
 
 ### Volume Mounts
 
@@ -200,33 +202,6 @@ playwright-cli screenshot --filename=screenshot.png
 playwright-cli close
 ```
 
-## API Reference
-
-### Tasks
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/tasks` | GET | List all tasks |
-| `/api/tasks` | POST | Create a task |
-| `/api/tasks/:id` | GET | Get task details |
-| `/api/tasks/:id` | DELETE | Delete a task |
-| `/api/tasks/:id/run` | POST | Execute a task |
-
-### Schedules
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/schedules` | GET | List all schedules |
-| `/api/schedules` | POST | Create a schedule |
-| `/api/schedules/:id` | DELETE | Delete a schedule |
-
-### Status
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/status` | GET | Get agent status |
-| `/api/diagnostics` | GET | Get system diagnostics |
-
 ## Development
 
 ### Project Structure
@@ -281,8 +256,8 @@ npm test
 # Check if Ollama is running
 docker compose logs ollama
 
-# Pull a model manually
-docker exec bob-the-agent-ollama ollama pull llama3.2
+# Pull a local model manually
+docker exec bob-the-agent-ollama ollama pull qwen3.5:4b
 ```
 
 ### Agent container not starting
@@ -295,14 +270,14 @@ docker compose logs agent
 docker compose config
 ```
 
-### Web interface not accessible
+### Search enginge not working
 
 ```bash
-# Check if web service is running
-docker compose ps web
+# Check if searXNG service is running
+docker compose ps searxng
 
-# Check Nginx logs
-docker compose logs web
+# Check searXNG logs
+docker compose logs searxng
 ```
 
 ## License

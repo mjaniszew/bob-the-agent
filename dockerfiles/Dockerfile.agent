@@ -66,9 +66,11 @@ RUN mkdir -p /home/node/.openclaw/ && chown -R node:node /home/node/.openclaw/
 
 # Switch to non-root user
 USER node:node
+# Install plightwright skills
+WORKDIR /home/node
+RUN playwright-cli install --skills
 # Set working directory to app for further actions
 WORKDIR /app
-RUN playwright-cli install --skills
 
 # Expose OpenClaw gateway port
 EXPOSE 18789
