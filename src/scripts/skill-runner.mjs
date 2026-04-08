@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Skills are compiled to /app/skills/dist/ in the container
-const SKILLS_DIST = '/app/skills/dist';
+const SKILLS_DIST = process.env.APP_SKILLS_DIST || '/app/skills/dist';
 
 // Parse command line arguments
 function parseArgs() {
@@ -51,7 +51,7 @@ Options:
 
 Available skills:
   - web-search          Search the web using DuckDuckGo, Google, or Bing
-  - grok-search         Search web and X.com using x.AI Grok API
+  - x-com               Search X.com using x.AI API
   - data-extraction     Extract data from URLs and files
   - math-operations     Perform calculations and statistical analysis
   - document-creation  Create PDF or DOCX documents
@@ -66,8 +66,8 @@ Examples:
   # Math calculation
   node skill-runner.mjs --skill math-operations --params '{"operation":"calculate","expression":"2+2"}'
 
-  # Grok search
-  node skill-runner.mjs --skill grok-search --params '{"query":"latest tech","mode":"web"}'
+  # x.com search
+  node skill-runner.mjs --skill x-com --params '{"action": "searchPosts", "query": "breaking news", "maxResults": 20}'
 
   # S3 file upload
   node skill-runner.mjs --skill aws-s3 --params '{"action":"upload","key":"test/file.txt","content":"Hello World"}'
@@ -91,7 +91,7 @@ Examples:
 // Skill registry with lazy loading
 const skillRegistry = {
   'web-search': () => import(`${SKILLS_DIST}/web-search/index.js`).then(m => m.default),
-  'grok-search': () => import(`${SKILLS_DIST}/grok-search/index.js`).then(m => m.default),
+  'x-com': () => import(`${SKILLS_DIST}/x-com/index.js`).then(m => m.default),
   'data-extraction': () => import(`${SKILLS_DIST}/data-extraction/index.js`).then(m => m.default),
   'math-operations': () => import(`${SKILLS_DIST}/math-operations/index.js`).then(m => m.default),
   'document-creation': () => import(`${SKILLS_DIST}/document-creation/index.js`).then(m => m.default),

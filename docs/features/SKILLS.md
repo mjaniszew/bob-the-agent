@@ -30,8 +30,8 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | WebSearch | ⚠️ Disabled | Uses Grok tokens - prefer SearXNG |
 
 **Environment Variables Required:**
-- `XAI_SEARCH_API_KEY` - For X.com API access (x-com skill) and Grok Search (recommended, separate from XAI_API_KEY)
-- `XAI_API_KEY` - Fallback for X.com and Grok search if XAI_SEARCH_API_KEY not set
+- `X_COM_API_TOKEN` - For X.com API access (x-com skill) and Grok Search (recommended, separate from XAI_API_KEY)
+- `XAI_API_KEY` - Fallback for X.com and Grok search if X_COM_API_TOKEN not set
 - `SEARXNG_SECRET_KEY` - For SearXNG configuration
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_REGION` - For AWS S3
 - `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
@@ -49,7 +49,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 
 1. Direct X.com API access for posts, users, and timelines
 2. Cost-effective alternative to Grok for X.com searches
-3. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid token consumption)
+3. Uses `X_COM_API_TOKEN` (separate from `XAI_API_KEY` to avoid token consumption)
 4. Actions:
    - `searchPosts` - Search recent posts (last 7 days)
    - `searchPostsAll` - Search full archive (requires elevated access)
@@ -62,7 +62,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 
 1. Alternative X.com (Twitter) search using x.AI's Grok API
 2. Use when Grok's AI analysis capabilities are needed for X.com results
-3. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid token consumption)
+3. Uses `X_COM_API_TOKEN` (separate from `XAI_API_KEY` to avoid token consumption)
 4. For most X.com searches, prefer the `x-com` skill as it's more cost-effective
 
 ## Data Extraction and Deep Analysis

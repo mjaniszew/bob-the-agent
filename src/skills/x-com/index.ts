@@ -102,10 +102,9 @@ const DEFAULT_USER_FIELDS = [
 
 /**
  * Get the API key from environment variables
- * Priority: XAI_SEARCH_API_KEY > XAI_API_KEY
  */
 function getApiKey(): string | null {
-  return process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY || null;
+  return process.env.X_COM_API_TOKEN || null;
 }
 
 /**
@@ -115,7 +114,7 @@ async function xApiRequest(
   endpoint: string,
   apiKey: string,
   params: Record<string, string | number | undefined> = {}
-): Promise<{ data: any; meta: any }> {
+): Promise<Record<string, any>> {
   const url = new URL(`${X_API_BASE}${endpoint}`);
 
   // Add query parameters
@@ -142,7 +141,7 @@ async function xApiRequest(
     };
   }
 
-  return response.json();
+  return response.json() as Record<string, any>;
 }
 
 /**
@@ -367,7 +366,7 @@ async function getUserTimeline(
  */
 function formatError(error: any): string {
   if (error.status === 401) {
-    return 'Unauthorized: Invalid API key. Check XAI_SEARCH_API_KEY environment variable.';
+    return 'Unauthorized: Invalid API key. Check X_COM_API_TOKEN environment variable.';
   }
   if (error.status === 429) {
     return 'Rate limit exceeded. Please wait before making more requests.';
@@ -405,7 +404,7 @@ export async function xComSearch(params: XComSearchParams): Promise<XComSearchRe
       action: params.action,
       data: [],
       meta: { resultCount: 0 },
-      error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is required. Use XAI_SEARCH_API_KEY (recommended) for direct X API access.',
+      error: 'X_COM_API_TOKEN or XAI_API_KEY environment variable is required. Use X_COM_API_TOKEN (recommended) for direct X API access.',
       executionTime: executionTime()
     };
   }

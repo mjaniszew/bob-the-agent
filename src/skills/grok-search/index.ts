@@ -43,14 +43,14 @@ const XAI_API_BASE = 'https://api.x.ai/v1';
 
 /**
  * Search X.com (Twitter) using x.AI's x_search tool
- * Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY to avoid token consumption)
+ * Uses X_COM_API_TOKEN (separate from main XAI_API_KEY to avoid token consumption)
  */
 async function grokXSearch(params: GrokXSearchParams): Promise<SearchResult> {
-  // Use XAI_SEARCH_API_KEY for search (separate from main XAI_API_KEY)
-  const apiKey = process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY;
+  // Use X_COM_API_TOKEN for search (separate from main XAI_API_KEY)
+  const apiKey = process.env.X_COM_API_TOKEN || process.env.XAI_API_KEY;
 
   if (!apiKey) {
-    return { results: [], error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is not set. Use XAI_SEARCH_API_KEY (recommended) to avoid consuming tokens for web search via OpenClaw.' };
+    return { results: [], error: 'X_COM_API_TOKEN or XAI_API_KEY environment variable is not set. Use X_COM_API_TOKEN (recommended) to avoid consuming tokens for web search via OpenClaw.' };
   }
 
   const requestBody: Record<string, unknown> = {
@@ -134,7 +134,7 @@ interface GrokSearchOutput {
  */
 export async function grokSearch(params: { query: string; allowedXHandles?: string[]; excludedXHandles?: string[]; fromDate?: string; toDate?: string; enableImageUnderstanding?: boolean; enableVideoUnderstanding?: boolean; maxResults?: number }): Promise<GrokSearchOutput> {
   const startTime = Date.now();
-  const apiKey = process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY;
+  const apiKey = process.env.X_COM_API_TOKEN || process.env.XAI_API_KEY;
 
   console.log("Doing Grok X Search");
 
@@ -144,7 +144,7 @@ export async function grokSearch(params: { query: string; allowedXHandles?: stri
       results: [],
       totalFound: 0,
       executionTime: Date.now() - startTime,
-      error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is not set. Use XAI_SEARCH_API_KEY (recommended) to avoid consuming tokens for web search via OpenClaw.'
+      error: 'X_COM_API_TOKEN or XAI_API_KEY environment variable is not set. Use X_COM_API_TOKEN (recommended) to avoid consuming tokens for web search via OpenClaw.'
     };
   }
 

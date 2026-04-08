@@ -16,7 +16,7 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 ### Grok Search Skill
 - Specialized for X.com (Twitter) search ONLY
-- Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY)
+- Uses X_COM_API_TOKEN (separate from main XAI_API_KEY)
 - NOT for general web search - use SearXNG instead
 
 ### Analysis Capabilities

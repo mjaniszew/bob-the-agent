@@ -12,20 +12,13 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 ### X.com Search Skill (x-com)
 - Direct X.com (Twitter) API access - cost-effective alternative to Grok
-- Uses XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
+- Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
 - Search recent posts (last 7 days) and full archive
 - Search users by query
 - Retrieve user timelines
 - Supports pagination for large result sets
 - Use for X.com/Twitter specific searches
 - For general web search, use SearXNG instead
-
-### Grok Search Skill
-- Specialized for X.com (Twitter) search using x.AI Grok API
-- Uses XAI_SEARCH_API_KEY (separate from main XAI_API_KEY)
-- Real-time discussions and trends from Twitter
-- Alternative to x-com when Grok's AI analysis is needed
-- NOT for general web search - use SearXNG instead
 
 ### Playwright Skill
 - Headless browser for website interaction and automation

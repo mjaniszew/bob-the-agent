@@ -67,9 +67,9 @@ Returns JSON with:
 
 ## Environment Variables
 
-- `XAI_SEARCH_API_KEY`: Required for Grok API access (recommended, separate from main XAI_API_KEY)
-- `XAI_API_KEY`: Fallback if XAI_SEARCH_API_KEY is not set
+- `X_COM_API_TOKEN`: Required for Grok API access (recommended, separate from main XAI_API_KEY)
+- `XAI_API_KEY`: Fallback if X_COM_API_TOKEN is not set
 
 ## Why Separate API Key?
 
-Using `XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY` prevents OpenClaw from consuming tokens for web search. SearXNG is used for web search (free), while Grok is used only for X.com search.
+Using `X_COM_API_TOKEN` instead of the main `XAI_API_KEY` prevents OpenClaw from consuming tokens for web search. SearXNG is used for web search (free), while Grok is used only for X.com search.

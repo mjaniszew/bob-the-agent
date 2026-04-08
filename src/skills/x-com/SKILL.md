@@ -1,16 +1,13 @@
 ---
 name: x-com
-description: Search X.com (Twitter) directly via X API for posts, users, and timelines. More cost-effective than Grok for X.com searches.
-version: 1.0.0
-trigger: "x.com search|twitter search|x post|x user|tweet search|timeline|x-com"
-tools: [shell]
+description: Use this skill to search X.com (Twitter) directly via the native X API. This is a cost-effective alternative to Grok for X.com-specific searches. Trigger words: x.com api search|twitter api search|x-com api
 ---
 
 # X.com Search Skill
 
 Use this skill to search X.com (Twitter) directly via the native X API. This is a cost-effective alternative to Grok for X.com-specific searches.
 
-**IMPORTANT:** This skill uses the native X API directly, not Grok. Use `XAI_SEARCH_API_KEY` (recommended) to avoid consuming Grok tokens.
+**IMPORTANT:** This skill uses the native X API directly, not Grok. Use `X_COM_API_TOKEN` (recommended) to avoid consuming Grok tokens.
 
 ## When to Use
 
@@ -215,12 +212,12 @@ Returns JSON with:
 
 ## Environment Variables
 
-- `XAI_SEARCH_API_KEY` - Required for X API access (recommended, separate from XAI_API_KEY)
-- `XAI_API_KEY` - Fallback if XAI_SEARCH_API_KEY is not set
+- `X_COM_API_TOKEN` - Required for X API access (recommended, separate from XAI_API_KEY)
+- `XAI_API_KEY` - Fallback if X_COM_API_TOKEN is not set
 
 ## Why Separate API Key?
 
-Using `XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY`:
+Using `X_COM_API_TOKEN` instead of the main `XAI_API_KEY`:
 - Prevents token consumption from Grok
 - Keeps search costs separate from AI model usage
 - Better cost tracking and management
@@ -229,7 +226,7 @@ Using `XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY`:
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| 401 Unauthorized | Invalid API key | Check XAI_SEARCH_API_KEY environment variable |
+| 401 Unauthorized | Invalid API key | Check X_COM_API_TOKEN environment variable |
 | 429 Rate Limited | Too many requests | Wait before making more requests |
 | 403 Forbidden | Insufficient access | Upgrade X API access level |
 | 404 Not Found | Resource doesn't exist | Check user ID or query parameters |

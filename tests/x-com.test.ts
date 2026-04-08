@@ -95,7 +95,7 @@ describe('X.com Search Skill', () => {
     it('should search recent posts with query', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -125,7 +125,7 @@ describe('X.com Search Skill', () => {
     it('should include max_results parameter in request', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -149,7 +149,7 @@ describe('X.com Search Skill', () => {
     it('should support pagination with next_token', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -177,7 +177,7 @@ describe('X.com Search Skill', () => {
     it('should support date range filtering', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -203,7 +203,7 @@ describe('X.com Search Skill', () => {
     it('should request specific tweet fields', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -229,7 +229,7 @@ describe('X.com Search Skill', () => {
     it('should search all posts with query', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -259,7 +259,7 @@ describe('X.com Search Skill', () => {
     it('should support pagination for full archive search', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -285,7 +285,7 @@ describe('X.com Search Skill', () => {
     it('should search users by query', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -315,7 +315,7 @@ describe('X.com Search Skill', () => {
     it('should support maxResults for user search (up to 1000)', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -337,7 +337,7 @@ describe('X.com Search Skill', () => {
     it('should request specific user fields', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -361,7 +361,7 @@ describe('X.com Search Skill', () => {
     it('should get user tweets by user ID', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -392,7 +392,7 @@ describe('X.com Search Skill', () => {
     it('should get user tweets by username (resolve ID first)', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       // Mock the user lookup first, then the timeline
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -428,7 +428,7 @@ describe('X.com Search Skill', () => {
     it('should support pagination for user timeline', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -453,7 +453,7 @@ describe('X.com Search Skill', () => {
     it('should return error for missing userId and username', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       const result = await xComSearch({
         action: 'getUserTimeline',
@@ -470,7 +470,7 @@ describe('X.com Search Skill', () => {
     it('should handle missing API key', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      delete process.env.XAI_SEARCH_API_KEY;
+      delete process.env.X_COM_API_TOKEN;
       delete process.env.XAI_API_KEY;
 
       const result = await xComSearch({
@@ -487,7 +487,7 @@ describe('X.com Search Skill', () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
       process.env.XAI_API_KEY = 'fallback-api-key';
-      delete process.env.XAI_SEARCH_API_KEY;
+      delete process.env.X_COM_API_TOKEN;
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -509,7 +509,7 @@ describe('X.com Search Skill', () => {
     it('should handle rate limit exceeded (429)', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -537,7 +537,7 @@ describe('X.com Search Skill', () => {
     it('should handle authentication error (401)', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'invalid-key';
+      process.env.X_COM_API_TOKEN = 'invalid-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -563,7 +563,7 @@ describe('X.com Search Skill', () => {
     it('should handle network errors', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.reject(new Error('Network error'))
@@ -581,7 +581,7 @@ describe('X.com Search Skill', () => {
     it('should handle invalid JSON response', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -602,7 +602,7 @@ describe('X.com Search Skill', () => {
     it('should handle empty results gracefully', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -629,7 +629,7 @@ describe('X.com Search Skill', () => {
       // Skipped: Requires fixing pre-existing database.ts TypeScript issues
       const { executeSkill } = await import('../src/skills/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -668,7 +668,7 @@ describe('X.com Search Skill', () => {
       // Skipped: Requires fixing pre-existing database.ts TypeScript issues
       const { executeSkill } = await import('../src/skills/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       await expect(executeSkill('x-com', {
         action: 'invalidAction',
@@ -681,7 +681,7 @@ describe('X.com Search Skill', () => {
     it('should include executionTime in result', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-api-key';
+      process.env.X_COM_API_TOKEN = 'test-api-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
