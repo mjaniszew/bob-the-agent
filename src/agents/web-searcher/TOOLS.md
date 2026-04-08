@@ -11,7 +11,7 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Runs as Docker container alongside agent
 
 ### X.com Search Skill (x-com)
-- Direct X.com (Twitter) API access - cost-effective alternative to Grok
+- Direct X.com (Twitter) API access - cost-effective X.com search
 - Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
 - Search recent posts (last 7 days) and full archive
 - Search users by query

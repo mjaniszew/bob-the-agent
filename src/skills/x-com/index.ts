@@ -1,9 +1,6 @@
 /**
  * X.com Search Skill Implementation
  * Direct X.com API access for posts, users, and timelines
- *
- * This skill uses the native X API directly instead of Grok,
- * providing a more cost-effective solution for X.com searches.
  */
 
 const X_API_BASE = 'https://api.x.com/2';

@@ -11,7 +11,7 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Runs as Docker container alongside agent
 
 ### X.com Search Skill (x-com)
-- Direct X.com (Twitter) API access - cost-effective alternative to Grok
+- Direct X.com (Twitter) API access for posts, users, and timelines
 - Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
 - Search recent posts (last 7 days) and full archive
 - Search users by query
@@ -19,13 +19,6 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Supports pagination for large result sets
 - Use for X.com/Twitter specific searches
 - For general web search, use SearXNG instead
-
-### Grok Search Skill
-- Specialized for X.com (Twitter) search using x.AI Grok API
-- Uses X_COM_API_TOKEN (separate from main XAI_API_KEY)
-- Real-time discussions and trends from Twitter
-- Alternative to x-com when Grok's AI analysis is needed
-- NOT for general web search - use SearXNG instead
 
 ### Playwright Skill
 - Headless browser for website interaction and automation
@@ -44,7 +37,6 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 - Use SearXNG (searxng-search tool) for ALL general web searches
 - Use X.com Search (x-com) for direct Twitter/X searches - more cost-effective
-- Use Grok Search when you need Grok's AI analysis for X.com results
 - Use `site:` operator to search within specific domains
 - Use quotes for exact phrase matching
 - Include year for time-sensitive queries

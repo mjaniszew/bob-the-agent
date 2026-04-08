@@ -1,13 +1,13 @@
 ---
 name: x-com
-description: Use this skill to search X.com (Twitter) directly via the native X API. This is a cost-effective alternative to Grok for X.com-specific searches. Trigger words: x.com api search|twitter api search|x-com api
+description: Use this skill to search X.com (Twitter) directly via the native X API for posts, users, and timelines. Trigger words: x.com api search|twitter api search|x-com api
 ---
 
 # X.com Search Skill
 
-Use this skill to search X.com (Twitter) directly via the native X API. This is a cost-effective alternative to Grok for X.com-specific searches.
+Use this skill to search X.com (Twitter) directly via the native X API. This is the primary skill for X.com searches.
 
-**IMPORTANT:** This skill uses the native X API directly, not Grok. Use `X_COM_API_TOKEN` (recommended) to avoid consuming Grok tokens.
+**IMPORTANT:** This skill uses the native X API directly. Use `X_COM_API_TOKEN` (recommended) for API access.
 
 ## When to Use
 
@@ -23,7 +23,6 @@ Use this skill when:
 Do NOT use this skill for:
 - General web search → Use SearXNG (searxng-search tool) instead
 - Searching websites, articles, documentation → Use SearXNG instead
-- X.com searches that require Grok's AI analysis → Use grok-search skill instead
 
 ## Usage
 
@@ -218,9 +217,9 @@ Returns JSON with:
 ## Why Separate API Key?
 
 Using `X_COM_API_TOKEN` instead of the main `XAI_API_KEY`:
-- Prevents token consumption from Grok
 - Keeps search costs separate from AI model usage
 - Better cost tracking and management
+- Dedicated API access for X.com searches
 
 ## Error Handling
 

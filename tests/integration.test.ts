@@ -47,7 +47,7 @@ describe('Mini Agent Integration Tests', () => {
       const taskData = {
         name: 'Test Task',
         description: 'A test task for integration testing',
-        skill: 'grok-search'
+        skill: 'x-com'
       };
 
       mockFetch({
@@ -115,7 +115,7 @@ describe('Mini Agent Integration Tests', () => {
       const scheduleData = {
         name: 'Daily Report',
         cron_expression: '0 9 * * *',
-        task_template: { skill: 'grok-search', parameters: { query: 'daily news from x.com' } }
+        task_template: { skill: 'x-com', parameters: { query: 'daily news from x.com' } }
       };
 
       mockFetch({
@@ -201,7 +201,7 @@ describe('Mini Agent Integration Tests', () => {
   });
 
   describe('Skills', () => {
-    it('should execute grok search skill', async () => {
+    it('should execute x-com skill', async () => {
       const skillParams = {
         query: 'test query',
         maxResults: 5

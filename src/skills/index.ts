@@ -8,7 +8,6 @@ export { mathOperations } from './math-operations/index.js';
 export { documentCreation } from './document-creation/index.js';
 export { notifications } from './notifications/index.js';
 export { scheduling, listSchedules, deleteSchedule } from './scheduling/index.js';
-export { grokSearch } from './grok-search/index.js';
 export { xComSearch } from './x-com/index.js';
 export { awsS3 } from './aws-s3/index.js';
 
@@ -66,21 +65,6 @@ export const skillRegistry = {
       task: { type: 'object', required: true, description: 'Task to execute' }
     }
   },
-  'grok-search': {
-    name: 'Grok Search',
-    description: 'Search X.com (Twitter) using x.AI Grok API. Use SearXNG (via OpenClaw searxng-search tool) for web search.',
-    version: '1.1.0',
-    params: {
-      query: { type: 'string', required: true, description: 'Search query' },
-      allowedXHandles: { type: 'array', description: 'X.com handles to include' },
-      excludedXHandles: { type: 'array', description: 'X.com handles to exclude' },
-      fromDate: { type: 'string', description: 'Start date for results (YYYY-MM-DD)' },
-      toDate: { type: 'string', description: 'End date for results (YYYY-MM-DD)' },
-      enableImageUnderstanding: { type: 'boolean', default: false, description: 'Enable image understanding' },
-      enableVideoUnderstanding: { type: 'boolean', default: false, description: 'Enable video understanding' },
-      maxResults: { type: 'number', default: 10, description: 'Maximum results' }
-    }
-  },
   'aws-s3': {
     name: 'AWS S3',
     description: 'Upload files to S3 and generate URLs for access (presigned for private buckets, public URLs for public buckets)',
@@ -96,7 +80,7 @@ export const skillRegistry = {
   },
   'x-com': {
     name: 'X.com Search',
-    description: 'Search X.com (Twitter) directly via X API for posts, users, and timelines. More cost-effective than Grok for X.com searches.',
+    description: 'Search X.com (Twitter) directly via X API for posts, users, and timelines.',
     version: '1.0.0',
     params: {
       action: { type: 'string', enum: ['searchPosts', 'searchPostsAll', 'searchUsers', 'getUserTimeline'], required: true, description: 'Action to perform: searchPosts, searchPostsAll, searchUsers, or getUserTimeline' },
@@ -153,10 +137,6 @@ export async function executeSkill(skillName: string, params: Record<string, any
     case 'scheduling': {
       const { scheduling } = await import('./scheduling/index.js');
       return scheduling(params as any);
-    }
-    case 'grok-search': {
-      const { grokSearch } = await import('./grok-search/index.js');
-      return grokSearch(params as any);
     }
     case 'x-com': {
       const { xComSearch } = await import('./x-com/index.js');

@@ -14,7 +14,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | document-creation | ✅ Implemented | PDF and DOCX generation |
 | notifications | ✅ Implemented | Discord, email notifications |
 | scheduling | ✅ Implemented | Cron-based task scheduling |
-| grok-search | ✅ Implemented | X.AI Grok search for X.com (Twitter) |
 | x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
 
@@ -27,11 +26,10 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | Tool | Status | Description |
 |-------|--------|-------------|
 | searxng-search | ✅ Available | Web search via SearXNG (free, no tokens) |
-| WebSearch | ⚠️ Disabled | Uses Grok tokens - prefer SearXNG |
 
 **Environment Variables Required:**
-- `X_COM_API_TOKEN` - For X.com API access (x-com skill) and Grok Search (recommended, separate from XAI_API_KEY)
-- `XAI_API_KEY` - Fallback for X.com and Grok search if X_COM_API_TOKEN not set
+- `X_COM_API_TOKEN` - For X.com API access (x-com skill)
+- `XAI_API_KEY` - Fallback for X.com search if X_COM_API_TOKEN not set
 - `SEARXNG_SECRET_KEY` - For SearXNG configuration
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_REGION` - For AWS S3
 - `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
@@ -48,8 +46,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 ## X.com Search (x-com skill)
 
 1. Direct X.com API access for posts, users, and timelines
-2. Cost-effective alternative to Grok for X.com searches
-3. Uses `X_COM_API_TOKEN` (separate from `XAI_API_KEY` to avoid token consumption)
+2. Uses `X_COM_API_TOKEN` (separate from `XAI_API_KEY` to avoid token consumption)
 4. Actions:
    - `searchPosts` - Search recent posts (last 7 days)
    - `searchPostsAll` - Search full archive (requires elevated access)
@@ -57,13 +54,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
    - `getUserTimeline` - Get user's tweets
 5. Supports pagination with `nextToken` for large result sets
 6. Query operators: `from:user`, `#hashtag`, `has:images`, `lang:en`, etc.
-
-## Grok Search
-
-1. Alternative X.com (Twitter) search using x.AI's Grok API
-2. Use when Grok's AI analysis capabilities are needed for X.com results
-3. Uses `X_COM_API_TOKEN` (separate from `XAI_API_KEY` to avoid token consumption)
-4. For most X.com searches, prefer the `x-com` skill as it's more cost-effective
 
 ## Data Extraction and Deep Analysis
 1. Agent should be able to extract data from any source, including web search results, pdf and other documents

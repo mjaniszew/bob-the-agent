@@ -223,9 +223,6 @@
       "nodeManager": "npm"
     },
     "entries": {
-      "grok-search": {
-        "enabled": true
-      },
       "data-extraction": {
         "enabled": true
       },
