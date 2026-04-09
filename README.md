@@ -80,7 +80,6 @@ docker exec -it bob-the-agent openclaw pairing approve discord <pairing-token>
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logging level | `info` |
-| `OLLAMA_API_KEY` | Ollama API Key | - |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
 | `SEARXNG_BASE_URL` | SearXNG base url, local or remote | http://searxng:8888 |
 | `AWS_S3_BUCKET` | AWS S3 Bucket to upload files to | - |
