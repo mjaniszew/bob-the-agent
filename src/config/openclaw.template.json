@@ -1,6 +1,6 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.4.5",
+    "lastTouchedVersion": "2026.4.9",
     "lastTouchedAt": "2026-03-27T15:24:58.280Z"
   },
   "auth": {
@@ -20,8 +20,8 @@
         "api": "ollama",
         "models": [
           {
-            "id": "qwen3.5:4b",
-            "name": "qwen3.5:4b",
+            "id": "qwen3.5:2b-q4_K_M",
+            "name": "qwen3.5:2b-q4_K_M",
             "reasoning": true,
             "input": [
               "text"
@@ -80,7 +80,7 @@
         "ollama/kimi-k2.5:cloud": {
           "alias": "kimi-k2.5"
         },
-        "ollama/qwen3.5:4b": {
+        "ollama/qwen3.5:2b-q4_K_M": {
           "alias": "qwen3.5-local"
         }
       },
@@ -88,7 +88,11 @@
         "maxSpawnDepth": 2,
         "maxChildrenPerAgent": 5,
         "maxConcurrent": 8
-      }
+      },
+      "llm": {
+        "idleTimeoutSeconds": 1800
+      },
+      "timeoutSeconds": 1800
     },
     "list": [
       {
@@ -99,7 +103,7 @@
         "model": {
           "primary": "ollama/kimi-k2.5:cloud",
           "fallbacks": [
-            "ollama/qwen3.5:4b"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -117,7 +121,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/qwen3.5:4b"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -132,7 +136,7 @@
         "model": {
           "primary": "ollama/kimi-k2.5:cloud",
           "fallbacks": [
-            "ollama/qwen3.5:4b"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -150,7 +154,7 @@
         "model": {
           "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "ollama/qwen3.5:4b"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -211,6 +215,12 @@
       "nodeManager": "npm"
     },
     "entries": {
+      "aws-s3": {
+        "enabled": true
+      },
+      "x-com": {
+        "enabled": true
+      },
       "data-extraction": {
         "enabled": true
       },
@@ -226,6 +236,9 @@
     "entries": {
       "discord": {
         "enabled": true
+      },
+      "amazon-bedrock": {
+        "enabled": false
       }
     }
   },

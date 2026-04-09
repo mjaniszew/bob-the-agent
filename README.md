@@ -80,12 +80,9 @@ docker exec -it bob-the-agent openclaw pairing approve discord <pairing-token>
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logging level | `info` |
-| `DEFAULT_PROVIDER` | Primary model provider | `ollama` |
-| `OLLAMA_BASE_URL` | Ollama API URL | `http://ollama:11434` |
-| `OLLAMA_MODEL` | Default model | `qwen3.5:4b` |
 | `OLLAMA_API_KEY` | Ollama API Key | - |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
-| `ANTHROPIC_API_KEY` | Anthropic API key | - |
+| `SEARXNG_BASE_URL` | SearXNG base url, local or remote | http://searxng:8888 |
 | `AWS_S3_BUCKET` | AWS S3 Bucket to upload files to | - |
 | `AWS_S3_REGION` | AWS S3 Region | - |
 | `AWS_ACCESS_KEY_ID` | AWS S3 Access Key | - |
@@ -235,14 +232,17 @@ npm test
 
 ## Troubleshooting
 
-### Ollama not responding
+### Ollama not responding / timeouts
 
 ```bash
 # Check if Ollama is running
 docker compose logs ollama
 
+# Sign into ollama account for cloud models access
+docker exec bob-the-agent-ollama ollama signin
+
 # Pull a local model manually
-docker exec bob-the-agent-ollama ollama pull qwen3.5:4b
+docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
 ```
 
 ### Agent container not starting
