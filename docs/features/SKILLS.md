@@ -12,6 +12,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | data-extraction | ✅ Implemented | Extract data from files and URLs |
 | math-operations | ✅ Implemented | Mathematical calculations |
 | x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
+| grok-search | ✅ Implemented | X.com search via xAI Grok x_search tool (fallback for x-com) |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
 
 **System Tool Skills (SKILL.md only):**
@@ -27,6 +28,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 **Environment Variables Required:**
 - `X_COM_API_TOKEN` - For X.com API access (x-com skill)
 - `XAI_API_KEY` - Fallback for X.com search if X_COM_API_TOKEN not set
+- `XAI_SEARCH_API_KEY` - For Grok search API access (grok-search skill, separate from XAI_API_KEY)
 - `SEARXNG_SECRET_KEY` - For SearXNG configuration
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_REGION` - For AWS S3
 - `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
@@ -51,6 +53,20 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
    - `getUserTimeline` - Get user's tweets
 5. Supports pagination with `nextToken` for large result sets
 6. Query operators: `from:user`, `#hashtag`, `has:images`, `lang:en`, etc.
+
+## Grok Search (grok-search skill)
+
+1. X.com search via xAI Grok's x_search tool through the Responses API
+2. Uses `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY` to avoid OpenClaw auto-consumption)
+3. Fallback when x-com skill fails or is unavailable
+4. Actions:
+   - `searchPosts` - Search recent posts
+   - `searchPostsAll` - Search full archive
+   - `searchUsers` - Search users by query
+   - `getUserTimeline` - Get user's tweets
+5. Returns AI-synthesized results with citations (URLs, titles, snippets)
+6. Supports handle filtering (`allowedHandles`, `excludedHandles`), date ranges, image/video understanding
+7. Uses cost-effective `grok-4.1-fast` model by default
 
 ## Data Extraction and Deep Analysis
 1. Agent should be able to extract data from any source, including web search results, pdf and other documents
