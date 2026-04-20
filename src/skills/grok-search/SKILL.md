@@ -54,7 +54,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"sear
 | toDate | string | No | - | ISO date for end of time range |
 | enableImageUnderstanding | boolean | No | false | Enable AI understanding of images in posts |
 | enableVideoUnderstanding | boolean | No | false | Enable AI understanding of videos in posts |
-| model | string | No | grok-4.1-fast | xAI model to use for the response |
+| model | string | No | grok-4-1-fast-non-reasoning | xAI model to use for the response |
 
 ## Examples
 
@@ -149,7 +149,7 @@ Using `XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY`:
 
 | Resource | Cost |
 |----------|------|
-| grok-4.1-fast (default model) | $0.20/M input tokens, $0.50/M output tokens |
+| grok-4-1-fast-non-reasoning (default model) | $0.20/M input tokens, $0.50/M output tokens |
 | X Search tool | $5.00 per 1,000 calls |
 
 Compared to the x-com skill (native X API), Grok search is more expensive per call but provides AI-synthesized results with semantic understanding. Use the x-com skill for straightforward searches and reserve Grok search for when you need intelligent analysis or when x-com is unavailable.
@@ -170,4 +170,4 @@ Compared to the x-com skill (native X API), Grok search is more expensive per ca
 - Grok search returns AI-synthesized results with citations rather than raw API data.
 - The `searchPosts` action covers the last 7 days; use `searchPostsAll` for any time period.
 - Image and video understanding add processing time and cost.
-- The default model `grok-4.1-fast` balances speed and quality; you can specify a different model if needed.
+- The default model `grok-4-1-fast-non-reasoning` balances speed and quality; you can specify a different model if needed.

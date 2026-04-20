@@ -201,7 +201,7 @@ describe('Grok Search Skill', () => {
       expect(xSearchTool.to_date).toBe('2026-04-20');
     });
 
-    it('should use grok-4.1-fast model by default', async () => {
+    it('should use grok-4-1-fast-non-reasoning model by default', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
       process.env.XAI_SEARCH_API_KEY = 'test-key';
@@ -223,7 +223,7 @@ describe('Grok Search Skill', () => {
 
       const mockCall = (fetch as jest.Mock).mock.calls[0] as [string, { body?: string }];
       const body = JSON.parse(mockCall[1]?.body as string);
-      expect(body.model).toBe('grok-4.1-fast');
+      expect(body.model).toBe('grok-4-1-fast-non-reasoning');
     });
 
     it('should allow custom model override', async () => {

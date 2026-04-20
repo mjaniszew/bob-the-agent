@@ -66,7 +66,7 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
    - `getUserTimeline` - Get user's tweets
 5. Returns AI-synthesized results with citations (URLs, titles, snippets)
 6. Supports handle filtering (`allowedHandles`, `excludedHandles`), date ranges, image/video understanding
-7. Uses cost-effective `grok-4.1-fast` model by default
+7. Uses cost-effective `grok-4-1-fast-non-reasoning` model by default
 
 ## Data Extraction and Deep Analysis
 1. Agent should be able to extract data from any source, including web search results, pdf and other documents

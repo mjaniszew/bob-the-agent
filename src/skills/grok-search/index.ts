@@ -4,7 +4,7 @@
  */
 
 const XAI_API_BASE = 'https://api.x.ai/v1';
-const DEFAULT_MODEL = 'grok-4.1-fast';
+const DEFAULT_MODEL = 'grok-4-1-fast-non-reasoning';
 
 // Action types - mirrors x-com skill for consistency
 type GrokSearchAction = 'searchPosts' | 'searchPostsAll' | 'searchUsers' | 'getUserTimeline';
