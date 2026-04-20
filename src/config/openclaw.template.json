@@ -221,6 +221,9 @@
       "x-com": {
         "enabled": true
       },
+      "grok-search": {
+        "enabled": true
+      },
       "data-extraction": {
         "enabled": true
       },
