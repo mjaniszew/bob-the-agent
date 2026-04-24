@@ -20,6 +20,14 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 - Use for X.com/Twitter specific searches
 - For general web search, use SearXNG instead
 
+### Grok Search Skill (grok-search)
+- X.com search via xAI Grok's x_search tool
+- Uses XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
+- Fallback when x-com skill fails or is unavailable
+- AI-synthesized results with citations
+- Supports posts search, user search, and timeline retrieval
+- More expensive than x-com — use as fallback only
+
 ### Playwright Skill
 - Headless browser for website interaction and automation
 - Take screenshots for visual evidence

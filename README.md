@@ -211,22 +211,6 @@ bob-the-agent-docker/
 ```bash
 # Build all images
 docker compose build
-
-# Build specific service
-docker compose build agent
-docker compose build web
-```
-
-### Running Tests
-
-```bash
-# API tests
-cd src/api
-npm test
-
-# Frontend tests
-cd src/frontend
-npm test
 ```
 
 ## Troubleshooting

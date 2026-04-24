@@ -10,26 +10,7 @@ Mini Agent uses environment variables and YAML configuration files for customiza
 
 Main configuration file for environment variables.
 
-```env
-# Agent Settings
-LOG_LEVEL=info
-DEFAULT_PROVIDER=ollama
-OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=llama3.2
-
-# Cloud Providers (Optional)
-ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
-
-# Discord (Optional)
-DISCORD_BOT_TOKEN=
-DISCORD_CLIENT_ID=
-
-# AWS S3 (Optional)
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=us-east-1
-```
+[env_template](/.env.template) contains possible env variables with explainations.
 
 ### openclaw.template.json
 
@@ -232,9 +213,9 @@ ollama:
 
 ### Model Selection
 
-- Use smaller models for faster inference
-- `llama3.2:1b` for quick tasks
-- `llama3.2` for complex tasks
+- Use cloud models for best performance
+- Use smaller local models for fallback and faster inference
+- eg. `qwen3.5:2b-q4_K_M` for quick tasks and low memory usage
 
 ### Parallel Tasks
 

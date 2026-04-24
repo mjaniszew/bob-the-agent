@@ -55,6 +55,7 @@ Available skills:
   - data-extraction     Extract data from URLs and files
   - math-operations     Perform calculations and statistical analysis
   - aws-s3             Upload files to S3 and generate presigned URLs
+  - grok-search        Search X.com via xAI Grok x_search tool (fallback for x-com)
 
 Examples:
   # Web search
@@ -71,6 +72,9 @@ Examples:
 
   # S3 presigned URL
   node skill-runner.mjs --skill aws-s3 --params '{"action":"getUrl","key":"test/file.txt"}'
+
+  # Grok search (X.com fallback)
+  node skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"xAI announcements"}'
 `);
       process.exit(0);
     }
@@ -91,7 +95,8 @@ const skillRegistry = {
   'x-com': () => import(`${SKILLS_DIST}/x-com/index.js`).then(m => m.default),
   'data-extraction': () => import(`${SKILLS_DIST}/data-extraction/index.js`).then(m => m.default),
   'math-operations': () => import(`${SKILLS_DIST}/math-operations/index.js`).then(m => m.default),
-  'aws-s3': () => import(`${SKILLS_DIST}/aws-s3/index.js`).then(m => m.default)
+  'aws-s3': () => import(`${SKILLS_DIST}/aws-s3/index.js`).then(m => m.default),
+  'grok-search': () => import(`${SKILLS_DIST}/grok-search/index.js`).then(m => m.default)
 };
 
 // Validate skill parameters against registry metadata
