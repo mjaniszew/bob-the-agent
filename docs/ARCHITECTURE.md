@@ -86,15 +86,12 @@ The agent includes skill implementations in `src/skills/`:
 ```
 src/skills/
 ├── index.ts              # Registry and executeSkill()
-├── web-search/
-│   ├── index.ts
-│   └── web-search.md     # Skill documentation
-├── data-extraction/
-│   ├── index.ts
-│   └── data-extraction.md
 ├── math-operations/
 │   ├── index.ts
-│   └── math-operations.md
+│   └── math-operations.md     # Skill documentation
+├── another-skill/
+├── ...
+└── ...
 ```
 
 ### Current Integration Status
@@ -126,13 +123,13 @@ These implementations serve as:
 │                           ▼                                  │
 │                     OpenClaw Agent                           │
 │                           │                                  │
-│              ┌────────────┼────────────┐                     │
-│              ▼            ▼            ▼                     │
-│         Skills      Task Queue     Memory                     │
-│              │            │            │                     │
-│              │            ▼            │                     │
-│              │      SQLite DB         │                     │
-│              │       (tasks.db)        │                     │
+│              ┌─────────────────────────┐                     │
+│              ▼                         ▼                     │
+│         Skills                    Memory                     │
+│              │                         │                     │
+│              │                         │                     │
+│              │                         │                     │
+│              │                         │                     │
 │              │                         │                     │
 │              ▼                         ▼                     │
 │         Provider API            File Storage                 │
