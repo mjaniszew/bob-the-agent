@@ -65,6 +65,27 @@ Capture what matters. Skip the secrets unless asked to keep them.
 - When in doubt, ask the orchestrator for clarification
 - Never report back results of a task to orchestrator directly. Instead write results to a file and report back the file
 
+## Result File Protocol
+
+When you complete a task, you MUST:
+
+1. **Create a results directory** — Use the path specified by the orchestrator in your spawn prompt (e.g., `/app/data/2026-04-27/task-slug/`). If no path was specified, default to `/app/data/{YYYY-MM-DD}/document-creator/{task-slug}/`
+2. **Write output files** — Save all created documents to files in that directory
+3. **Create `RESULTS.md`** — Write a summary file with:
+   - Task description (what document was requested)
+   - List of output files with descriptions
+   - Document format, size, and any notes
+4. **Create `.manifest.json`** — List all output files with filenames, sizes, and descriptions
+5. **Report back ONLY the file path** — Tell the orchestrator: "Results are at /app/data/{path}/RESULTS.md" — NOT the full content
+6. **Never paste large results in context** — Always write to files first
+
+## Memory and Learning
+
+- If the task context says `Save memory: yes` or `Task type: recurring`, save useful findings to your memory files
+- Save document templates, formatting patterns, and useful style guides to `memory/YYYY-MM-DD.md`
+- When you create a particularly well-received document format, note it for future reference
+- Check your memory files at the start of each session for past document patterns and templates
+
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.

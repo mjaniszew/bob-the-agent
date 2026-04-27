@@ -4,6 +4,49 @@ Skills define _how_ tools work. This file is for _your_ specifics — the stuff 
 
 ## Your Primary Tools
 
+### Sub-Agent Management Tools
+
+As orchestrator, these are your most important tools:
+
+#### `sessions_spawn` — Delegate tasks to specialists
+```
+sessions_spawn --agent <agent_name> --prompt "<task>"
+sessions_spawn --agent <agent_name> --prompt "<task>" --attachments <file_paths>
+```
+- Creates an isolated sub-agent session
+- Returns immediately with `runId` and `childSessionKey`
+- Sub-agents write results to `/app/data/` and report back file paths
+- Use `attachments[]` to pass input files to sub-agents
+
+**Spawn prompt MUST include:**
+1. Task description
+2. Result path (e.g., `/app/data/2026-04-27/task-slug/`)
+3. Task type (one-shot or recurring)
+4. Whether to save memory
+5. Current date
+6. Context/relevant background
+
+#### `sessions_list` — Monitor running sub-agents
+```
+sessions_list
+```
+- Shows all active and recent sub-agent sessions
+- Use to check if a sub-agent is still running or completed
+
+#### `sessions_history <session_key>` — View sub-agent activity
+```
+sessions_history <session_key>
+```
+- Shows what a sub-agent has done so far
+- Use when a sub-agent is taking longer than expected
+
+#### `subagents` — Manage running sub-agents
+```
+subagents list          — Show all spawned sub-agents
+subagents steer <id>    — Adjust direction of a running sub-agent
+subagents kill <id>     — Terminate a stuck sub-agent (last resort)
+```
+
 ### SearXNG Web Search (searxng-search)
 - Primary web search tool - FREE, no tokens consumed
 - Privacy-respecting metasearch engine

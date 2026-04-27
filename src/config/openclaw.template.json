@@ -36,8 +36,8 @@
             "maxTokens": 25600
           },
           {
-            "id": "kimi-k2.5:cloud",
-            "name": "kimi-k2.5:cloud",
+            "id": "kimi-k2.6:cloud",
+            "name": "kimi-k2.6:cloud",
             "reasoning": true,
             "input": [
               "text"
@@ -77,8 +77,8 @@
         "ollama/minimax-m2.7:cloud": {
           "alias": "minimax-m2.7"
         },
-        "ollama/kimi-k2.5:cloud": {
-          "alias": "kimi-k2.5"
+        "ollama/kimi-k2.6:cloud": {
+          "alias": "kimi-k2.6"
         },
         "ollama/qwen3.5:2b-q4_K_M": {
           "alias": "qwen3.5-local"
@@ -87,7 +87,9 @@
       "subagents": {
         "maxSpawnDepth": 2,
         "maxChildrenPerAgent": 5,
-        "maxConcurrent": 8
+        "maxConcurrent": 8,
+        "runTimeoutSeconds": 600,
+        "archiveAfterMinutes": 120
       },
       "llm": {
         "idleTimeoutSeconds": 1800
@@ -101,9 +103,9 @@
         "workspace": "/app/workspace/main",
         "agentDir": "/home/node/.openclaw/agents/main/agent",
         "model": {
-          "primary": "ollama/kimi-k2.5:cloud",
+          "primary": "kimi-k2.6",
           "fallbacks": [
-            "ollama/qwen3.5:2b-q4_K_M"
+            "qwen3.5-local"
           ]
         },
         "thinkingDefault": "high",
@@ -119,9 +121,9 @@
         "workspace": "/app/workspace/web-searcher",
         "agentDir": "/home/node/.openclaw/agents/web-searcher/agent",
         "model": {
-          "primary": "ollama/minimax-m2.7:cloud",
+          "primary": "minimax-m2.7",
           "fallbacks": [
-            "ollama/qwen3.5:2b-q4_K_M"
+            "qwen3.5-local"
           ]
         },
         "thinkingDefault": "high",
@@ -134,16 +136,16 @@
         "workspace": "/app/workspace/research-analyzer",
         "agentDir": "/home/node/.openclaw/agents/research-analyzer/agent",
         "model": {
-          "primary": "ollama/kimi-k2.5:cloud",
+          "primary": "kimi-k2.6",
           "fallbacks": [
-            "ollama/qwen3.5:2b-q4_K_M"
+            "qwen3.5-local"
           ]
         },
         "thinkingDefault": "high",
         "reasoningDefault": "on",
         "fastModeDefault": false,
         "subagents": {
-          "allowAgents": ["web-searcher", "data-extractor"]
+          "allowAgents": ["web-searcher", "data-extractor", "document-creator"]
         }
       },
       {
@@ -152,14 +154,29 @@
         "workspace": "/app/workspace/data-extractor",
         "agentDir": "/home/node/.openclaw/agents/data-extractor/agent",
         "model": {
-          "primary": "ollama/minimax-m2.7:cloud",
+          "primary": "minimax-m2.7",
           "fallbacks": [
-            "ollama/qwen3.5:2b-q4_K_M"
+            "qwen3.5-local"
           ]
         },
         "thinkingDefault": "high",
         "reasoningDefault": "on",
         "fastModeDefault": false
+      },
+      {
+        "id": "document-creator",
+        "name": "document-creator",
+        "workspace": "/app/workspace/document-creator",
+        "agentDir": "/home/node/.openclaw/agents/document-creator/agent",
+        "model": {
+          "primary": "minimax-m2.7",
+          "fallbacks": [
+            "qwen3.5-local"
+          ]
+        },
+        "thinkingDefault": "low",
+        "reasoningDefault": "off",
+        "fastModeDefault": true
       }
     ]
   },
