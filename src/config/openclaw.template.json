@@ -87,7 +87,9 @@
       "subagents": {
         "maxSpawnDepth": 2,
         "maxChildrenPerAgent": 5,
-        "maxConcurrent": 8
+        "maxConcurrent": 8,
+        "runTimeoutSeconds": 600,
+        "archiveAfterMinutes": 120
       },
       "llm": {
         "idleTimeoutSeconds": 1800
@@ -143,7 +145,7 @@
         "reasoningDefault": "on",
         "fastModeDefault": false,
         "subagents": {
-          "allowAgents": ["web-searcher", "data-extractor"]
+          "allowAgents": ["web-searcher", "data-extractor", "document-creator"]
         }
       },
       {

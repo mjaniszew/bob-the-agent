@@ -121,42 +121,57 @@ These implementations serve as:
 │  User → Discord → Agent Gateway (18789)                      │
 │                           │                                  │
 │                           ▼                                  │
-│                     OpenClaw Agent                           │
+│                     Main Agent (Orchestrator)                 │
 │                           │                                  │
-│              ┌─────────────────────────┐                     │
-│              ▼                         ▼                     │
-│         Skills                    Memory                     │
-│              │                         │                     │
-│              │                         │                     │
-│              │                         │                     │
-│              │                         │                     │
-│              │                         │                     │
-│              ▼                         ▼                     │
-│         Provider API            File Storage                 │
-│         (Ollama/Cloud)          (/app/workspace)              │
-│              │                                                │
-│              ▼                                                │
-│         ┌────────────────────────────────────┐               │
-│         │         External Services          │               │
-│         │  ┌─────────┐  ┌───────────────┐  │               │
-│         │  │ SearXNG │  │ X.com API     │  │               │
-│         │  │ :8888   │  │ (via x-com)   │  │               │
-│         │  └─────────┘  └───────────────┘  │               │
-│         │  ┌─────────┐  ┌───────────────┐  │               │
-│         │  │ AWS S3  │  │ Other APIs    │  │               │
-│         │  └─────────┘  └───────────────┘  │               │
-│         └────────────────────────────────────┘               │
+│              ┌────────────┼────────────┐────────────┐        │
+│              │            │            │            │        │
+│              ▼            ▼            ▼            ▼        │
+│        web-searcher  research-   data-       document-       │
+│                       analyzer   extractor    creator        │
+│              │            │            │            │        │
+│              │       ┌────┼────┐       │            │        │
+│              │       ▼    ▼    ▼       │            │        │
+│              │  web-  data- doc-       │            │        │
+│              │  searcher extractor creator            │        │
+│              │            │            │            │        │
+│              ▼            ▼            ▼            ▼        │
+│         ┌──────────────────────────────────────────────┐     │
+│         │        /app/data/{YYYY-MM-DD}/{task-slug}/   │     │
+│         │   RESULTS.md  │  .manifest.json  │  files    │     │
+│         └──────────────────────────────────────────────┘     │
+│                           │                                  │
+│                           ▼                                  │
+│                    /app/results/                              │
+│              (final output to user)                          │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │              External Services                       │    │
+│  │  ┌─────────┐  ┌───────────────┐  ┌─────────┐       │    │
+│  │  │ SearXNG │  │ X.com API     │  │ AWS S3  │       │    │
+│  │  │ :8888   │  │ (via x-com)   │  │         │       │    │
+│  │  └─────────┘  └───────────────┘  └─────────┘       │    │
+│  └──────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+### Sub-Agent Communication Protocol
+
+1. **Main agent** receives task and delegates to sub-agent via `sessions_spawn`
+2. **Sub-agent** executes task and writes results to `/app/data/{YYYY-MM-DD}/{task-slug}/`
+3. **Sub-agent** creates `RESULTS.md` summary and `.manifest.json` file listing
+4. **Sub-agent** reports back ONLY the file path (not the content)
+5. **Main agent** reads results file, extracts key findings, cleans context
+6. **Main agent** writes final output to `/app/results/`
 
 ### Storage Locations
 
 | Path (Container) | Path (Host) | Purpose |
 |-------------------|-------------|---------|
-| `/app/workspace` | `agent_workspace` volume | Working directory for tasks |
-| `/app/results` | `./volumes/results` | Task output files |
+| `/app/workspace` | `agent_workspace` volume | Agent workspace files (AGENTS.md, TOOLS.md, etc.) |
+| `/app/results` | `./volumes/results` | Final task output files (main agent only) |
 | `/app/user-files` | `./volumes/user-files` | Input files from user |
-| `/app/data` | `./volumes/data` | Database, logs, memory |
+| `/app/data` | `./volumes/data` | Sub-agent task data, results, memory |
+| `/app/data/{YYYY-MM-DD}/{task-slug}/` | — | Sub-agent task results directory |
 | `/root/.ollama` | `ollama_data` volume | Downloaded models |
 | `/etc/searxng` | `searxng_config` volume | SearXNG configuration |
 | `/var/cache/searxng` | `searxng_data` volume | SearXNG cache |
