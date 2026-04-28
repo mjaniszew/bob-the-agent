@@ -91,7 +91,9 @@
         "runTimeoutSeconds": 600,
         "archiveAfterMinutes": 120
       },
-      "timeoutSeconds": 1800
+      "timeoutSeconds": 1800,
+      "bootstrapMaxChars": 24000,
+      "bootstrapTotalMaxChars": 120000
     },
     "list": [
       {
@@ -100,9 +102,9 @@
         "workspace": "/app/workspace/main",
         "agentDir": "/home/node/.openclaw/agents/main/agent",
         "model": {
-          "primary": "kimi-k2.6",
+          "primary": "ollama/kimi-k2.6:cloud",
           "fallbacks": [
-            "qwen3.5-local"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -120,9 +122,9 @@
         "workspace": "/app/workspace/web-searcher",
         "agentDir": "/home/node/.openclaw/agents/web-searcher/agent",
         "model": {
-          "primary": "minimax-m2.7",
+          "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "qwen3.5-local"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -135,9 +137,9 @@
         "workspace": "/app/workspace/research-analyzer",
         "agentDir": "/home/node/.openclaw/agents/research-analyzer/agent",
         "model": {
-          "primary": "kimi-k2.6",
+          "primary": "ollama/kimi-k2.6:cloud",
           "fallbacks": [
-            "qwen3.5-local"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -157,9 +159,9 @@
         "workspace": "/app/workspace/data-extractor",
         "agentDir": "/home/node/.openclaw/agents/data-extractor/agent",
         "model": {
-          "primary": "minimax-m2.7",
+          "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "qwen3.5-local"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "high",
@@ -172,9 +174,9 @@
         "workspace": "/app/workspace/document-creator",
         "agentDir": "/home/node/.openclaw/agents/document-creator/agent",
         "model": {
-          "primary": "minimax-m2.7",
+          "primary": "ollama/minimax-m2.7:cloud",
           "fallbacks": [
-            "qwen3.5-local"
+            "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
         "thinkingDefault": "low",
@@ -270,6 +272,9 @@
       },
       "ollama": {
         "enabled": true
+      },
+      "codex": {
+        "enabled": false
       }
     }
   },
