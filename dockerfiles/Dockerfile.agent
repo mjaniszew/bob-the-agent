@@ -5,13 +5,15 @@
 FROM node:24-bookworm-slim
 
 # Build arguments for customization
-ARG OPENCLAW_VERSION=2026.4.9
+ARG OPENCLAW_VERSION=2026.4.26
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Environment setup
 ENV DEBIAN_FRONTEND=noninteractive \
-    HOME=/home/node
+    HOME=/home/node \
+    NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache \
+    OPENCLAW_NO_RESPAWN=1
 
 # Install system dependencies (python, make, g++ for native modules)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -33,8 +35,8 @@ RUN npm install -g openclaw@${OPENCLAW_VERSION}
 # Install and setup Playwright globally
 RUN npm install -g @playwright/cli@latest & npx playwright install-deps
 
-# Create application directories
-RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts
+# Create application and cache directories
+RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts /var/tmp/openclaw-compile-cache
 
 # Copy application files
 COPY --chown=node:node ./src/config/ /app/config/

@@ -35,11 +35,14 @@ cp .env.template .env
 docker compose up -d
 ```
 
-### 3. Pull a Model
+### 3. Pull Ollama Models
 
 ```bash
 # Pull the default model
-docker exec bob-the-agent-ollama ollama pull qwen3.5:4b
+docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
+# Pull all cloud models manifests
+docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
+...
 ```
 
 ### 4. Sign in to Ollama (First Run)
@@ -224,8 +227,9 @@ docker compose logs ollama
 # Sign into ollama account for cloud models access
 docker exec bob-the-agent-ollama ollama signin
 
-# Pull a local model manually
+# Pull all models from ollama manually
 docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
+docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 ```
 
 ### Agent container not starting

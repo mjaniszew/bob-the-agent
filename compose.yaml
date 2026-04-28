@@ -19,9 +19,7 @@ services:
     deploy:
       resources:
         reservations:
-          memory: 2G
-        limits:
-          memory: 8G
+          memory: 1G
 
   # ===========================================
   # OpenClaw Agent - Main AI agent
@@ -60,6 +58,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+        limits:
+          memory: 4G
 
   # ===========================================
   # SearXNG - Privacy-respecting metasearch engine
@@ -87,6 +91,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+        limits:
+          memory: 4G
 
   # ===========================================
   # Valkey - Redis-compatible cache for SearXNG
@@ -103,6 +113,12 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          memory: 256M
 
 # ===========================================
 # Named Volumes
