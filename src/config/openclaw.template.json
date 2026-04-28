@@ -91,6 +91,9 @@
         "runTimeoutSeconds": 600,
         "archiveAfterMinutes": 120
       },
+      "thinkingDefault": "low",
+      "verboseDefault": "off",
+      "elevatedDefault": "on",
       "timeoutSeconds": 1800,
       "bootstrapMaxChars": 24000,
       "bootstrapTotalMaxChars": 120000
@@ -127,7 +130,7 @@
             "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
-        "thinkingDefault": "high",
+        "thinkingDefault": "low",
         "reasoningDefault": "on",
         "fastModeDefault": false
       },
@@ -164,7 +167,7 @@
             "ollama/qwen3.5:2b-q4_K_M"
           ]
         },
-        "thinkingDefault": "high",
+        "thinkingDefault": "low",
         "reasoningDefault": "on",
         "fastModeDefault": false
       },
@@ -192,9 +195,21 @@
         "provider": "searxng"
       }
     },
+    "sessions_spawn": {
+      "attachments": {
+        "enabled": true,
+        "maxTotalBytes": 5242880,
+        "maxFiles": 50,
+        "maxFileBytes": 1048576,
+        "retainOnSessionKeep": false
+      }
+    },
     "deny": [
       "gateway"
-    ]
+    ],
+    "experimental": {
+      "planTool": true
+    }
   },
   "commands": {
     "native": "auto",
