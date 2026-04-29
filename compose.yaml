@@ -69,28 +69,23 @@ services:
   # SearXNG - Privacy-respecting metasearch engine
   # ===========================================
   searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng:${SEARXNG_VERSION:-2026.4.29-cba0cffa8}
     container_name: bob-the-agent-searxng
     restart: unless-stopped
     depends_on:
       valkey:
         condition: service_healthy
     environment:
-      - SEARXNG_DEBUG=false
-      - SEARXNG_BASE_URL=http://searxng:8888
-      - SEARXNG_SECRET=123456789123456789123456798
-      - SEARXNG_PUBLIC_INSTANCE=false
+      - SEARXNG_HOST=[::]
+      - SEARXNG_PORT=8888
+      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
+      - SEARXNG_VALKEY_URL=valkey://valkey:6379/0
     volumes:
       - searxng_config:/etc/searxng/
+      - ./src/config/searxng.settings.yml:/etc/searxng/settings.yml:rw
       - searxng_data:/var/cache/searxng/
     ports:
-      - "8888:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8888/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - "8888:8888"
     deploy:
       resources:
         reservations:
@@ -102,7 +97,7 @@ services:
   # Valkey - Redis-compatible cache for SearXNG
   # ===========================================
   valkey:
-    image: valkey/valkey:8.0-alpine
+    image: valkey/valkey:9-alpine
     container_name: bob-the-agent-valkey
     restart: unless-stopped
     volumes:
