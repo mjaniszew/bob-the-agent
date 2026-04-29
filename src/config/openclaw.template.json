@@ -1,6 +1,6 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.4.26",
+    "lastTouchedVersion": "2026.4.25",
     "lastTouchedAt": "2026-04-28T12:56:08.235Z"
   },
   "auth": {
@@ -94,7 +94,7 @@
       "thinkingDefault": "low",
       "verboseDefault": "off",
       "elevatedDefault": "on",
-      "timeoutSeconds": 1800,
+      "timeoutSeconds": 3600,
       "bootstrapMaxChars": 24000,
       "bootstrapTotalMaxChars": 120000
     },
