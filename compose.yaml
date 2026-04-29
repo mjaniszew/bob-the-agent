@@ -28,6 +28,8 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.agent
+      args:
+        - OPENCLAW_VERSION=${OPENCLAW_VERSION:-2026.4.26}
     container_name: bob-the-agent
     restart: unless-stopped
     depends_on:
@@ -82,7 +84,7 @@ services:
       - SEARXNG_VALKEY_URL=valkey://valkey:6379/0
     volumes:
       - searxng_config:/etc/searxng/
-      - ./src/config/searxng.settings.yml:/etc/searxng/settings.yml:rw
+      - ./src/config/searxng.settings.yml:/etc/searxng/settings.yml:ro
       - searxng_data:/var/cache/searxng/
     ports:
       - "8888:8888"
