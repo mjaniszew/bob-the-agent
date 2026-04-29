@@ -75,6 +75,7 @@ The agent container uses a two-stage startup process:
 | File | Purpose |
 |------|---------|
 | `src/config/openclaw.template.json` | Source template with `${VAR}` placeholders |
+| `src/config/searxng.settings.yml` | Configuration file for SearXNG |
 | `src/scripts/app-entrypoint.sh` | Entry point script that checks for existing config |
 | `src/scripts/generate-config.mjs` | Generates runtime config from template |
 | `/home/node/.openclaw/openclaw.json` | Generated config (inside container) |
