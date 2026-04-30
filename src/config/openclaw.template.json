@@ -88,7 +88,7 @@
         "maxSpawnDepth": 2,
         "maxChildrenPerAgent": 5,
         "maxConcurrent": 8,
-        "runTimeoutSeconds": 600,
+        "runTimeoutSeconds": 1800,
         "archiveAfterMinutes": 120
       },
       "thinkingDefault": "low",

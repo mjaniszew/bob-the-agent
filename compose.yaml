@@ -29,7 +29,7 @@ services:
       context: .
       dockerfile: dockerfiles/Dockerfile.agent
       args:
-        - OPENCLAW_VERSION=${OPENCLAW_VERSION:-2026.4.26}
+        - OPENCLAW_VERSION=${OPENCLAW_VERSION:-2026.4.27}
     container_name: bob-the-agent
     restart: unless-stopped
     depends_on:
