@@ -96,7 +96,10 @@
       "elevatedDefault": "on",
       "timeoutSeconds": 3600,
       "bootstrapMaxChars": 24000,
-      "bootstrapTotalMaxChars": 120000
+      "bootstrapTotalMaxChars": 120000,
+      "llm": {
+        "idleTimeoutSeconds": 300
+      }
     },
     "list": [
       {
