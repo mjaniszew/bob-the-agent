@@ -1,6 +1,6 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.4.25",
+    "lastTouchedVersion": "2026.4.23",
     "lastTouchedAt": "2026-04-28T12:56:08.235Z"
   },
   "auth": {
@@ -88,7 +88,7 @@
         "maxSpawnDepth": 2,
         "maxChildrenPerAgent": 5,
         "maxConcurrent": 8,
-        "runTimeoutSeconds": 600,
+        "runTimeoutSeconds": 1800,
         "archiveAfterMinutes": 120
       },
       "thinkingDefault": "low",
@@ -96,7 +96,10 @@
       "elevatedDefault": "on",
       "timeoutSeconds": 3600,
       "bootstrapMaxChars": 24000,
-      "bootstrapTotalMaxChars": 120000
+      "bootstrapTotalMaxChars": 120000,
+      "llm": {
+        "idleTimeoutSeconds": 300
+      }
     },
     "list": [
       {
@@ -111,7 +114,7 @@
           ]
         },
         "thinkingDefault": "high",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false,
         "subagents": {
           "allowAgents": [
@@ -131,7 +134,7 @@
           ]
         },
         "thinkingDefault": "low",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false
       },
       {
@@ -146,7 +149,7 @@
           ]
         },
         "thinkingDefault": "high",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false,
         "subagents": {
           "allowAgents": [
@@ -168,7 +171,7 @@
           ]
         },
         "thinkingDefault": "low",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false
       },
       {
@@ -296,5 +299,8 @@
   "browser": {
     "enabled": false,
     "noSandbox": true
+  },
+  "diagnostics": {
+    "stuckSessionWarnMs": 600000
   }
 }

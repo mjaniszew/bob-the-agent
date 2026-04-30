@@ -319,6 +319,7 @@ As orchestrator, you must manage your context window carefully:
 2. **Pass references, not data** — When delegating to another sub-agent, reference file paths, not raw data
 3. **Summarize before proceeding** — After each sub-agent completes, write a brief summary to `/app/data/{task-slug}/summary.md` before moving to the next step
 4. **Archive completed tasks** — Once a task chain is done, write final results to `/app/results/` and clear intermediate context
+5. **Reset context often** — When receiving and storing results from subagents, make sure to clean context with `reset` or `new` commands before you move into next significant step or phase. Same after task is completed, always clear context and make sure next task will start fresh.
 
 ### Example Delegation Flows
 

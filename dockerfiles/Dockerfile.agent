@@ -2,21 +2,27 @@
 # OpenClaw Agent Dockerfile
 # ===========================================
 # Base: Node.js 24 on Debian Bookworm (stable, widely compatible)
-FROM node:24-bookworm-slim
+FROM node:24-bookworm
 
 # Build arguments for customization
 ARG USER_ID=1000
 ARG GROUP_ID=1000
+ARG OPENCLAW_VERSION=2026.4.23
 
 # Environment setup
 ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/node \
     NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache \
-    OPENCLAW_NO_RESPAWN=1
+    OPENCLAW_NO_RESPAWN=1 \
+    OPENCLAW_SKIP_GMAIL_WATCHER=1
+
+# Create node compile cache directory
+RUN mkdir -p /var/tmp/openclaw-compile-cache
 
 # Install system dependencies (python, make, g++ for native modules)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    systemctl \
     git \
     ca-certificates \
     python3 \
@@ -34,8 +40,8 @@ RUN npm install -g openclaw@${OPENCLAW_VERSION}
 # Install and setup Playwright globally
 RUN npm install -g @playwright/cli@latest & npx playwright install-deps
 
-# Create application and cache directories
-RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts /var/tmp/openclaw-compile-cache
+# Create application directories
+RUN mkdir -p /app/data /app/workspace /app/results /app/user-files /app/config /app/skills /app/scripts
 
 # Copy application files
 COPY --chown=node:node ./src/config/ /app/config/
