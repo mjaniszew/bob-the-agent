@@ -35,7 +35,7 @@ cp .env.template .env
 docker compose up -d
 ```
 
-### 3. Pull Ollama Models
+### 3. Pull Ollama Models, at least local ones
 
 ```bash
 # Pull the default model
@@ -52,7 +52,18 @@ docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 docker exec -it bob-the-agent-ollama ollama signin
 ```
 
-### 5. Pair Discord Bot (Optional)
+### 5. Run Doctor to ensure no issues with configuration are detected
+
+Run commands below from host or directly in the agent container:
+
+```bash
+# Run doctor in the agent container and follow what's in the screen
+docker exec -it bob-the-agent openclaw doctor
+# Apply detected fixes
+docker exec -it bob-the-agent openclaw doctor --fix
+```
+
+### 6. Pair Discord Bot (Optional)
 
 If using Discord bot:
 

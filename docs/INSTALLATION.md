@@ -88,10 +88,10 @@ docker compose ps
 
 ```bash
 # Pull default model
-docker exec bob-the-agent-ollama ollama pull llama3.2
+docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
 
-# Optional: Pull additional models
-docker exec bob-the-agent-ollama ollama pull codellama
+# Optional: Pull additional cloud models
+docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 ```
 
 ### Step 5: Verify Installation
