@@ -7,6 +7,7 @@ FROM node:24-bookworm
 # Build arguments for customization
 ARG USER_ID=1000
 ARG GROUP_ID=1000
+ARG OPENCLAW_VERSION=2026.4.23
 
 # Environment setup
 ENV DEBIAN_FRONTEND=noninteractive \
