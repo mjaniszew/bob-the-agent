@@ -94,6 +94,7 @@
       "thinkingDefault": "low",
       "verboseDefault": "off",
       "elevatedDefault": "on",
+      "reasoningDefault": "off",
       "timeoutSeconds": 3600,
       "bootstrapMaxChars": 24000,
       "bootstrapTotalMaxChars": 120000,
@@ -114,7 +115,7 @@
           ]
         },
         "thinkingDefault": "high",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false,
         "subagents": {
           "allowAgents": [
@@ -134,7 +135,7 @@
           ]
         },
         "thinkingDefault": "low",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false
       },
       {
@@ -149,7 +150,7 @@
           ]
         },
         "thinkingDefault": "high",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false,
         "subagents": {
           "allowAgents": [
@@ -171,7 +172,7 @@
           ]
         },
         "thinkingDefault": "low",
-        "reasoningDefault": "on",
+        "reasoningDefault": "off",
         "fastModeDefault": false
       },
       {
@@ -299,5 +300,8 @@
   "browser": {
     "enabled": false,
     "noSandbox": true
+  },
+  "diagnostics": {
+    "stuckSessionWarnMs": 600000
   }
 }
