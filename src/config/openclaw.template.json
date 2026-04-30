@@ -94,7 +94,6 @@
       "thinkingDefault": "low",
       "verboseDefault": "off",
       "elevatedDefault": "on",
-      "reasoningDefault": "off",
       "timeoutSeconds": 3600,
       "bootstrapMaxChars": 24000,
       "bootstrapTotalMaxChars": 120000,
