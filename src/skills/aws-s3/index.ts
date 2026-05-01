@@ -49,9 +49,9 @@ interface AwsS3Result {
 
 // Create S3 client from environment variables
 function createS3Client(): S3Client {
-  const region = process.env.AWS_S3_REGION || 'us-east-1';
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const region = process.env.USER_AWS_S3_REGION || 'us-east-1';
+  const accessKeyId = process.env.USER_AWS_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.USER_AWS_S3_SECRET_ACCESS_KEY;
 
   return new S3Client({
     region,
@@ -64,9 +64,9 @@ function createS3Client(): S3Client {
 
 // Get bucket name from environment
 function getBucketName(): string {
-  const bucket = process.env.AWS_S3_BUCKET;
+  const bucket = process.env.USER_AWS_S3_BUCKET;
   if (!bucket) {
-    throw new Error('AWS_S3_BUCKET environment variable is not set');
+    throw new Error('USER_AWS_S3_BUCKET environment variable is not set');
   }
   return bucket;
 }
@@ -159,7 +159,7 @@ export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
 
   // getPublicUrl doesn't need credentials - it just constructs a URL
   if (action === 'getPublicUrl') {
-    const region = process.env.AWS_S3_REGION || 'us-east-1';
+    const region = process.env.USER_AWS_S3_REGION || 'us-east-1';
     const url = getPublicUrlFor(bucket, key, region);
     return {
       success: true,
@@ -169,13 +169,13 @@ export async function awsS3(params: AwsS3Params): Promise<AwsS3Result> {
   }
 
   // Check AWS credentials (required for upload and getUrl)
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const accessKeyId = process.env.USER_AWS_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.USER_AWS_S3_SECRET_ACCESS_KEY;
 
   if (!accessKeyId || !secretAccessKey) {
     return {
       success: false,
-      error: 'AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.'
+      error: 'AWS credentials not configured. Set USER_AWS_S3_ACCESS_KEY_ID and USER_AWS_S3_SECRET_ACCESS_KEY environment variables.'
     };
   }
 

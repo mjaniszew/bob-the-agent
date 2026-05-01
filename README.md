@@ -96,10 +96,10 @@ docker exec -it bob-the-agent openclaw pairing approve discord <pairing-token>
 | `LOG_LEVEL` | Logging level | `info` |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
 | `SEARXNG_BASE_URL` | SearXNG base url, local or remote | http://searxng:8888 |
-| `AWS_S3_BUCKET` | AWS S3 Bucket to upload files to | - |
-| `AWS_S3_REGION` | AWS S3 Region | - |
-| `AWS_ACCESS_KEY_ID` | AWS S3 Access Key | - |
-| `AWS_SECRET_ACCESS_KEY` | AWS S3 Access Key Secret | - |
+| `USER_AWS_S3_BUCKET` | AWS S3 Bucket to upload files to | - |
+| `USER_AWS_S3_REGION` | AWS S3 Region | - |
+| `USER_AWS_S3_ACCESS_KEY_ID` | AWS S3 Access Key | - |
+| `USER_AWS_S3_SECRET_ACCESS_KEY` | AWS S3 Access Key Secret | - |
 
 ### Volume Mounts
 

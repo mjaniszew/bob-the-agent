@@ -39,7 +39,7 @@ Final output for users goes to: `/app/results/`
 
 ### X.com Search Skill (x-com)
 - Direct X.com (Twitter) API access - cost-effective X.com search
-- Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
+- Uses USER_X_COM_API_TOKEN (separate from XAI_API_KEY)
 - Search recent posts (last 7 days) and full archive
 - Search users by query
 - Retrieve user timelines
@@ -49,7 +49,7 @@ Final output for users goes to: `/app/results/`
 
 ### Grok Search Skill (grok-search)
 - X.com search via xAI Grok's x_search tool
-- Uses XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
+- Uses USER_XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
 - Fallback when x-com skill fails or is unavailable
 - AI-synthesized results with citations
 - Supports posts search, user search, and timeline retrieval

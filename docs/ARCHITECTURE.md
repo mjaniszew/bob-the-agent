@@ -187,11 +187,11 @@ See `.env.template` for all configurable variables:
 | `OLLAMA_API_KEY` | No | Ollama API key for cloud models |
 | `DISCORD_BOT_TOKEN` | For Discord | Bot token from Discord Developer Portal |
 | `SEARXNG_BASE_URL` | No | SearXNG URL (defaults to http://searxng:8888) |
-| `X_COM_API_TOKEN` | For X.com | X.com API token for x-com skill |
-| `AWS_ACCESS_KEY_ID` | For AWS S3 | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
-| `AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
-| `AWS_S3_REGION` | For AWS S3 | S3 bucket region |
+| `USER_X_COM_API_TOKEN` | For X.com | X.com API token for x-com skill |
+| `USER_AWS_S3_ACCESS_KEY_ID` | For AWS S3 | AWS access key |
+| `USER_AWS_S3_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
+| `USER_AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
+| `USER_AWS_S3_REGION` | For AWS S3 | S3 bucket region |
 
 Environment variables are substituted at container startup via the `generate-config.mjs` script.
 

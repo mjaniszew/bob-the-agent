@@ -7,7 +7,7 @@ description: Use this skill to search X.com (Twitter) directly via the native X 
 
 Use this skill to search X.com (Twitter) directly via the native X API. This is the primary skill for X.com searches.
 
-**IMPORTANT:** This skill uses the native X API directly. Use `X_COM_API_TOKEN` (recommended) for API access.
+**IMPORTANT:** This skill uses the native X API directly. Use `USER_X_COM_API_TOKEN` (recommended) for API access.
 
 ## When to Use
 
@@ -211,12 +211,12 @@ Returns JSON with:
 
 ## Environment Variables
 
-- `X_COM_API_TOKEN` - Required for X API access (recommended, separate from XAI_API_KEY)
-- `XAI_API_KEY` - Fallback if X_COM_API_TOKEN is not set
+- `USER_X_COM_API_TOKEN` - Required for X API access (recommended, separate from XAI_API_KEY)
+- `XAI_API_KEY` - Fallback if USER_X_COM_API_TOKEN is not set
 
 ## Why Separate API Key?
 
-Using `X_COM_API_TOKEN` instead of the main `XAI_API_KEY`:
+Using `USER_X_COM_API_TOKEN` instead of the main `XAI_API_KEY`:
 - Keeps search costs separate from AI model usage
 - Better cost tracking and management
 - Dedicated API access for X.com searches
@@ -225,7 +225,7 @@ Using `X_COM_API_TOKEN` instead of the main `XAI_API_KEY`:
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| 401 Unauthorized | Invalid API key | Check X_COM_API_TOKEN environment variable |
+| 401 Unauthorized | Invalid API key | Check USER_X_COM_API_TOKEN environment variable |
 | 429 Rate Limited | Too many requests | Wait before making more requests |
 | 403 Forbidden | Insufficient access | Upgrade X API access level |
 | 404 Not Found | Resource doesn't exist | Check user ID or query parameters |

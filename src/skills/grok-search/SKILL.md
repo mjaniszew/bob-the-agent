@@ -7,7 +7,7 @@ description: Use this skill to search X.com (Twitter) via xAI Grok's x_search to
 
 Use this skill to search X.com (Twitter) via xAI Grok's x_search tool using the xAI Responses API. This is the fallback skill for X.com searches when the native X API (x-com skill) is unavailable or fails, and when specifically requested.
 
-**IMPORTANT:** This skill uses the xAI Responses API with `x_search` tool. Use `XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY`) to isolate search costs from general AI usage.
+**IMPORTANT:** This skill uses the xAI Responses API with `x_search` tool. Use `USER_XAI_SEARCH_API_KEY` (separate from `XAI_API_KEY`) to isolate search costs from general AI usage.
 
 ## When to Use
 
@@ -134,12 +134,12 @@ Returns JSON with AI-synthesized results including citations:
 
 ## Environment Variables
 
-- `XAI_SEARCH_API_KEY` - Required for xAI search API access (separate from XAI_API_KEY to isolate search costs)
-- `XAI_API_KEY` - Fallback if XAI_SEARCH_API_KEY is not set
+- `USER_XAI_SEARCH_API_KEY` - Required for xAI search API access (separate from XAI_API_KEY to isolate search costs)
+- `XAI_API_KEY` - Fallback if USER_XAI_SEARCH_API_KEY is not set
 
 ## Why Separate API Key?
 
-Using `XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY`:
+Using `USER_XAI_SEARCH_API_KEY` instead of the main `XAI_API_KEY`:
 - Keeps search costs separate from AI model usage
 - Better cost tracking and management
 - X Search calls are billed separately ($5/1K calls) and can rack up costs quickly
@@ -158,7 +158,7 @@ Compared to the x-com skill (native X API), Grok search is more expensive per ca
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| 401 Unauthorized | Invalid API key | Check XAI_SEARCH_API_KEY environment variable |
+| 401 Unauthorized | Invalid API key | Check USER_XAI_SEARCH_API_KEY environment variable |
 | 429 Rate Limited | Too many requests | Wait before making more requests |
 | 403 Forbidden | Insufficient access | Verify API key has xAI Responses API access |
 | 500 Internal Server Error | xAI service issue | Retry after a brief wait |

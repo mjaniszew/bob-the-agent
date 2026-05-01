@@ -148,15 +148,15 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 ## Environment Variables
 
 Required (for `upload` and `getUrl` actions):
-- `AWS_S3_BUCKET`: S3 bucket name
-- `AWS_ACCESS_KEY_ID`: AWS access key ID
-- `AWS_SECRET_ACCESS_KEY`: AWS secret access key
+- `USER_AWS_S3_BUCKET`: S3 bucket name
+- `USER_AWS_S3_ACCESS_KEY_ID`: AWS access key ID
+- `USER_AWS_S3_SECRET_ACCESS_KEY`: AWS secret access key
 
 Required (for `getPublicUrl` action):
-- `AWS_S3_BUCKET`: S3 bucket name (credentials not required)
+- `USER_AWS_S3_BUCKET`: S3 bucket name (credentials not required)
 
 Optional:
-- `AWS_S3_REGION`: S3 region (default: us-east-1)
+- `USER_AWS_S3_REGION`: S3 region (default: us-east-1)
 
 ## Common Content Types
 

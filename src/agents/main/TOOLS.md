@@ -55,7 +55,7 @@ subagents kill <id>     — Terminate a stuck sub-agent (last resort)
 
 ### X.com Search Skill (x-com)
 - Direct X.com (Twitter) API access for posts, users, and timelines
-- Uses X_COM_API_TOKEN (separate from XAI_API_KEY)
+- Uses USER_X_COM_API_TOKEN (separate from XAI_API_KEY)
 - Search recent posts (last 7 days) and full archive
 - Search users by query
 - Retrieve user timelines
@@ -65,7 +65,7 @@ subagents kill <id>     — Terminate a stuck sub-agent (last resort)
 
 ### Grok Search Skill (grok-search)
 - X.com search via xAI Grok's x_search tool
-- Uses XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
+- Uses USER_XAI_SEARCH_API_KEY (separate from XAI_API_KEY)
 - Fallback when x-com skill fails or is unavailable
 - AI-synthesized results with citations
 - Supports posts search, user search, and timeline retrieval

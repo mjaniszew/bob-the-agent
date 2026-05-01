@@ -50,10 +50,10 @@ interface GrokSearchResult {
 
 /**
  * Get the API key from environment variables
- * Prefers XAI_SEARCH_API_KEY to isolate search costs from OpenClaw's XAI_API_KEY
+ * Prefers USER_XAI_SEARCH_API_KEY to isolate search costs from OpenClaw's XAI_API_KEY
  */
 function getApiKey(): string | null {
-  return process.env.XAI_SEARCH_API_KEY || process.env.XAI_API_KEY || null;
+  return process.env.USER_XAI_SEARCH_API_KEY || process.env.XAI_API_KEY || null;
 }
 
 /**
@@ -124,7 +124,7 @@ function buildXSearchTool(params: GrokSearchParams): Record<string, any> {
  */
 function formatError(error: any): string {
   if (error.status === 401) {
-    return 'Unauthorized: Invalid API key. Check XAI_SEARCH_API_KEY environment variable.';
+    return 'Unauthorized: Invalid API key. Check USER_XAI_SEARCH_API_KEY environment variable.';
   }
   if (error.status === 429) {
     return 'Rate limit exceeded. Please wait before making more requests.';
@@ -163,7 +163,7 @@ export async function grokSearch(params: GrokSearchParams): Promise<GrokSearchRe
       output: '',
       citations: [],
       usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, xSearchCalls: 0 },
-      error: 'XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is required. Use XAI_SEARCH_API_KEY (recommended) to isolate search costs.',
+      error: 'USER_XAI_SEARCH_API_KEY or XAI_API_KEY environment variable is required. Use USER_XAI_SEARCH_API_KEY (recommended) to isolate search costs.',
       executionTime: Date.now() - startTime
     };
   }

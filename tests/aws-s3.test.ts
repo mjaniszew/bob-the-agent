@@ -46,10 +46,10 @@ describe('AWS S3 Skill', () => {
     it('should return proper response structure for upload', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       // Note: Without real AWS credentials, this will fail with a network/auth error
       // The test validates the parameter handling and response structure
@@ -74,10 +74,10 @@ describe('AWS S3 Skill', () => {
     it('should handle buffer content', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const buffer = Buffer.from('Binary content here');
 
@@ -99,10 +99,10 @@ describe('AWS S3 Skill', () => {
     it('should use default content-type if not specified', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -118,10 +118,10 @@ describe('AWS S3 Skill', () => {
     it('should return success when generating URL with valid parameters', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'getUrl',
@@ -135,10 +135,10 @@ describe('AWS S3 Skill', () => {
     it('should use default expiration time of 3600 seconds', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'getUrl',
@@ -151,10 +151,10 @@ describe('AWS S3 Skill', () => {
     it('should respect custom expiration time', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'getUrl',
@@ -170,10 +170,10 @@ describe('AWS S3 Skill', () => {
     it('should handle missing AWS credentials gracefully', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      delete process.env.AWS_ACCESS_KEY_ID;
-      delete process.env.AWS_SECRET_ACCESS_KEY;
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
+      delete process.env.USER_AWS_S3_ACCESS_KEY_ID;
+      delete process.env.USER_AWS_S3_SECRET_ACCESS_KEY;
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
 
       const result = await awsS3({
         action: 'upload',
@@ -189,9 +189,9 @@ describe('AWS S3 Skill', () => {
     it('should handle missing S3 bucket configuration gracefully', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
-      delete process.env.AWS_S3_BUCKET;
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
+      delete process.env.USER_AWS_S3_BUCKET;
 
       const result = await awsS3({
         action: 'upload',
@@ -207,10 +207,10 @@ describe('AWS S3 Skill', () => {
     it('should handle invalid action gracefully', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'invalid' as any,
@@ -225,10 +225,10 @@ describe('AWS S3 Skill', () => {
     it('should handle missing key parameter', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -243,10 +243,10 @@ describe('AWS S3 Skill', () => {
     it('should handle missing content on upload', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -263,10 +263,10 @@ describe('AWS S3 Skill', () => {
     it('should upload file from filePath', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -286,10 +286,10 @@ describe('AWS S3 Skill', () => {
     it('should auto-detect content type from file extension', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       // Test .txt file - should auto-detect text/plain
       const result = await awsS3({
@@ -304,10 +304,10 @@ describe('AWS S3 Skill', () => {
     it('should handle missing file gracefully', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -323,10 +323,10 @@ describe('AWS S3 Skill', () => {
     it('should handle file read errors gracefully', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       // Try to read a directory instead of a file
       const result = await awsS3({
@@ -342,10 +342,10 @@ describe('AWS S3 Skill', () => {
     it('should reject when both content and filePath are provided', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -362,10 +362,10 @@ describe('AWS S3 Skill', () => {
     it('should require either content or filePath for upload', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -380,10 +380,10 @@ describe('AWS S3 Skill', () => {
     it('should use explicit contentType over auto-detected type', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -397,13 +397,13 @@ describe('AWS S3 Skill', () => {
   });
 
   describe('Configuration', () => {
-    it('should use AWS_S3_BUCKET from environment', async () => {
+    it('should use USER_AWS_S3_BUCKET from environment', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-custom-bucket';
-      process.env.AWS_S3_REGION = 'us-west-2';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'my-custom-bucket';
+      process.env.USER_AWS_S3_REGION = 'us-west-2';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'upload',
@@ -415,13 +415,13 @@ describe('AWS S3 Skill', () => {
       expect(result).toHaveProperty('success');
     });
 
-    it('should use AWS_S3_REGION from environment', async () => {
+    it('should use USER_AWS_S3_REGION from environment', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'test-bucket';
-      process.env.AWS_S3_REGION = 'ap-southeast-1';
-      process.env.AWS_ACCESS_KEY_ID = 'test-key';
-      process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'ap-southeast-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await awsS3({
         action: 'getUrl',
@@ -436,8 +436,8 @@ describe('AWS S3 Skill', () => {
     it('should return public URL with correct format', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-public-bucket';
-      process.env.AWS_S3_REGION = 'us-east-1';
+      process.env.USER_AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.USER_AWS_S3_REGION = 'us-east-1';
       // Note: getPublicUrl does NOT require credentials
 
       const result = await awsS3({
@@ -454,8 +454,8 @@ describe('AWS S3 Skill', () => {
     it('should handle keys with special characters (encoding)', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-public-bucket';
-      process.env.AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
       // Note: getPublicUrl does NOT require credentials
 
       const result = await awsS3({
@@ -468,11 +468,11 @@ describe('AWS S3 Skill', () => {
       expect(result.url).toContain('path%20with%20spaces');
     });
 
-    it('should use default region if AWS_S3_REGION not set', async () => {
+    it('should use default region if USER_AWS_S3_REGION not set', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-public-bucket';
-      delete process.env.AWS_S3_REGION;
+      process.env.USER_AWS_S3_BUCKET = 'my-public-bucket';
+      delete process.env.USER_AWS_S3_REGION;
 
       const result = await awsS3({
         action: 'getPublicUrl',
@@ -486,11 +486,11 @@ describe('AWS S3 Skill', () => {
     it('should not require AWS credentials for getPublicUrl', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-public-bucket';
-      process.env.AWS_S3_REGION = 'us-west-2';
+      process.env.USER_AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.USER_AWS_S3_REGION = 'us-west-2';
       // Explicitly do NOT set AWS credentials
-      delete process.env.AWS_ACCESS_KEY_ID;
-      delete process.env.AWS_SECRET_ACCESS_KEY;
+      delete process.env.USER_AWS_S3_ACCESS_KEY_ID;
+      delete process.env.USER_AWS_S3_SECRET_ACCESS_KEY;
 
       const result = await awsS3({
         action: 'getPublicUrl',
@@ -506,10 +506,10 @@ describe('AWS S3 Skill', () => {
     it('should work with different regions', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      process.env.AWS_S3_BUCKET = 'my-public-bucket';
-      process.env.AWS_S3_REGION = 'ap-southeast-2';
-      delete process.env.AWS_ACCESS_KEY_ID;
-      delete process.env.AWS_SECRET_ACCESS_KEY;
+      process.env.USER_AWS_S3_BUCKET = 'my-public-bucket';
+      process.env.USER_AWS_S3_REGION = 'ap-southeast-2';
+      delete process.env.USER_AWS_S3_ACCESS_KEY_ID;
+      delete process.env.USER_AWS_S3_SECRET_ACCESS_KEY;
 
       const result = await awsS3({
         action: 'getPublicUrl',
@@ -528,10 +528,10 @@ describe('AWS S3 Skill', () => {
       try {
         const { executeSkill } = await import('../src/skills/index');
 
-        process.env.AWS_S3_BUCKET = 'test-bucket';
-        process.env.AWS_S3_REGION = 'eu-central-1';
-        process.env.AWS_ACCESS_KEY_ID = 'test-key';
-        process.env.AWS_SECRET_ACCESS_KEY = 'test-secret';
+        process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+        process.env.USER_AWS_S3_REGION = 'eu-central-1';
+        process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+        process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
         const result = await executeSkill('aws-s3', {
           action: 'upload',

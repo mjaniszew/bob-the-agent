@@ -27,10 +27,10 @@ afterAll(() => {
 
 describe('Grok Search Skill', () => {
   describe('API Key Handling', () => {
-    it('should use XAI_SEARCH_API_KEY when set', async () => {
+    it('should use USER_XAI_SEARCH_API_KEY when set', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-search-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-search-key';
       delete process.env.XAI_API_KEY;
 
       global.fetch = jest.fn(() =>
@@ -53,10 +53,10 @@ describe('Grok Search Skill', () => {
       expect(headers?.Authorization).toContain('test-search-key');
     });
 
-    it('should fall back to XAI_API_KEY when XAI_SEARCH_API_KEY is not set', async () => {
+    it('should fall back to XAI_API_KEY when USER_XAI_SEARCH_API_KEY is not set', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      delete process.env.XAI_SEARCH_API_KEY;
+      delete process.env.USER_XAI_SEARCH_API_KEY;
       process.env.XAI_API_KEY = 'fallback-key';
 
       global.fetch = jest.fn(() =>
@@ -82,13 +82,13 @@ describe('Grok Search Skill', () => {
     it('should return error when neither API key is set', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      delete process.env.XAI_SEARCH_API_KEY;
+      delete process.env.USER_XAI_SEARCH_API_KEY;
       delete process.env.XAI_API_KEY;
 
       const result = await grokSearch({ action: 'searchPosts', query: 'test' });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('XAI_SEARCH_API_KEY');
+      expect(result.error).toContain('USER_XAI_SEARCH_API_KEY');
     });
   });
 
@@ -96,7 +96,7 @@ describe('Grok Search Skill', () => {
     it('should search recent posts with query via x_search', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -124,7 +124,7 @@ describe('Grok Search Skill', () => {
     it('should include from_date for recent posts (last 7 days)', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -151,7 +151,7 @@ describe('Grok Search Skill', () => {
     it('should support allowedHandles parameter', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -177,7 +177,7 @@ describe('Grok Search Skill', () => {
     it('should support date range filtering', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -204,7 +204,7 @@ describe('Grok Search Skill', () => {
     it('should use grok-4-1-fast-non-reasoning model by default', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -229,7 +229,7 @@ describe('Grok Search Skill', () => {
     it('should allow custom model override', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -256,7 +256,7 @@ describe('Grok Search Skill', () => {
     it('should search all posts without date restriction', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -288,7 +288,7 @@ describe('Grok Search Skill', () => {
     it('should search users via x_search', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -319,7 +319,7 @@ describe('Grok Search Skill', () => {
     it('should get timeline for a specific user via x_search', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -348,7 +348,7 @@ describe('Grok Search Skill', () => {
     it('should return error when username is not provided for getUserTimeline', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       const result = await grokSearch({ action: 'getUserTimeline', query: '' });
 
@@ -359,7 +359,7 @@ describe('Grok Search Skill', () => {
     it('should strip @ from username when setting allowed_x_handles', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -388,7 +388,7 @@ describe('Grok Search Skill', () => {
     it('should handle API authentication error (401)', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'invalid-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'invalid-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -408,7 +408,7 @@ describe('Grok Search Skill', () => {
     it('should handle rate limit exceeded (429)', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -428,7 +428,7 @@ describe('Grok Search Skill', () => {
     it('should handle network errors', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.reject(new Error('Network error'))
@@ -443,7 +443,7 @@ describe('Grok Search Skill', () => {
     it('should handle empty results gracefully', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -468,7 +468,7 @@ describe('Grok Search Skill', () => {
     it('should handle invalid JSON response', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -488,7 +488,7 @@ describe('Grok Search Skill', () => {
     it('should include executionTime in result', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -513,7 +513,7 @@ describe('Grok Search Skill', () => {
     it('should track token usage and x_search call count', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -541,7 +541,7 @@ describe('Grok Search Skill', () => {
     it('should send request to xAI Responses API endpoint', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -565,7 +565,7 @@ describe('Grok Search Skill', () => {
     it('should use POST method', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -589,7 +589,7 @@ describe('Grok Search Skill', () => {
     it('should include x_search tool in request body', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -615,7 +615,7 @@ describe('Grok Search Skill', () => {
     it('should include Content-Type and Authorization headers', async () => {
       const { grokSearch } = await import('../src/skills/grok-search/index');
 
-      process.env.XAI_SEARCH_API_KEY = 'test-key';
+      process.env.USER_XAI_SEARCH_API_KEY = 'test-key';
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -646,7 +646,7 @@ describe('Grok Search Skill', () => {
       // This test runs inside the Docker container
       // Verifies the skill is properly registered and callable via:
       // node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"test"}'
-      // Requires XAI_SEARCH_API_KEY to be set in Docker env
+      // Requires USER_XAI_SEARCH_API_KEY to be set in Docker env
     });
 
     it.skip('should return structured results when called from Docker', async () => {
@@ -654,8 +654,8 @@ describe('Grok Search Skill', () => {
       // when invoked through the skill-runner in the container
     });
 
-    it.skip('should use XAI_SEARCH_API_KEY from Docker environment', async () => {
-      // Verifies the skill picks up the XAI_SEARCH_API_KEY env var
+    it.skip('should use USER_XAI_SEARCH_API_KEY from Docker environment', async () => {
+      // Verifies the skill picks up the USER_XAI_SEARCH_API_KEY env var
       // that is configured in docker-compose.yml
     });
   });
