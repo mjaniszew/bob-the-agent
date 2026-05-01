@@ -62,6 +62,14 @@ export const skillRegistry = {
       userId: { type: 'string', description: 'User ID for getUserTimeline action' },
       username: { type: 'string', description: 'Username for getUserTimeline action (alternative to userId)' }
     }
+  },
+  'grok-search': {
+    name: 'Grok Search ',
+    description: 'Search using Grok through x.ai API',
+    version: '1.0.0',
+    params: {
+      action: { type: 'string', enum: ['searchPosts', 'searchPostsAll', 'searchUsers', 'getUserTimeline'], required: true, description: 'Action to perform: searchPosts, searchPostsAll, searchUsers, or getUserTimeline' },      
+    }
   }
 };
 
@@ -99,6 +107,10 @@ export async function executeSkill(skillName: string, params: Record<string, any
     case 'aws-s3': {
       const { awsS3 } = await import('./aws-s3/index.js');
       return awsS3(params as any);
+    }
+    case 'grok-search': {
+      const { grokSearch } = await import('./grok-search/index.js');
+      return grokSearch(params as any);
     }
     default:
       throw new Error(`Skill not implemented: ${skillName}`);

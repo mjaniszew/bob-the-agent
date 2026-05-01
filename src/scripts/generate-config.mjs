@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs';
 
-const template = readFileSync('/app/config/openclaw.template.json', 'utf8');
+const template = readFileSync('/app/config/hermes.template.yaml', 'utf8');
 
 const config = JSON.parse(template.replace(/\$\{(\w+)\}/g, (_, key) => {
   const val = process.env[key];
@@ -8,5 +8,5 @@ const config = JSON.parse(template.replace(/\$\{(\w+)\}/g, (_, key) => {
   return val;
 }));
 
-writeFileSync('/home/node/.openclaw/openclaw.json', JSON.stringify(config, null, 2));
-console.log('First run: openclaw.json generated');
+writeFileSync('/opt/data/config.yaml', JSON.stringify(config, null, 2));
+console.log('First run: config.yaml generated');

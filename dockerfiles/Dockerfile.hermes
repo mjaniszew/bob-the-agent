@@ -1,0 +1,31 @@
+FROM nousresearch/hermes-agent:v2026.4.30
+
+# Environment setup
+ENV NODE_COMPILE_CACHE=/var/tmp/node-compile-cache
+
+# Create node compile cache directory
+RUN mkdir -p /var/tmp/node-compile-cache
+
+# Install additional system dependencies eg. browser
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    systemctl ca-certificates make g++ chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /app/scripts
+COPY ./src/config/ /app/config/
+COPY ./src/scripts/ /app/scripts/
+COPY ./src/skills/ /app/skills/
+RUN chmod +x /app/scripts/*.sh
+
+# Set working directory for skills build
+WORKDIR /app/skills
+
+# Install skills dependencies and build skills
+RUN npm install 
+RUN npm run build
+
+WORKDIR /app
+
+ENTRYPOINT ["scripts/hermes-entrypoint.sh"]
+CMD ["bash", "-c", "scripts/hermes-cmd.sh gateway run"]
