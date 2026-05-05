@@ -23,7 +23,7 @@ services:
           memory: 1G
 
   # ===========================================
-  # OpenClaw Agent - Main AI agent
+  # Hermes Agent - Main AI agent / orchestrator
   # ===========================================
   agent-main:
     build:
@@ -65,6 +65,9 @@ services:
           memory: 2G
         limits:
           memory: 4G
+  # ===========================================================
+  # Researcher Agent - AI agent focused on deep research tasks
+  # ===========================================================
   researcher:
     build:
       context: .
@@ -104,11 +107,14 @@ services:
           memory: 2G
         limits:
           memory: 4G
-  websearcher:
+  # =====================================================================
+  # Simple Agent - AI agent focused on conducting simple and cheap tasks
+  # =====================================================================
+  simple-agent:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.hermes
-    container_name: bob-the-agent-websearcher
+    container_name: bob-the-agent-simple
     restart: unless-stopped
     depends_on:
       ollama:
@@ -117,7 +123,7 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - NODE_ENV=production
       - HERMES_YOLO_MODE=1
-      - AGENT_NAME=web-searcher
+      - AGENT_NAME=simple
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
       - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
@@ -129,7 +135,7 @@ services:
     ports:
       - 8102:8642
     volumes:
-      - ./volumes/agent-web-searcher:/opt/data
+      - ./volumes/agent-simple:/opt/data
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
       interval: 30s

@@ -15,6 +15,11 @@ if [[ ! -f "$OUTPUT_FILE" ]]; then
   /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" "$AGENT_NAME" "$OUTPUT_FILE"
 fi
 
+if [[ ! -f "/opt/data/SOUL.md" ]]; then
+  echo "Agent SOUL not found! Generating..."
+  cp $AGENTS_DIR/$AGENT_NAME/SOUL.md /opt/data/SOUL.md
+fi
+
 # Set up skills directory for agent
 if [[ ! -d /opt/data/skills ]]; then
   mkdir -p /opt/data/skills
