@@ -14,16 +14,13 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
 | grok-search | ✅ Implemented | X.com search via xAI Grok x_search tool (fallback for x-com) |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
+| searxng-search | ✅ Implemented | Web search via SearXNG (free, no tokens) |
 
 **System Tool Skills (SKILL.md only):**
 | Skill | Status | Description |
 |-------|--------|-------------|
 | playwright | ✅ Available | Browser automation via playwright-cli |
 
-**Built-in OpenClaw Tools:**
-| Tool | Status | Description |
-|-------|--------|-------------|
-| searxng-search | ✅ Available | Web search via SearXNG (free, no tokens) |
 
 **Environment Variables Required:**
 - `USER_X_COM_API_TOKEN` - For X.com API access (x-com skill)

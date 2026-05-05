@@ -15,8 +15,10 @@ RUN apt-get update && \
 RUN mkdir -p /app/scripts
 COPY ./src/config/ /app/config/
 COPY ./src/scripts/ /app/scripts/
+COPY ./src/agents/ /app/agents/
 COPY ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/*.sh
+RUN cd /app/scripts && npm install js-yaml@4.1.1
 
 # Set working directory for skills build
 WORKDIR /app/skills

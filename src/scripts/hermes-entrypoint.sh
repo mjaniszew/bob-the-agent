@@ -3,10 +3,16 @@ set -e
 
 echo "Agent starting"
 
+# Config generation parameters with defaults
+TEMPLATE_FILE="${TEMPLATE_FILE:-/app/config/hermes.template.yaml}"
+AGENTS_DIR="${AGENTS_DIR:-/app/agents}"
+AGENT_NAME="${AGENT_NAME:-main}"
+OUTPUT_FILE="${OUTPUT_FILE:-/opt/data/config.yaml}"
+
 # Generate config if does not exist
-if [[ ! -f /opt/data/config.yaml ]]; then
+if [[ ! -f "$OUTPUT_FILE" ]]; then
   echo "Config not found! Generating..."
-  exec /app/scripts/generate-config.sh
+  /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" "$AGENT_NAME" "$OUTPUT_FILE"
 fi
 
 # Set up skills directory for agent

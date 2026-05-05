@@ -85,11 +85,9 @@ Context: <relevant background information>
 
 | Path | Purpose | Used By |
 |------|---------|---------|
-| `/app/data/{YYYY-MM-DD}/{task-id}/` | Sub-agent working directory for task results | All sub-agents |
 | `/app/results/` | Final output files delivered to user | Main agent only |
-| `/app/user-files/` | Input files provided by user | Read by any agent |
-| `{workspace}/memory/` | Agent memory files | All agents |
-| `{workspace}/MEMORY.md` | Long-term curated memory | Main agent only |
+| `/opt/data/` | Agent files: configs, skills, workspace | Per agent files |
+
 
 ## Memory and Learning
 

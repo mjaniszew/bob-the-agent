@@ -25,7 +25,7 @@ services:
   # ===========================================
   # OpenClaw Agent - Main AI agent
   # ===========================================
-  agent:
+  agent-main:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile.hermes
@@ -37,6 +37,8 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - NODE_ENV=production
+      - HERMES_YOLO_MODE=1
+      - AGENT_NAME=main
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -49,7 +51,85 @@ services:
     ports:
       - 8642:8642
     volumes:
-      - ./volumes/.hermes:/opt/data
+      - ./volumes/agent-main:/opt/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          cpus: 2
+          memory: 2G
+        limits:
+          memory: 4G
+  researcher:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.hermes
+    container_name: bob-the-agent-researcher
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - NODE_ENV=production
+      - HERMES_YOLO_MODE=1
+      - AGENT_NAME=researcher
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
+      - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
+      - USER_XAI_SEARCH_API_KEY=${USER_XAI_SEARCH_API_KEY}
+      - USER_AWS_S3_BUCKET=${USER_AWS_S3_BUCKET}
+      - USER_AWS_S3_REGION=${USER_AWS_S3_REGION}
+      - USER_AWS_S3_ACCESS_KEY_ID=${USER_AWS_S3_ACCESS_KEY_ID}
+      - USER_AWS_S3_SECRET_ACCESS_KEY=${USER_AWS_S3_SECRET_ACCESS_KEY}
+    ports:
+      - 8101:8642
+    volumes:
+      - ./volumes/agent-researcher:/opt/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          cpus: 2
+          memory: 2G
+        limits:
+          memory: 4G
+  websearcher:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.hermes
+    container_name: bob-the-agent-websearcher
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - NODE_ENV=production
+      - HERMES_YOLO_MODE=1
+      - AGENT_NAME=web-searcher
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
+      - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
+      - USER_XAI_SEARCH_API_KEY=${USER_XAI_SEARCH_API_KEY}
+      - USER_AWS_S3_BUCKET=${USER_AWS_S3_BUCKET}
+      - USER_AWS_S3_REGION=${USER_AWS_S3_REGION}
+      - USER_AWS_S3_ACCESS_KEY_ID=${USER_AWS_S3_ACCESS_KEY_ID}
+      - USER_AWS_S3_SECRET_ACCESS_KEY=${USER_AWS_S3_SECRET_ACCESS_KEY}
+    ports:
+      - 8102:8642
+    volumes:
+      - ./volumes/agent-web-searcher:/opt/data
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
       interval: 30s
@@ -123,8 +203,6 @@ services:
 # ===========================================
 volumes:
   ollama_data:
-    driver: local
-  agent_workspace:
     driver: local
   searxng_config:
     driver: local

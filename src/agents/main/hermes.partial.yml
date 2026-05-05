@@ -1,0 +1,11 @@
+model:
+  default: kimi-k2.6:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+- name: ollama/kimi-k2.6:cloud
+  base_url: http://ollama:11434/v1
+  model: kimi-k2.6:cloud
+toolsets:
+- hermes-cli
+- browser
