@@ -22,7 +22,7 @@ This project builds a containerized AI agent that runs 24/7 autonomously via Doc
 ## Key Requirements
 
 - Agent must run fully autonomously - never ask questions during execution
-- Use stable, community-endorsed solutions (Claude Code, OpenClaw, Ollama)
+- Use stable, community-endorsed solutions (Claude Code, Hermes Agent, Ollama)
 - Support multiple model providers with cloud API keys via environment variables
 - Mountable external volumes for result files and user-provided files
 - Lightweight enough for mediocre mini PCs

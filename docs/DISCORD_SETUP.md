@@ -2,19 +2,19 @@
 
 ## Overview
 
-Mini Agent includes a Discord bot for managing tasks through Discord slash commands.
+Bob The Agent includes a Discord bot powered by the Hermes Agent framework for managing tasks through Discord slash commands and natural language interaction.
 
 ## Prerequisites
 
 - A Discord account
 - A Discord server where you have admin permissions
-- The bot token and client ID from `.env`
+- The bot token and client ID configured in `.env`
 
 ## Step 1: Create Discord Application
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 2. Click "New Application"
-3. Name it (e.g., "Mini Agent")
+3. Name it (e.g., "Bob The Agent")
 4. Copy the **Application ID** (this is your `DISCORD_CLIENT_ID`)
 
 ## Step 2: Create Bot User
@@ -58,73 +58,38 @@ DISCORD_CLIENT_ID=your-application-id-here
 
 ## Step 5: Verify Bot Works
 
-1. Restart the agent container:
+1. Restart the main agent container:
    ```bash
-   docker compose restart agent
+   docker compose restart agent-main
    ```
 
 2. Check logs:
    ```bash
-   docker compose logs agent | grep "Discord"
+   docker compose logs agent-main | grep -i discord
    ```
 
-3. Test in Discord:
-   ```
-   /help
-   ```
+3. Test in Discord by sending a message or using commands
 
-## Available Commands
+## Usage
 
-### Task Management
+Hermes Agent's Discord integration supports natural language interaction. The bot responds to messages and can use all configured skills and tools.
 
-| Command | Description |
-|---------|-------------|
-| `/task add` | Create a new task |
-| `/task list` | List all tasks |
-| `/task status` | Get task status |
-| `/task run` | Run a task immediately |
-| `/task delete` | Delete a task |
+### Key Features
 
-### Schedule Management
+- **Natural language interaction** — Talk to the bot normally in channels
+- **Threaded conversations** — The bot can auto-create threads for longer discussions
+- **Reactions** — The bot uses emoji reactions to acknowledge messages
+- **Slash commands** — Hermes provides built-in commands depending on configuration
 
-| Command | Description |
-|---------|-------------|
-| `/schedule add` | Create a scheduled task |
-| `/schedule list` | List all schedules |
-| `/schedule remove` | Remove a schedule |
+### Discord Configuration
 
-### Other Commands
+Discord bot behavior is configured in `hermes.template.yaml` under the `discord` section:
 
-| Command | Description |
-|---------|-------------|
-| `/result` | Get task result |
-| `/status` | Get agent status |
-| `/help` | Show help |
-
-## Usage Examples
-
-### Create a Task
-
-```
-/task add name:"Search for AI news" description:"Find latest AI developments" skill:web-search
-```
-
-### List Tasks
-
-```
-/task list status:pending
-```
-
-### Run a Task
-
-```
-/task run id:abc123
-```
-
-### Create a Schedule
-
-```
-/schedule add name:"Daily Report" cron:"0 9 * * *" task:{"skill":"web-search","parameters":{"query":"daily news"}}
+```yaml
+discord:
+  require_mention: true          # Only respond when mentioned
+  auto_thread: true              # Auto-create threads for conversations
+  reactions: true                 # Use emoji reactions
 ```
 
 ## Troubleshooting
@@ -132,21 +97,21 @@ DISCORD_CLIENT_ID=your-application-id-here
 ### Bot Not Responding
 
 1. Check if bot is online in Discord
-2. Verify token and client ID are correct
-3. Check agent logs for errors:
+2. Verify token and client ID are correct in `.env`
+3. Check agent-main logs for Discord errors:
    ```bash
-   docker compose logs agent
+   docker compose logs agent-main | grep -i discord
    ```
 
 ### Commands Not Appearing
 
-1. Re-register commands:
-   - Restart the agent container
-   - Wait up to 1 hour for Discord to refresh
+1. Restart the agent container: `docker compose restart agent-main`
+2. Wait up to 1 hour for Discord to refresh command cache
+3. Verify `hermes-cli` and `hermes-discord` toolsets are enabled in config
 
 ### Permission Errors
 
-1. Ensure bot has required permissions
+1. Ensure bot has required permissions in Discord
 2. Re-invite bot with correct permissions
 3. Check server role settings
 
@@ -156,7 +121,7 @@ DISCORD_CLIENT_ID=your-application-id-here
 
 - Never share your bot token
 - Regenerate if compromised
-- Use environment variables
+- Use environment variables (never commit to git)
 
 ### Server Permissions
 

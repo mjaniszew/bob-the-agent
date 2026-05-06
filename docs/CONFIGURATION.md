@@ -2,7 +2,7 @@
 
 ## Overview
 
-Mini Agent uses environment variables and YAML configuration files for customization.
+Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a multi-container architecture where each agent (main, researcher, simple) runs in its own container with its own configuration.
 
 ## Configuration Files
 
@@ -10,53 +10,107 @@ Mini Agent uses environment variables and YAML configuration files for customiza
 
 Main configuration file for environment variables.
 
-[env_template](/.env.template) contains possible env variables with explainations.
+[.env.template](/.env.template) contains possible environment variables with explanations.
 
-### openclaw.template.json
+### hermes.template.yaml
 
-Agent behavior configuration template located at `src/config/openclaw.template.json`.
+Shared Hermes Agent behavior configuration template located at `src/config/hermes.template.yaml`.
 
 **How it works:**
-1. At container startup, `app-entrypoint.sh` checks if OpenClaw config exists
-2. If not, `generate-config.mjs` reads the JSON template
-3. Environment variables are substituted (e.g., `${DISCORD_BOT_TOKEN}`)
-4. Final config is written to `/home/node/.openclaw/openclaw.json`
+1. At container startup, `hermes-entrypoint.sh` checks if `/opt/data/config.yaml` exists
+2. If not, `generate-config.sh` reads the YAML template and agent-specific partial
+3. If a partial exists for the agent, `merge-yaml.mjs` deep-merges them (arrays replaced, objects merged)
+4. If no partial exists, the template is used as-is
+5. Final config is written to `/opt/data/config.yaml`
 
-The template uses OpenClaw's native JSON format. Only essential configuration is specified; OpenClaw manages defaults for optional settings.
+The template uses Hermes Agent's native YAML format. It contains defaults for model settings, toolsets, agent behavior, terminal configuration, browser settings, checkpoints, and more.
 
-```json
-{
-  "meta": {
-    "lastTouchedVersion": "2026.3.13"
-  },
-  "auth": {
-    "profiles": {
-      "ollama:default": {
-        "provider": "ollama",
-        "mode": "api_key"
-      }
-    }
-  },
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "ollama": {
-        "baseUrl": "http://ollama:11434",
-        "models": [
-          { "id": "llama3.2", "contextWindow": 128000 }
-        ]
-      }
-    }
-  },
-  "gateway": {
-    "port": 18789,
-    "mode": "local"
-  }
-}
+**Example hermes.template.yaml structure:**
+
+```yaml
+model:
+  default: qwen3.5:2b-q4_K_M
+  provider: custom
+  base_url: http://ollama:11434/v1
+providers: {}
+toolsets:
+  - hermes-cli
+agent:
+  max_turns: 90
+  gateway_timeout: 1800
+  personalities:
+    default: You are automation agent...
+terminal:
+  backend: local
+  persistent_shell: true
+  lifetime_seconds: 300
 ```
 
-**Environment Variable Substitution:**
-Any `${VAR_NAME}` in the template is replaced with the corresponding environment variable value at startup. If a variable is missing, startup fails with an error.
+### Agent Partials (hermes.partial.yml)
+
+Each agent can override specific parts of the shared template via a partial YAML file in `src/agents/{name}/hermes.partial.yml`:
+
+**Main agent** (`src/agents/main/hermes.partial.yml`):
+```yaml
+model:
+  default: kimi-k2.6:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+  - name: ollama/kimi-k2.6:cloud
+    base_url: http://ollama:11434/v1
+    model: kimi-k2.6:cloud
+toolsets:
+  - hermes-cli
+  - browser
+```
+
+**Researcher agent** (`src/agents/researcher/hermes.partial.yml`):
+```yaml
+model:
+  default: kimi-k2.6:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+  - name: ollama/kimi-k2.6:cloud
+    base_url: http://ollama:11434/v1
+    model: kimi-k2.6:cloud
+toolsets:
+  - hermes-cli
+  - browser
+```
+
+**Simple agent** (`src/agents/simple/hermes.partial.yml`):
+```yaml
+model:
+  default: minimax-m2.7:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+  - name: ollama/minimax-m2.7:cloud
+    base_url: http://ollama:11434/v1
+    model: minimax-m2.7:cloud
+toolsets:
+  - hermes-cli
+  - browser
+```
+
+**Merge behavior:**
+- Objects are deep-merged (nested keys override individually)
+- Arrays are replaced entirely (not concatenated)
+- Keys present only in the partial are added
+- Keys present only in the template are preserved
+
+### Agent Identity Files
+
+Each agent also has identity and behavioral files that are copied to `/opt/data/` at startup:
+
+| File | Purpose |
+|------|---------|
+| `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
+| `src/agents/{name}/IDENTITY.md` | Agent identity metadata (name, role, emoji) |
+| `src/agents/{name}/AGENTS.md` | Agent workspace instructions and conventions |
+| `src/agents/{name}/TOOLS.md` | Agent-specific tool notes and tips |
 
 ## Environment Variables
 
@@ -65,119 +119,168 @@ Any `${VAR_NAME}` in the template is replaced with the corresponding environment
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `LOG_LEVEL` | string | `info` | Logging level (debug, info, warn, error) |
-| `DEFAULT_PROVIDER` | string | `ollama` | Default model provider |
 | `NODE_ENV` | string | `production` | Node environment |
+| `HERMES_YOLO_MODE` | string | `1` | Auto-approve mode (1=enabled) |
+| `AGENT_NAME` | string | `main` | Agent identity (main, researcher, simple) |
 
 ### Model Providers
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `OLLAMA_BASE_URL` | string | Ollama API endpoint |
-| `OLLAMA_MODEL` | string | Default Ollama model |
-| `ANTHROPIC_API_KEY` | string | Anthropic API key |
-| `OPENAI_API_KEY` | string | OpenAI API key |
+| `OLLAMA_BASE_URL` | string | Ollama API endpoint (defaults to http://ollama:11434) |
+
+### Search & External Services
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `SEARXNG_BASE_URL` | string | SearXNG URL (defaults to http://searxng:8888) |
+| `USER_X_COM_API_TOKEN` | string | X.com API token for x-com skill |
+| `USER_XAI_SEARCH_API_KEY` | string | xAI API key for grok-search skill |
 
 ### Discord Bot
 
 | Variable | Type | Description |
 |----------|------|-------------|
 | `DISCORD_BOT_TOKEN` | string | Discord bot token |
-| `DISCORD_CLIENT_ID` | string | Discord application ID |
+
+### AWS S3
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `USER_AWS_S3_BUCKET` | string | S3 bucket name |
+| `USER_AWS_S3_REGION` | string | S3 region (default: us-east-1) |
+| `USER_AWS_S3_ACCESS_KEY_ID` | string | AWS access key |
+| `USER_AWS_S3_SECRET_ACCESS_KEY` | string | AWS secret key |
 
 ## Docker Compose Configuration
 
-### Service Limits
+### Service Architecture
 
-Adjust resource limits in `docker-compose.yml`:
+The compose file defines 6 services:
+
+```yaml
+services:
+  ollama:          # LLM inference engine
+  agent-main:      # Main orchestrator agent (Hermes + Discord)
+  researcher:      # Deep research specialist agent (Hermes)
+  simple-agent:    # Simple/cheap task handler (Hermes)
+  searxng:         # Privacy-respecting metasearch engine
+  valkey:          # Redis-compatible cache for SearXNG
+```
+
+### Resource Limits
+
+Adjust resource limits in `compose.yaml`:
 
 ```yaml
 services:
   ollama:
     deploy:
       resources:
-        limits:
-          memory: 8G
         reservations:
-          memory: 2G
+          cpus: 1
+          memory: 1G
 
-  agent:
+  agent-main:
     deploy:
       resources:
-        limits:
-          memory: 2G
         reservations:
-          memory: 512M
+          cpus: 2
+          memory: 2G
+        limits:
+          memory: 4G
+
+  researcher:
+    deploy:
+      resources:
+        reservations:
+          cpus: 2
+          memory: 2G
+        limits:
+          memory: 4G
+
+  simple-agent:
+    deploy:
+      resources:
+        reservations:
+          cpus: 2
+          memory: 2G
+        limits:
+          memory: 4G
 ```
 
 ### Volume Mounts
 
-| Host Path | Container Path | Purpose |
-|-----------|---------------|---------|
-| `./volumes/results` | `/app/results` | Task output files |
-| `./volumes/user-files` | `/app/user-files` | Input files |
-| `./volumes/data` | `/app/data` | Agent database, logs |
-| `ollama_data` | `/root/.ollama` | Model storage |
+| Host Path | Container Path | Service | Purpose |
+|-----------|---------------|---------|---------|
+| `./volumes/agent-main` | `/opt/data` | agent-main | Main agent workspace, config, memory, skills |
+| `./volumes/agent-researcher` | `/opt/data` | researcher | Researcher agent workspace |
+| `./volumes/agent-simple` | `/opt/data` | simple-agent | Simple agent workspace |
+| `./volumes/results` | `/app/results` | agent-main | Final task output files |
+| `ollama_data` | `/root/.ollama` | ollama | Downloaded models |
+| `searxng_config` | `/etc/searxng/` | searxng | SearXNG configuration |
+| `searxng_data` | `/var/cache/searxng/` | searxng | SearXNG cache |
+| `valkey_data` | `/data` | valkey | Valkey/Redis data |
 
 ### Ports
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
 | `11434` | `11434` | Ollama API |
-| `18789` | `18789` | Agent Gateway |
+| `8642` | `8642` | agent-main Gateway |
+| `8101` | `8642` | researcher Gateway |
+| `8102` | `8642` | simple-agent Gateway |
+| `8888` | `8888` | SearXNG |
 
 ## Model Configuration
 
-### Adding Models
+### Changing Agent Models
+
+Each agent's model is configured via its `hermes.partial.yml` file:
+
+1. Edit the partial for the agent you want to change, e.g. `src/agents/main/hermes.partial.yml`:
+
+```yaml
+model:
+  default: your-model-name:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+  - name: ollama/your-model-name:cloud
+    base_url: http://ollama:11434/v1
+    model: your-model-name:cloud
+```
+
+2. Rebuild and restart the containers:
+```bash
+docker compose build agent-main
+docker compose up -d agent-main
+```
+
+### Adding Models to Ollama
 
 1. Pull additional models:
    ```bash
-   docker exec bob-the-agent-ollama ollama pull codellama
+   docker exec bob-the-agent-ollama ollama pull your-model
    ```
 
-2. Configure in `openclaw.template.json`:
-   ```json
-   "providers": {
-     "ollama": {
-       "models": [
-         { "id": "llama3.2" },
-         { "id": "codellama" },
-         { "id": "mistral" }
-       ]
-     }
-   }
-   ```
+2. Reference them in agent partials via `custom_providers`.
 
 ### Cloud Provider Setup
 
-1. Set API key:
-   ```env
-   ANTHROPIC_API_KEY=sk-ant-...
+The system uses Ollama as a proxy for both local and cloud models. Cloud models are accessed through Ollama's cloud model support:
+
+1. Sign into Ollama in the container:
+   ```bash
+   docker exec -it bob-the-agent-ollama ollama signin
    ```
 
-2. Add provider configuration to `openclaw.template.json`:
-   ```json
-   "models": {
-     "providers": {
-       "anthropic": {
-         "apiKey": "${ANTHROPIC_API_KEY}",
-         "models": [
-           { "id": "claude-sonnet-4-6" }
-         ]
-       }
-     }
-   }
+2. Pull cloud model manifests:
+   ```bash
+   docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
    ```
 
-3. Switch default provider by setting the primary model:
-   ```json
-   "agents": {
-     "defaults": {
-       "model": {
-         "primary": "anthropic/claude-sonnet-4-6"
-       }
-     }
-   }
-   ```
+3. Reference in agent partials as shown above.
 
 ## Security Considerations
 
@@ -190,40 +293,44 @@ services:
 
 - Use HTTPS in production
 - Restrict CORS origins
-- Use Docker network isolation
+- Use Docker network isolation (agents communicate on internal `bob-the-agent-network`)
 
 ### API Keys
 
 - Never commit API keys to git
-- Use environment variables
+- Use environment variables (`.env` file)
 - Rotate keys periodically
 
 ## Performance Tuning
 
 ### Memory Allocation
 
-For limited RAM:
+For limited RAM, you can reduce the number of running agent containers:
+
 ```yaml
-ollama:
+# Comment out researcher and simple-agent in compose.yaml
+# to only run the main agent
+```
+
+Or reduce memory limits:
+
+```yaml
+agent-main:
   deploy:
     resources:
       limits:
-        memory: 4G
+        memory: 2G
 ```
 
 ### Model Selection
 
-- Use cloud models for best performance
-- Use smaller local models for fallback and faster inference
-- eg. `qwen3.5:2b-q4_K_M` for quick tasks and low memory usage
+- Use cloud models (e.g., `kimi-k2.6:cloud`) for best quality
+- Use `minimax-m2.7:cloud` for cheaper simple tasks
+- Use local models (e.g., `qwen3.5:2b-q4_K_M`) as fallback or for offline operation
+- The default template model `qwen3.5:2b-q4_K_M` is overridden by each agent's partial
 
-### Parallel Tasks
+### Agent Count
 
-Adjust concurrency in the OpenClaw configuration:
-```json
-"agents": {
-  "defaults": {
-    "maxConcurrentTasks": 5
-  }
-}
-```
+The default setup runs 3 agent containers. For resource-constrained environments:
+- Run only `agent-main` for basic operation (comment out `researcher` and `simple-agent` in compose.yaml)
+- Reduce CPU/memory reservations accordingly

@@ -15,5 +15,5 @@ _This isn't just metadata. It's the start of figuring out who you are._
 Notes:
 
 - Save this file at the workspace root as `IDENTITY.md`.
-- For avatars, use a workspace-relative path like `avatars/openclaw.png`.
+- For avatars, use a workspace-relative path like `avatars/bob.png`.
 - As the orchestrator, your job is to understand tasks and delegate to the right specialists.

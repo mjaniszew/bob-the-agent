@@ -5,9 +5,11 @@
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
 | CPU | 4 cores | 8 cores |
-| RAM | 4 GB | 8 GB |
+| RAM | 8 GB | 16 GB |
 | Storage | 20 GB | 50 GB |
 | GPU | Optional | NVIDIA with CUDA |
+
+**Note:** The default setup runs 3 agent containers (main, researcher, simple). For systems with less RAM, you can comment out `researcher` and `simple-agent` services in `compose.yaml` to run only the main agent (4 GB RAM minimum in that case).
 
 ## Prerequisites
 
@@ -29,7 +31,7 @@ For NVIDIA GPU acceleration:
 
 1. Install NVIDIA drivers
 2. Install NVIDIA Container Toolkit
-3. Add GPU configuration to docker-compose.yml:
+3. Add GPU configuration to `compose.yaml`:
    ```yaml
    services:
      ollama:
@@ -48,7 +50,7 @@ For NVIDIA GPU acceleration:
 
 ```bash
 git clone <repository-url>
-cd bob-the-agent-docker
+cd bob-the-agent
 ```
 
 ### Step 2: Configure Environment
@@ -60,38 +62,58 @@ cp .env.template .env
 Edit `.env` with your settings:
 
 ```env
-# Required
+# Core
 LOG_LEVEL=info
-DEFAULT_PROVIDER=ollama
-OLLAMA_MODEL=llama3.2
 
-# Optional: Cloud Providers
-ANTHROPIC_API_KEY=your-key
-OPENAI_API_KEY=your-key
+# Optional: Cloud Provider (via Ollama signin)
+# Sign into Ollama after startup for cloud model access
 
 # Optional: Discord Bot
 DISCORD_BOT_TOKEN=your-token
 DISCORD_CLIENT_ID=your-client-id
+
+# Optional: External services
+SEARXNG_BASE_URL=http://searxng:8888
+USER_X_COM_API_TOKEN=your-x-com-token
+USER_XAI_SEARCH_API_KEY=your-xai-key
+
+# Optional: AWS S3
+USER_AWS_S3_BUCKET=your-bucket
+USER_AWS_S3_REGION=us-east-1
+USER_AWS_S3_ACCESS_KEY_ID=your-key
+USER_AWS_S3_SECRET_ACCESS_KEY=your-secret
 ```
 
 ### Step 3: Start Services
 
 ```bash
-# Start all services
+# Build and start all services
 docker compose up -d
 
-# Check status
+# Check status (should show 6 running containers)
 docker compose ps
 ```
 
-### Step 4: Pull Initial Model
+Expected containers:
+- `bob-the-agent-ollama` — LLM inference
+- `bob-the-agent` — Main orchestrator agent
+- `bob-the-agent-researcher` — Research specialist agent
+- `bob-the-agent-simple` — Simple task handler agent
+- `bob-the-agent-searxng` — Web search engine
+- `bob-the-agent-valkey` — Cache for SearXNG
+
+### Step 4: Pull Ollama Models
 
 ```bash
-# Pull default model
+# Pull the default local model
 docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
 
-# Optional: Pull additional cloud models
+# Sign into Ollama for cloud models
+docker exec -it bob-the-agent-ollama ollama signin
+
+# Pull cloud model manifests
 docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
+docker exec bob-the-agent-ollama ollama pull minimax-m2.7:cloud
 ```
 
 ### Step 5: Verify Installation
@@ -100,16 +122,29 @@ docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 # Check Ollama API
 curl http://localhost:11434/api/tags
 
-# Check agent health
-curl http://localhost:18789/healthz
+# Check main agent gateway
+curl http://localhost:8642/healthz
+
+# Check SearXNG
+curl http://localhost:8888/healthz
 ```
+
+### Step 6: Pair Discord Bot (Optional)
+
+If using the Discord bot with Hermes Agent:
+
+1. Ensure `DISCORD_BOT_TOKEN` is set in `.env`
+2. Restart the main agent: `docker compose restart agent-main`
+3. Check logs for Discord connection: `docker compose logs agent-main | grep -i discord`
+
+For detailed Discord setup instructions, see [Discord Setup](./DISCORD_SETUP.md).
 
 ## Platform-Specific Notes
 
 ### macOS
 
 - Docker Desktop includes all necessary components
-- Apple Silicon (M1/M2/M3) works with ARM images
+- Apple Silicon (M1/M2/M3/M4) works with ARM images
 - GPU acceleration not available on Apple Silicon
 
 ### Windows
@@ -123,6 +158,39 @@ curl http://localhost:18789/healthz
 - Install Docker Engine and Docker Compose separately
 - Add user to docker group: `sudo usermod -aG docker $USER`
 - NVIDIA GPU requires nvidia-container-toolkit
+
+## Managing Agent Containers
+
+### Run Only Main Agent (Low Resource)
+
+For systems with limited RAM, edit `compose.yaml` and comment out the `researcher` and `simple-agent` services:
+
+```yaml
+# researcher:
+#   ...
+# simple-agent:
+#   ...
+```
+
+Then start with:
+```bash
+docker compose up -d
+```
+
+### Rebuild After Config Changes
+
+When you change agent configuration files (partials, SOUL.md, etc.):
+
+```bash
+# Rebuild specific agent
+docker compose build agent-main
+
+# Or rebuild all
+docker compose build
+
+# Restart
+docker compose up -d
+```
 
 ## Updating
 
@@ -143,7 +211,7 @@ docker compose up -d
 # Stop and remove containers
 docker compose down
 
-# Remove volumes
+# Remove volumes (WARNING: deletes all agent data and models)
 docker compose down -v
 
 # Remove images
@@ -152,6 +220,6 @@ docker rmi $(docker images -q 'bob-the-agent*')
 
 ## Next Steps
 
-- Read [Configuration Guide](./CONFIGURATION.md)
-- Read [Discord Setup](./DISCORD_SETUP.md)
-- Read [Troubleshooting](./TROUBLESHOOTING.md)
+- Read [Configuration Guide](./CONFIGURATION.md) for detailed configuration options
+- Read [Discord Setup](./DISCORD_SETUP.md) for Discord bot configuration
+- Read [Troubleshooting](./TROUBLESHOOTING.md) for common issues
