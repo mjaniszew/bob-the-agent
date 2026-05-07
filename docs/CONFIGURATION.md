@@ -156,7 +156,7 @@ Each agent also has identity and behavioral files that are copied to `/opt/data/
 
 ### Service Architecture
 
-The compose file defines 6 services:
+The compose file defines 6 services. All agent services share a single `bob-the-agent:latest` image, differentiated by the `AGENT_NAME` environment variable. Common configuration is shared via YAML anchors (`x-agent-image`, `x-agent-env`, `x-agent-healthcheck`, `x-agent-resources`).
 
 ```yaml
 services:
@@ -170,43 +170,15 @@ services:
 
 ### Resource Limits
 
-Adjust resource limits in `compose.yaml`:
+Resource limits are defined via YAML anchors in `compose.yaml` and shared by all agent services. Adjust as needed:
 
 ```yaml
-services:
-  ollama:
-    deploy:
-      resources:
-        reservations:
-          cpus: 1
-          memory: 1G
-
-  agent-main:
-    deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
-
-  researcher:
-    deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
-
-  simple-agent:
-    deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
+x-agent-resources: &agent-resources
+  reservations:
+    cpus: 2
+    memory: 2G
+  limits:
+    memory: 4G
 ```
 
 ### Volume Mounts
@@ -216,7 +188,7 @@ services:
 | `./volumes/agent-main` | `/opt/data` | agent-main | Main agent workspace, config, memory, skills |
 | `./volumes/agent-researcher` | `/opt/data` | researcher | Researcher agent workspace |
 | `./volumes/agent-simple` | `/opt/data` | simple-agent | Simple agent workspace |
-| `./volumes/results` | `/app/results` | agent-main | Final task output files |
+| `./volumes/results` | All agents | Final task output files |
 | `ollama_data` | `/root/.ollama` | ollama | Downloaded models |
 | `searxng_config` | `/etc/searxng/` | searxng | SearXNG configuration |
 | `searxng_data` | `/var/cache/searxng/` | searxng | SearXNG cache |
@@ -251,10 +223,10 @@ custom_providers:
     model: your-model-name:cloud
 ```
 
-2. Rebuild and restart the containers:
+2. Rebuild the image and restart the containers (rebuild affects all agents since they share one image):
 ```bash
-docker compose build agent-main
-docker compose up -d agent-main
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
+docker compose up -d
 ```
 
 ### Adding Models to Ollama

@@ -84,14 +84,30 @@ USER_AWS_S3_ACCESS_KEY_ID=your-key
 USER_AWS_S3_SECRET_ACCESS_KEY=your-secret
 ```
 
-### Step 3: Start Services
+### Step 3: Build Image & Start Services
+
+All agent services share a single `bob-the-agent:latest` image. Build it before starting:
 
 ```bash
-# Build and start all services
+# Build the agent image
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
+
+# Start all services
 docker compose up -d
 
 # Check status (should show 6 running containers)
 docker compose ps
+```
+
+Alternative build options:
+```bash
+# Build and start in one step
+./run-docker.sh
+
+# Pull from registry instead of building locally
+docker pull your-registry/bob-the-agent:latest
+docker tag your-registry/bob-the-agent:latest bob-the-agent:latest
+docker compose up -d
 ```
 
 Expected containers:
@@ -179,16 +195,13 @@ docker compose up -d
 
 ### Rebuild After Config Changes
 
-When you change agent configuration files (partials, SOUL.md, etc.):
+When you change agent configuration files (partials, SOUL.md, etc.), rebuild the image (this affects all agents since they share one image):
 
 ```bash
-# Rebuild specific agent
-docker compose build agent-main
+# Rebuild the image
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
 
-# Or rebuild all
-docker compose build
-
-# Restart
+# Restart all services
 docker compose up -d
 ```
 
@@ -198,8 +211,8 @@ docker compose up -d
 # Pull latest changes
 git pull
 
-# Rebuild containers
-docker compose build
+# Rebuild the agent image
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
 
 # Restart services
 docker compose up -d
@@ -214,8 +227,8 @@ docker compose down
 # Remove volumes (WARNING: deletes all agent data and models)
 docker compose down -v
 
-# Remove images
-docker rmi $(docker images -q 'bob-the-agent*')
+# Remove the agent image
+docker rmi bob-the-agent:latest
 ```
 
 ## Next Steps

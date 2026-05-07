@@ -31,9 +31,21 @@ cp .env.template .env
 # Edit .env with your configuration
 ```
 
-### 2. Start Services
+### 2. Build Image & Start Services
+
+All agent services share a single `bob-the-agent:latest` image. Build it before starting:
 
 ```bash
+# Option A: Build and start separately
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
+docker compose up -d
+
+# Option B: Build and start in one command
+./run-docker.sh
+
+# Option C: Pull from registry (if available)
+docker pull your-registry/bob-the-agent:latest
+docker tag your-registry/bob-the-agent:latest bob-the-agent:latest
 docker compose up -d
 ```
 
@@ -131,7 +143,6 @@ Each agent has its own configuration in `src/agents/{name}/hermes.partial.yml` t
 | `./volumes/agent-main` | Main agent workspace (config, memory, skills) |
 | `./volumes/agent-researcher` | Researcher agent workspace |
 | `./volumes/agent-simple` | Simple agent workspace |
-| `./volumes/results` | Final task output files |
 
 ## Skills
 
@@ -194,12 +205,17 @@ bob-the-agent/
 
 ### Building from Source
 
-```bash
-# Build all images
-docker compose build
+All agent services share a single `bob-the-agent:latest` image:
 
-# Rebuild after config changes
-docker compose build agent-main
+```bash
+# Build the image
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
+
+# Or build and start in one step
+./run-docker.sh
+
+# Rebuild after config changes (applies to all agents)
+docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
 docker compose up -d
 ```
 

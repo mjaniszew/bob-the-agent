@@ -1,3 +1,32 @@
+# ===========================================
+# Agents common settings
+# ===========================================
+x-agent-image: &agent-image bob-the-agent:latest
+x-agent-env: &agent-env
+  OLLAMA_BASE_URL: http://ollama:11434
+  NODE_ENV: production
+  HERMES_YOLO_MODE: 1
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
+  USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
+  USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
+  USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
+  USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
+  USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
+  USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
+x-agent-healthcheck: &agent-healthcheck
+  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+x-agent-resources: &agent-resources
+  reservations:
+    cpus: 2
+    memory: 2G
+  limits:
+    memory: 4G
+
 services:
   # ===========================================
   # Ollama - Local LLM inference server
@@ -26,129 +55,66 @@ services:
   # Hermes Agent - Main AI agent / orchestrator
   # ===========================================
   agent-main:
-    build:
-      context: .
-      dockerfile: dockerfiles/Dockerfile.hermes
+    image: *agent-image
     container_name: bob-the-agent
     restart: unless-stopped
     depends_on:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - NODE_ENV=production
-      - HERMES_YOLO_MODE=1
-      - AGENT_NAME=main
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
-      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-      - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
-      - USER_XAI_SEARCH_API_KEY=${USER_XAI_SEARCH_API_KEY}
-      - USER_AWS_S3_BUCKET=${USER_AWS_S3_BUCKET}
-      - USER_AWS_S3_REGION=${USER_AWS_S3_REGION}
-      - USER_AWS_S3_ACCESS_KEY_ID=${USER_AWS_S3_ACCESS_KEY_ID}
-      - USER_AWS_S3_SECRET_ACCESS_KEY=${USER_AWS_S3_SECRET_ACCESS_KEY}
+      <<: *agent-env
+      AGENT_NAME: main
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
     ports:
       - 8642:8642
     volumes:
       - ./volumes/agent-main:/opt/data
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - ./volumes/results:/app/results
+    healthcheck: *agent-healthcheck
     deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
+      resources: *agent-resources
   # ===========================================================
   # Researcher Agent - AI agent focused on deep research tasks
   # ===========================================================
   researcher:
-    build:
-      context: .
-      dockerfile: dockerfiles/Dockerfile.hermes
+    image: *agent-image
     container_name: bob-the-agent-researcher
     restart: unless-stopped
     depends_on:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - NODE_ENV=production
-      - HERMES_YOLO_MODE=1
-      - AGENT_NAME=researcher
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
-      - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
-      - USER_XAI_SEARCH_API_KEY=${USER_XAI_SEARCH_API_KEY}
-      - USER_AWS_S3_BUCKET=${USER_AWS_S3_BUCKET}
-      - USER_AWS_S3_REGION=${USER_AWS_S3_REGION}
-      - USER_AWS_S3_ACCESS_KEY_ID=${USER_AWS_S3_ACCESS_KEY_ID}
-      - USER_AWS_S3_SECRET_ACCESS_KEY=${USER_AWS_S3_SECRET_ACCESS_KEY}
+      <<: *agent-env
+      AGENT_NAME: researcher
     ports:
       - 8101:8642
     volumes:
       - ./volumes/agent-researcher:/opt/data
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - ./volumes/results:/app/results
+    healthcheck: *agent-healthcheck
     deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
+      resources: *agent-resources
   # =====================================================================
   # Simple Agent - AI agent focused on conducting simple and cheap tasks
   # =====================================================================
   simple-agent:
-    build:
-      context: .
-      dockerfile: dockerfiles/Dockerfile.hermes
+    image: *agent-image
     container_name: bob-the-agent-simple
     restart: unless-stopped
     depends_on:
       ollama:
         condition: service_healthy
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - NODE_ENV=production
-      - HERMES_YOLO_MODE=1
-      - AGENT_NAME=simple
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
-      - USER_X_COM_API_TOKEN=${USER_X_COM_API_TOKEN}
-      - USER_XAI_SEARCH_API_KEY=${USER_XAI_SEARCH_API_KEY}
-      - USER_AWS_S3_BUCKET=${USER_AWS_S3_BUCKET}
-      - USER_AWS_S3_REGION=${USER_AWS_S3_REGION}
-      - USER_AWS_S3_ACCESS_KEY_ID=${USER_AWS_S3_ACCESS_KEY_ID}
-      - USER_AWS_S3_SECRET_ACCESS_KEY=${USER_AWS_S3_SECRET_ACCESS_KEY}
+      <<: *agent-env
+      AGENT_NAME: simple
     ports:
       - 8102:8642
     volumes:
       - ./volumes/agent-simple:/opt/data
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - ./volumes/results:/app/results
+    healthcheck: *agent-healthcheck
     deploy:
-      resources:
-        reservations:
-          cpus: 2
-          memory: 2G
-        limits:
-          memory: 4G
+      resources: *agent-resources
 
   # ===========================================
   # SearXNG - Privacy-respecting metasearch engine

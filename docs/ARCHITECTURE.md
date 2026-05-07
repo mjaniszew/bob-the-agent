@@ -4,7 +4,7 @@ This document describes the architecture of Bob The Agent system.
 
 ## Container Architecture
 
-The system runs as multiple Docker containers managed by Docker Compose. Each specialized agent runs in its own container with its own Hermes Agent instance, sharing a common Ollama model provider and SearXNG search engine.
+The system runs as multiple Docker containers managed by Docker Compose. Each specialized agent runs in its own container with its own Hermes Agent instance, sharing a common Ollama model provider and SearXNG search engine. All agent services use a single pre-built `bob-the-agent:latest` image, differentiated by the `AGENT_NAME` environment variable. Common configuration (image, env, healthcheck, resources) is shared via YAML anchors.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -206,6 +206,7 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 │                        ▼                                             │
 │                 ./volumes/results/                                    │
 │              (final output to user)                                  │
+│                 /opt/data/ (agent workspace output)                  │
 │                                                                      │
 │  ┌──────────────────────────────────────────────────────────────┐    │
 │  │                    External Services                          │    │
@@ -235,7 +236,7 @@ Hermes Agent uses the built-in `delegate_task` tool for sub-agent delegation:
 | `/opt/data` | `./volumes/agent-main` | Main agent workspace (config, SOUL.md, memory, skills) |
 | `/opt/data` | `./volumes/agent-researcher` | Researcher agent workspace |
 | `/opt/data` | `./volumes/agent-simple` | Simple agent workspace |
-| `/app/results` | `./volumes/results` | Final task output files |
+| `/app/results` | `./volumes/results` | Agents results data |
 | `/root/.ollama` | `ollama_data` volume | Downloaded models |
 | `/etc/searxng` | `searxng_config` volume | SearXNG configuration |
 | `/var/cache/searxng` | `searxng_data` volume | SearXNG cache |

@@ -17,7 +17,7 @@
    lsof -i :8888   # SearXNG
    ```
 3. Ensure `.env` exists: `cp .env.template .env`
-4. Rebuild containers: `docker compose build --no-cache`
+4. Rebuild image: `docker build --no-cache -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .`
 
 #### Out of Memory
 
@@ -83,6 +83,22 @@
 4. Increase `agent.max_turns` or `agent.gateway_timeout` in hermes.template.yaml
 
 ### Agent Issues
+
+#### Image Not Found
+
+**Symptoms**: `docker compose up` fails with "image bob-the-agent:latest not found"
+
+**Solutions**:
+1. Build the image first:
+   ```bash
+   docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
+   ```
+2. Or use the helper script: `./run-docker.sh`
+3. Or pull from a registry (if configured):
+   ```bash
+   docker pull your-registry/bob-the-agent:latest
+   docker tag your-registry/bob-the-agent:latest bob-the-agent:latest
+   ```
 
 #### Agent Won't Start
 
