@@ -105,6 +105,7 @@ async def execute_task(message_data: dict) -> dict:
         return {"status": "failed", "error": f"Task timed out after {TASK_TIMEOUT}s", "duration_seconds": duration}
     except Exception as e:
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        print(f"[NATS] Error occured executing task: {e}", file=sys.stderr)
         return {"status": "failed", "error": str(e), "duration_seconds": duration}
 
 

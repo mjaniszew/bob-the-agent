@@ -33,4 +33,4 @@ RUN npm run build
 WORKDIR /app
 
 ENTRYPOINT ["scripts/hermes-entrypoint.sh"]
-CMD ["bash", "-c", "scripts/hermes-cmd.sh gateway run"]
+CMD ["bash", "-c", "/usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh gateway run"]
