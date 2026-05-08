@@ -47,5 +47,13 @@ for skill_dir in /app/skills/*/; do
   fi
 done
 
+# Start NATS listener for inter-agent communication
+if [[ -n "${AGENT_NAME}" && -f "/app/scripts/register-nats.py" ]]; then
+  mkdir -p /opt/data/nats-messages/incoming
+  python3 /app/scripts/register-nats.py &
+  NATS_PID=$!
+  echo "NATS listener started for agent: ${AGENT_NAME} (PID: ${NATS_PID})"
+fi
+
 # Execute the main command
 exec "$@"

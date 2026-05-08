@@ -9,3 +9,19 @@ custom_providers:
 toolsets:
 - hermes-cli
 - browser
+agent:
+  max_turns: 90
+  gateway_timeout: 1800
+  restart_drain_timeout: 60
+  api_max_retries: 3
+  service_tier: ''
+  tool_use_enforcement: auto
+  gateway_timeout_warning: 1800
+  gateway_notify_interval: 180
+  gateway_auto_continue_freshness: 3600
+  image_input_mode: auto
+  disabled_toolsets: []
+  verbose: false
+  reasoning_effort: medium
+  personalities:
+    default: You are specialist agent handling simple tasks. You execute given tasks without asking questions and return results to another agent.

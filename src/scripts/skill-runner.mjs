@@ -56,6 +56,7 @@ Available skills:
   - math-operations     Perform calculations and statistical analysis
   - aws-s3             Upload files to S3 and generate presigned URLs
   - grok-search        Search X.com via xAI Grok x_search tool (fallback for x-com)
+  - agent-to-agent     Communicate with other agents via NATS messaging
 
 Examples:
   # Web search
@@ -96,7 +97,8 @@ const skillRegistry = {
   'data-extraction': () => import(`${SKILLS_DIST}/data-extraction/index.js`).then(m => m.default),
   'math-operations': () => import(`${SKILLS_DIST}/math-operations/index.js`).then(m => m.default),
   'aws-s3': () => import(`${SKILLS_DIST}/aws-s3/index.js`).then(m => m.default),
-  'grok-search': () => import(`${SKILLS_DIST}/grok-search/index.js`).then(m => m.default)
+  'grok-search': () => import(`${SKILLS_DIST}/grok-search/index.js`).then(m => m.default),
+  'agent-to-agent': () => import(`${SKILLS_DIST}/agent-to-agent/index.js`).then(m => m.default)
 };
 
 // Validate skill parameters against registry metadata

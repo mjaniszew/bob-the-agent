@@ -9,8 +9,11 @@ RUN mkdir -p /var/tmp/node-compile-cache
 # Install additional system dependencies eg. browser
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    systemctl ca-certificates make g++ chromium \
+    systemctl ca-certificates make g++ chromium python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install NATS Python client
+RUN pip3 install --no-cache-dir --break-system-packages nats-py==2.14.0
 
 RUN mkdir -p /app/scripts
 COPY ./src/config/ /app/config/
@@ -30,4 +33,4 @@ RUN npm run build
 WORKDIR /app
 
 ENTRYPOINT ["scripts/hermes-entrypoint.sh"]
-CMD ["bash", "-c", "scripts/hermes-cmd.sh gateway run"]
+CMD ["bash", "-c", "/usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh gateway run"]
