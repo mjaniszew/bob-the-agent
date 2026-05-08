@@ -84,6 +84,14 @@ subagents kill <id>     — Terminate a stuck sub-agent (last resort)
 - Use for persisting research artifacts
 - Requires AWS credentials configured in environment
 
+### Agent-to-Agent Skill (agent-to-agent)
+- Communicate with other agents via NATS messaging
+- Send tasks to specialized agents (researcher, simple)
+- Check for incoming task messages from other agents
+- Send task results back to the originating agent
+- Use for cross-container task delegation
+- Available actions: send_task, check_messages, send_result
+
 ## Search Tips
 
 - Use SearXNG (searxng-search tool) for ALL general web searches

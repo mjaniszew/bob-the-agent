@@ -94,6 +94,13 @@ Main ones are:
 - Use for persisting research artifacts
 - Requires AWS credentials configured in environment
 
+### Agent-to-Agent Skill (agent-to-agent)
+- Communicate with other agents via NATS inter-agent messaging
+- Send tasks to specialized agents running in separate containers
+- Check for incoming task results from other agents
+- Available target agents: `researcher`, `simple`
+- Use for cross-container task delegation when Hermes `delegate_task` is not sufficient
+
 ## Search Tips
 
 - Use SearXNG (searxng-search tool) for ALL general web searches

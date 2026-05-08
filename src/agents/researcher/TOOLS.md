@@ -48,6 +48,12 @@ Final output for users goes to: `/app/results/`
 - Identify patterns and trends
 - Detect contradictions and gaps
 
+### Agent-to-Agent Skill (agent-to-agent)
+- Communicate with other agents via NATS inter-agent messaging
+- Receive tasks from the main agent
+- Send results back to the main agent
+- Available actions: check_messages, send_result
+
 ## Research Tips
 
 - Use SearXNG for all web searches (free, no tokens)

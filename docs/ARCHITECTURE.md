@@ -31,8 +31,14 @@ The system runs as multiple Docker containers managed by Docker Compose. Each sp
 │   │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ │                   │
 │   └─────────┼───────────────┼───────────────┼─────────┘                   │
 │             │               │               │                              │
-│             │    Delegation via Hermes delegate_task                      │
+│             │    NATS Inter-Agent Messaging                                  │
+│             │    (agent.{id}.tasks / agent.{id}.results)                    │
 │             │               │               │                              │
+│        ┌────┴───────────────┴───────────────┴────┐                        │
+│        │               NATS Server                │                        │
+│        │               :4222 / :8222              │                        │
+│        └─────────────────────────────────────────┘                        │
+│                                                                         │
 │   ┌─────────┴───────────────┴───────────────┴─────────┐                   │
 │   │              SearXNG + Valkey                     │                   │
 │   │  ┌─────────────┐        ┌─────────────┐           │                   │
@@ -55,7 +61,14 @@ The system runs as multiple Docker containers managed by Docker Compose. Each sp
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Upcoming:** NATS container for inter-agent messaging and task delegation between containers. Currently, agents communicate via Hermes built-in `delegate_task` tool within the same container.
+### Inter-Agent Communication
+
+Agents communicate across containers via **NATS messaging**. Each agent runs a `register-nats.py` background listener that subscribes to NATS subjects for task delegation and result reporting:
+
+- **`agent.{target_id}.tasks`** — Send a task to a specific agent
+- **`agent.{target_id}.results`** — Send a result back to the originating agent
+
+The `agent-to-agent` skill provides the sending interface, while `register-nats.py` handles receiving and executing tasks via Hermes one-shot mode.
 
 ### Services
 
@@ -67,6 +80,7 @@ The system runs as multiple Docker containers managed by Docker Compose. Each sp
 | `simple-agent` | Hermes Agent — simple/cheap task handler | 8102 |
 | `searxng` | Privacy-respecting metasearch engine | 8888 |
 | `valkey` | Redis-compatible cache for SearXNG | 6379 |
+| `nats` | NATS messaging server for inter-agent communication | 4222/8222 |
 
 ### Service Dependencies
 
@@ -128,6 +142,7 @@ Each agent container uses a two-stage startup process that merges a shared Herme
 | `src/scripts/generate-config.sh` | Config generation orchestrator |
 | `src/scripts/merge-yaml.mjs` | YAML deep-merge utility |
 | `src/scripts/hermes-cmd.sh` | Hermes command wrapper |
+| `src/scripts/register-nats.py` | NATS background listener for inter-agent messaging |
 | `src/config/searxng.settings.yml` | SearXNG configuration |
 
 ## Skills Architecture
@@ -168,6 +183,7 @@ Skills are compiled during Docker build (`npm run build`) and copied to `/opt/da
 | aws-s3 | ✅ Active | Upload files and generate presigned URLs for S3 |
 | data-extraction | ✅ Implemented | Extract structured data from websites/documents |
 | math-operations | ✅ Implemented | Mathematical calculations and operations |
+| agent-to-agent | ✅ Active | Inter-agent messaging via NATS for cross-container task delegation |
 
 Skills are invoked via:
 ```bash
@@ -188,7 +204,8 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 │           ┌────────────┼──────────────┐                              │
 │           │            │              │                               │
 │           ▼            ▼              ▼                               │
-│     delegate_task  delegate_task  direct execution                   │
+│     delegate_task  NATS messaging  direct execution                  │
+│     (in-process)  (cross-container)                                 │
 │           │            │                                              │
 │           ▼            ▼                                              │
 │     researcher    simple-agent                                       │
@@ -201,6 +218,7 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 │    │   - memory/ (daily notes)          │                            │
 │    │   - config.yaml (Hermes config)    │                            │
 │    │   - skills/                         │                            │
+│    │   - nats-messages/ (inter-agent)    │                            │
 │    └─────────────────────────────────────┘                            │
 │                        │                                             │
 │                        ▼                                             │
@@ -220,14 +238,20 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 
 ### Agent Delegation Protocol
 
-Hermes Agent uses the built-in `delegate_task` tool for sub-agent delegation:
+Hermes Agent supports two delegation mechanisms:
 
-1. **Main agent** receives task and decides whether to delegate or handle directly
-2. **Delegation** — Main agent calls `delegate_task` with goal, context, and toolset specifications
-3. **Sub-agent** executes in isolated context with its own terminal session
-4. **Sub-agent** writes results to workspace files
-5. **Sub-agent** returns summary to main agent (only the summary, not full data)
-6. **Main agent** processes results and writes final output to `/app/results/`
+**In-process delegation** (within same container):
+1. **Main agent** calls `delegate_task` with goal, context, and toolset specifications
+2. **Sub-agent** executes in isolated context with its own terminal session
+3. **Sub-agent** returns summary to main agent
+
+**Cross-container delegation** (via NATS messaging):
+1. **Main agent** uses `agent-to-agent` skill to send a task to a target agent via NATS
+2. **Message** is published to `agent.{target_id}.tasks` subject
+3. **Target agent's** `register-nats.py` listener receives the message
+4. **Target agent** executes the task via Hermes one-shot mode (`hermes -z "<prompt>"`)
+5. **Target agent** publishes result to `agent.{sender_id}.results` subject
+6. **Main agent** checks for results via `agent-to-agent` skill's `check_messages` action
 
 ### Storage Locations
 
@@ -260,6 +284,8 @@ See `.env.template` for all configurable variables:
 | `AGENT_NAME` | No | Agent identity name (main, researcher, simple) |
 | `HERMES_YOLO_MODE` | No | Auto-approve mode (1=enabled, 0=manual approval) |
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |
+| `NATS_URL` | No | NATS server URL (default: nats://nats:4222) |
+| `NATS_TASK_TIMEOUT` | No | Task execution timeout in seconds (default: 600) |
 
 ## Related Documentation
 

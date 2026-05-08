@@ -69,6 +69,12 @@ Final output for users goes to: `/app/results/`
 - Useful for sharing files with external users
 - Requires AWS credentials configured in environment
 
+### Agent-to-Agent Skill (agent-to-agent)
+- Communicate with other agents via NATS inter-agent messaging
+- Receive tasks from the main agent
+- Send results back to the main agent
+- Available actions: check_messages, send_result
+
 ## What Goes Here
 
 Things like:
