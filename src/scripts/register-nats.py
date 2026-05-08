@@ -26,6 +26,7 @@ import os
 import signal
 import sys
 import uuid
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,12 +59,13 @@ async def execute_task(message_data: dict) -> dict:
     Execute a task using Hermes one-shot mode.
 
     Constructs a prompt from the task message payload and runs
-    `/app/scripts/hermes-cmd.sh -z "<prompt>"` as a subprocess.
+    `hermes -z "<prompt>"` as a subprocess.
     """
     payload = message_data.get("payload", {})
     goal = payload.get("goal", "")
     context = payload.get("context", "")
     save_to = payload.get("save_results_to", "")
+    hermes_cmd = "hermes" if shutil.which("hermes") else "/app/scripts/hermes-cmd.sh"
 
     # Build the prompt for hermes one-shot mode
     prompt = goal
@@ -76,7 +78,7 @@ async def execute_task(message_data: dict) -> dict:
 
     try:
         process = await asyncio.create_subprocess_exec(
-            "/app/scripts/hermes-cmd.sh", "-z", prompt,
+            hermes_cmd, "-z", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -105,7 +107,6 @@ async def execute_task(message_data: dict) -> dict:
         return {"status": "failed", "error": f"Task timed out after {TASK_TIMEOUT}s", "duration_seconds": duration}
     except Exception as e:
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-        print(f"[NATS] Error occured executing task: {e}", file=sys.stderr)
         return {"status": "failed", "error": str(e), "duration_seconds": duration}
 
 
