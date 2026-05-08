@@ -35,7 +35,7 @@ from nats.errors import ConnectionClosedError, TimeoutError, NoServersError
 # Configuration from environment
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 AGENT_NAME = os.environ.get("AGENT_NAME", "main")
-TASK_TIMEOUT = int(os.environ.get("NATS_TASK_TIMEOUT", "600"))
+TASK_TIMEOUT = int(os.environ.get("NATS_TASK_TIMEOUT", "1800"))
 INCOMING_DIR = os.environ.get("NATS_INCOMING_DIR", "/opt/data/nats-messages/incoming")
 
 # Global NATS connection
@@ -58,7 +58,7 @@ async def execute_task(message_data: dict) -> dict:
     Execute a task using Hermes one-shot mode.
 
     Constructs a prompt from the task message payload and runs
-    `hermes -z "<prompt>"` as a subprocess.
+    `/app/scripts/hermes-cmd.sh -z "<prompt>"` as a subprocess.
     """
     payload = message_data.get("payload", {})
     goal = payload.get("goal", "")
@@ -76,7 +76,7 @@ async def execute_task(message_data: dict) -> dict:
 
     try:
         process = await asyncio.create_subprocess_exec(
-            "hermes", "-z", prompt,
+            "/app/scripts/hermes-cmd.sh", "-z", prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -189,14 +189,23 @@ async def connect_with_retry(url: str, name: str, max_retries: int = 0) -> nats.
     """
     print(f"[NATS] Connecting to {url} as {name}...")
 
+    async def error_cb(e):
+        print(f"[NATS] Error: {e}", file=sys.stderr)
+
+    async def disconnected_cb():
+        print("[NATS] Disconnected from server")
+
+    async def reconnected_cb():
+        print("[NATS] Reconnected to server")
+
     nc = await nats.connect(
         url,
         name=name,
         reconnect_time_wait=2,
         max_reconnect_attempts=max_retries,  # 0 means infinite in nats-py
-        error_cb=lambda e: print(f"[NATS] Error: {e}", file=sys.stderr),
-        disconnected_cb=lambda: print("[NATS] Disconnected from server"),
-        reconnected_cb=lambda: print("[NATS] Reconnected to server"),
+        error_cb=error_cb,
+        disconnected_cb=disconnected_cb,
+        reconnected_cb=reconnected_cb,
     )
     print(f"[NATS] Connected successfully")
     return nc

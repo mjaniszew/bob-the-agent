@@ -177,13 +177,13 @@ services:
           cpus: 0.5
           memory: 256M
   nats:
-    image: nats:2.14
+    image: nats:2.14.0-alpine3.22
     container_name: bob-the-agent-nats
     restart: unless-stopped
     ports:
       - "4222:4222"
       - "8222:8222"
-    command: "--cluster_name NATS --cluster nats://0.0.0.0:6222 --http_port 8222"
+    command: "--cluster_name nats --cluster nats://0.0.0.0:6222 --http_port 8222"
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8222/healthz || exit 1"]
       interval: 10s
