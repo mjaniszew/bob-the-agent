@@ -58,34 +58,41 @@ interface AgentToAgentResult {
  * Validate parameters based on the action.
  */
 function validateParams(params: AgentToAgentParams): string | null {
-  switch (params.action) {
-    case 'send_task': {
-      if (!params.target_agent_id) {
-        return 'Missing required parameter: target_agent_id is required for send_task action';
-      }
-      if (!params.goal) {
-        return 'Missing required parameter: goal is required for send_task action';
-      }
-      return null;
-    }
-    case 'check_messages': {
-      return null; // No required params for check_messages
-    }
-    case 'send_result': {
-      if (!params.target_agent_id) {
-        return 'Missing required parameter: target_agent_id is required for send_result action';
-      }
-      if (!(params as SendResultParams).original_message_id) {
-        return 'Missing required parameter: original_message_id is required for send_result action';
-      }
-      if (!(params as SendResultParams).status) {
-        return 'Missing required parameter: status is required for send_result action';
-      }
-      return null;
-    }
-    default:
-      return `Invalid action: ${params.action}. Must be 'send_task', 'check_messages', or 'send_result'`;
+  const action = params.action;
+  if (!action || !['send_task', 'check_messages', 'send_result'].includes(action)) {
+    return `Invalid action: ${action}. Must be 'send_task', 'check_messages', or 'send_result'`;
   }
+
+  if (action === 'send_task') {
+    const p = params as SendTaskParams;
+    if (!p.target_agent_id) {
+      return 'Missing required parameter: target_agent_id is required for send_task action';
+    }
+    if (!p.goal) {
+      return 'Missing required parameter: goal is required for send_task action';
+    }
+    return null;
+  }
+
+  if (action === 'check_messages') {
+    return null;
+  }
+
+  if (action === 'send_result') {
+    const p = params as SendResultParams;
+    if (!p.target_agent_id) {
+      return 'Missing required parameter: target_agent_id is required for send_result action';
+    }
+    if (!p.original_message_id) {
+      return 'Missing required parameter: original_message_id is required for send_result action';
+    }
+    if (!p.status) {
+      return 'Missing required parameter: status is required for send_result action';
+    }
+    return null;
+  }
+
+  return null;
 }
 
 /**
@@ -96,22 +103,24 @@ function buildArgs(params: AgentToAgentParams): string[] {
 
   switch (params.action) {
     case 'send_task': {
-      args.push('--target', params.target_agent_id);
-      args.push('--goal', params.goal);
-      if (params.context) {
-        args.push('--context', params.context);
+      const p = params as SendTaskParams;
+      args.push('--target', p.target_agent_id);
+      args.push('--goal', p.goal);
+      if (p.context) {
+        args.push('--context', p.context);
       }
-      if (params.toolsets && params.toolsets.length > 0) {
-        args.push('--toolsets', params.toolsets.join(','));
+      if (p.toolsets && p.toolsets.length > 0) {
+        args.push('--toolsets', p.toolsets.join(','));
       }
-      if (params.save_results_to) {
-        args.push('--save-results-to', params.save_results_to);
+      if (p.save_results_to) {
+        args.push('--save-results-to', p.save_results_to);
       }
       break;
     }
     case 'check_messages': {
-      if (params.timeout !== undefined && params.timeout > 0) {
-        args.push('--timeout', String(params.timeout));
+      const p = params as CheckMessagesParams;
+      if (p.timeout !== undefined && p.timeout > 0) {
+        args.push('--timeout', String(p.timeout));
       }
       break;
     }
