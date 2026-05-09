@@ -91,8 +91,6 @@ services:
     environment:
       <<: *agent-env
       AGENT_NAME: researcher
-    ports:
-      - 8101:8642
     volumes:
       - ./volumes/agent-researcher:/opt/data
       - ./volumes/results:/app/results
@@ -114,8 +112,6 @@ services:
     environment:
       <<: *agent-env
       AGENT_NAME: simple
-    ports:
-      - 8102:8642
     volumes:
       - ./volumes/agent-simple:/opt/data
       - ./volumes/results:/app/results

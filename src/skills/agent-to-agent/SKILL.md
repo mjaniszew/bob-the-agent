@@ -18,8 +18,29 @@ Use this skill when:
 
 Do NOT use this skill for:
 - Delegating tasks to sub-agents within the same container (use Hermes `delegate_task` instead)
-- General web search (use SearXNG or grok-search skills)
 - File operations (use terminal commands directly)
+
+## Available agents
+
+Following specialized agents are available:
+1. **Simple Agent** (`simple`) - For general simple tasks. Use this agent when: 
+ - use always for any web search
+ - for documents creation that do not falls under other specialized agents eg. simple summaries
+ - for basic data exctraction
+ - for basic browser usage (screenshots, web pages scraping, basic web pages interactions)
+ - for general tasks which does not require long context and specialized thinking
+2. **Researcher Agent** (`researcher`) - For complex research, analysis and synthesis tasks. Use this agent when:
+ - whenever task uses keywords like `research`, `analyze`, `synthezize`, `synthesis`
+ - for complex tasks requiring deep analysis and synthesis
+ - for cross referencing sources and informations
+ - for creating comples research documents
+
+## Delegation procedure
+General delegation procedure for agents using this skill is that when you receive task, always do the following:
+1. **Understand the task** - Make sure you understand the task requirements. If task is even moderately complex, has multiple steps and requires tools and skills usage, it will require plan which should cover delegation to specialized agents.
+2. **Choose specialized agents** - This skill contains list of available specialized agents, and rules when to use them.
+3. **Plan** - Create plan which should cover what and how to delegate to specialized agents. If plan consist of multiple steps, save it as a files for further use. For plan creation you can use `delegate_task` command to delegate to subagent.
+4. **Delegate** - Execute plan delegating to proper specialized agents. When you delegate to agent, always spawn subagent directly using `delegate_task` command, and this subagent should be responsible for delegating further, waiting for results. and informing you about the progress and passing results.
 
 ## Architecture
 
