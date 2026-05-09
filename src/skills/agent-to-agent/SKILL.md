@@ -192,6 +192,7 @@ Send a task result back to the originating agent.
 
 ## Notes
 
+- IMPORTANT: always wait for a task completion for a few minutes. If no results came back, send another message to same agent asking for status before you decide that task timed out
 - Messages are routed to specific agents using NATS subjects — only the targeted agent receives the message
 - The background `register-nats.py` listener automatically executes incoming tasks and sends results back
 - Results are persisted to `/opt/data/nats-messages/incoming/` and consumed on read (check_messages removes them)
