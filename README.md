@@ -1,7 +1,7 @@
 # Bob The Agent
 ![Bob The Agent](img/bob-logo-sm.png)
 
-A containerized multi-agent system that runs 24/7 autonomously via Docker Compose. Built with the Hermes Agent framework and Ollama for LLM inference.
+A containerized multi-agent system that runs 24/7 autonomously via Docker Compose. Built with the Hermes Agents and Ollama for LLM inference.
 
 ## Features
 
@@ -9,9 +9,9 @@ A containerized multi-agent system that runs 24/7 autonomously via Docker Compos
 - **Autonomous Operation** — Runs tasks without user interaction via Discord or CLI
 - **Local & Cloud Models** — Uses Ollama for both local and cloud model inference
 - **Web Search** — Built-in SearXNG metasearch engine (free, no API keys needed)
-- **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations
+- **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, agent to agent communication
 - **Discord Bot** — Chat with your agent through Discord
-- **Delegation** — Main agent delegates specialized tasks to researcher and simple agents
+- **Delegation** — Main agent delegates specialized tasks to researcher and simple agents using NATS communication
 - **Docker** — Easy deployment with Docker Compose
 
 ## Quick Start
@@ -19,8 +19,8 @@ A containerized multi-agent system that runs 24/7 autonomously via Docker Compos
 ### Prerequisites
 
 - Docker Desktop or Docker Engine + Docker Compose v2
-- At least 8GB RAM (4GB minimum for main agent only)
-- Optional: NVIDIA GPU for faster local inference
+- Recommended at least 8GB RAM (4GB minimum)
+- Optional: NVIDIA GPU for faster local inference if local models are used
 
 ### 1. Clone and Configure
 
@@ -103,7 +103,7 @@ See [Discord Setup](docs/DISCORD_SETUP.md) for detailed instructions.
 │  │  │ agent-main  │ │researcher│ │  simple  │ │                 │
 │  │  │  :8642      │ │  :8101   │ │  :8102   │ │                 │
 │  │  │ Orchestrator│ │ Research │ │  Simple  │ │                 │
-│  │  │ + Discord   │ │          │ │          │ │                 │
+│  │  │ + Discord   │ │          │ │  Agent   │ │                 │
 │  │  └─────────────┘ └──────────┘ └──────────┘ │                 │
 │  └─────────────────────────────────────────────┘                 │
 │                                                                 │
@@ -146,41 +146,11 @@ Each agent has its own configuration in `src/agents/{name}/hermes.partial.yml` t
 
 ## Skills
 
-### SearXNG Web Search
-
-Free, privacy-respecting web search. No API keys needed.
-
-```bash
-node /app/scripts/skill-runner.mjs --skill searxng-web-search --params '{"query":"latest AI news"}'
-```
-
-### X.com Search
-
-Direct X.com (Twitter) API access for posts, users, and timelines.
-
-```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{"action":"searchPosts","query":"breaking news"}'
-```
-
-### Grok Search
-
-X.com search via xAI Grok — AI-synthesized results with citations.
-
-```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"AI developments"}'
-```
-
-### AWS S3
-
-Upload files and generate presigned URLs.
-
-```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{"action":"upload","key":"report.pdf","filePath":"/data/report.pdf"}'
-```
-
-### Data Extraction & Math
-
-Built-in skills for extracting data from URLs/documents and performing calculations.
+Built-in skills for:
+- agent to agent communication
+- SearXNG web search capabilities
+- x-com(Twitter) searching directly
+- extracting data from URLs/documents and performing calculations.
 
 ## Development
 

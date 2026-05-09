@@ -5,7 +5,7 @@
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
 | CPU | 4 cores | 8 cores |
-| RAM | 8 GB | 16 GB |
+| RAM | 4 GB | 8+ GB |
 | Storage | 20 GB | 50 GB |
 | GPU | Optional | NVIDIA with CUDA |
 

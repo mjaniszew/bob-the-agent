@@ -76,8 +76,8 @@ The `agent-to-agent` skill provides the sending interface, while `register-nats.
 |---------|-------------|------|
 | `ollama` | Local LLM inference engine | 11434 |
 | `agent-main` | Hermes Agent — main orchestrator with Discord bot | 8642 |
-| `researcher` | Hermes Agent — deep research specialist | 8101 |
-| `simple-agent` | Hermes Agent — simple/cheap task handler | 8102 |
+| `researcher` | Hermes Agent — deep research specialist | |
+| `simple-agent` | Hermes Agent — simple/cheap task handler | |
 | `searxng` | Privacy-respecting metasearch engine | 8888 |
 | `valkey` | Redis-compatible cache for SearXNG | 6379 |
 | `nats` | NATS messaging server for inter-agent communication | 4222/8222 |
