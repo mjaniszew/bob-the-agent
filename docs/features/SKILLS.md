@@ -17,11 +17,10 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | agent-to-agent | ✅ Implemented | Inter-agent messaging via NATS |
 | searxng-search | ✅ Implemented | Web search via SearXNG (free, no tokens) |
 
-**System Tool Skills (SKILL.md only):**
+**Implemented Skills (Python):**
 | Skill | Status | Description |
 |-------|--------|-------------|
-| playwright | ✅ Available | Browser automation via playwright-cli |
-
+| agent-to-agent | ✅ Implemented | Agent to agent communication using NATS |
 
 **Environment Variables Required:**
 - `USER_X_COM_API_TOKEN` - For X.com API access (x-com skill)
@@ -83,13 +82,6 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 3. Should generate public URLs for objects in public buckets (no credentials required)
 4. Should support both direct content upload and file path upload
 5. Requires AWS credentials and bucket configuration via environment variables
-
-## Playwright (Browser Automation)
-1. Agent should be able to open and visit complex websites using playwright-cli
-2. Should interact with graphical interfaces of websites, take screenshots
-3. Should perform web automations, execute scripts in browser
-4. This skill uses playwright-cli system tool, not TypeScript implementation
-5. Requires playwright-cli to be installed and available in PATH
 
 ## Agent-to-Agent (NATS Inter-Agent Messaging)
 1. Agents communicate across containers via NATS messaging using the `agent-to-agent` skill
