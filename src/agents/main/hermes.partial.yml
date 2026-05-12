@@ -1,0 +1,27 @@
+model:
+  default: kimi-k2.6:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+- name: ollama/kimi-k2.6:cloud
+  base_url: http://ollama:11434/v1
+  model: kimi-k2.6:cloud
+toolsets:
+- hermes-cli
+- browser
+agent:
+  max_turns: 90
+  gateway_timeout: 3600
+  restart_drain_timeout: 60
+  api_max_retries: 6
+  service_tier: ''
+  tool_use_enforcement: auto
+  gateway_timeout_warning: 1800
+  gateway_notify_interval: 180
+  gateway_auto_continue_freshness: 3600
+  image_input_mode: auto
+  disabled_toolsets: []
+  verbose: false
+  reasoning_effort: medium
+  personalities:
+    default: You are automation agent. You execute given tasks without asking questions, and ask only when it's absolutely necessary.

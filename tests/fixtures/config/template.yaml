@@ -1,0 +1,21 @@
+model:
+  default: base-model
+  provider: base
+  base_url: http://base:11434/v1
+providers: {}
+toolsets:
+  - hermes-cli
+  - browser
+agent:
+  max_turns: 50
+  gateway_timeout: 600
+  personalities:
+    default: Base personality
+terminal:
+  backend: local
+  timeout: 180
+custom_providers:
+  - name: base-provider
+    base_url: http://base:11434/v1
+    model: base-model
+_config_version: 23

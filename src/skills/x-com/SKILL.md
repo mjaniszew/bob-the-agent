@@ -20,7 +20,8 @@ Use this skill when:
 
 ## When NOT to Use
 
-Do NOT use this skill for:
+Do NOT use this skill when:
+- If `USER_X_COM_API_TOKEN` variable is missing from the environment
 - General web search → Use SearXNG (searxng-search tool) instead
 - Searching websites, articles, documentation → Use SearXNG instead
 

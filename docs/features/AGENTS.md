@@ -85,11 +85,9 @@ Context: <relevant background information>
 
 | Path | Purpose | Used By |
 |------|---------|---------|
-| `/app/data/{YYYY-MM-DD}/{task-id}/` | Sub-agent working directory for task results | All sub-agents |
 | `/app/results/` | Final output files delivered to user | Main agent only |
-| `/app/user-files/` | Input files provided by user | Read by any agent |
-| `{workspace}/memory/` | Agent memory files | All agents |
-| `{workspace}/MEMORY.md` | Long-term curated memory | Main agent only |
+| `/opt/data/` | Agent files: configs, skills, workspace | Per agent files |
+
 
 ## Memory and Learning
 
@@ -114,6 +112,46 @@ The agent system is configured in `src/config/openclaw.template.json` with:
 - Each agent has its own workspace and model configuration
 - The main agent can spawn any other agent (`allowAgents: ["*"]`)
 - Research-analyzer can spawn web-searcher, data-extractor, and document-creator
+
+## NATS Inter-Agent Communication
+
+Agents communicate across containers via **NATS** messaging, enabling the orchestrator to delegate tasks to specialized agents in separate Docker containers.
+
+### Architecture
+
+Each agent container runs a `register-nats.py` background listener alongside the Hermes gateway. This listener:
+- Subscribes to NATS subjects for incoming tasks and results
+- Executes incoming tasks via Hermes one-shot mode
+- Publishes results back to the originating agent
+
+### Message Flow
+
+1. **Main agent** calls `agent-to-agent` skill with `send_task` action
+2. **Skill** publishes a task message to `agent.{target_id}.tasks`
+3. **Target agent's** `register-nats.py` receives the message
+4. **Target agent** executes the task via `hermes -z "<prompt>"`
+5. **Target agent** publishes result to `agent.{sender_id}.results`
+6. **Main agent** checks for results via `check_messages` action
+
+### NATS Subjects
+
+| Subject | Purpose |
+|---------|---------|
+| `agent.{target_id}.tasks` | Send task to specific agent |
+| `agent.{target_id}.results` | Receive results from specific agent |
+
+### Available Target Agents
+
+| Agent ID | Container | Role |
+|----------|-----------|------|
+| `researcher` | bob-the-agent-researcher | Deep research and analysis |
+| `simple` | bob-the-agent-simple | Lightweight simple tasks |
+
+### Configuration
+
+- `NATS_URL` environment variable (default: `nats://nats:4222`)
+- `NATS_TASK_TIMEOUT` environment variable (default: `600` seconds)
+- Each agent subscribes with a queue group for horizontal scaling support
 
 ## Known Limitations
 
