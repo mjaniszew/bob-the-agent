@@ -84,6 +84,12 @@ Set `DISCORD_BOT_TOKEN` and `DISCORD_CLIENT_ID` in `.env`, then restart:
 docker compose restart agent-main
 ```
 
+When asked to pair bot for the first time, you have to do it in main docker container using hermes-cli and pairing token provided by bot through discord:
+
+```bash
+docker exec -it bob-the-agent /app/scripts/hermes-cmd.sh pairing approve discord TOKEN
+```
+
 See [Discord Setup](docs/DISCORD_SETUP.md) for detailed instructions.
 
 ## Architecture

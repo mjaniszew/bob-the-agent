@@ -15,6 +15,11 @@ Use this skill when:
 - You need to persist generated artifacts (reports, documents, images)
 - You need to share files with external users
 
+## When NOT to Use
+
+Do NOT use this skill when:
+- If `USER_AWS_S3_ACCESS_KEY_ID` or `USER_AWS_S3_SECRET_ACCESS_KEY` variables are missing from the environment
+
 ## Usage
 
 Call the skill-runner with:

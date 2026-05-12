@@ -317,7 +317,6 @@ personalities: {}
 security:
   redact_secrets: true
   allow_private_urls: false
-  redact_secrets: false
   tirith_enabled: true
   tirith_path: tirith
   tirith_timeout: 5

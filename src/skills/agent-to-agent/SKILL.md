@@ -1,11 +1,32 @@
 ---
 name: agent-to-agent
 description: Use this skill to communicate with other agents via NATS messaging. Send tasks to specialized agents, check for incoming messages, and send task results back. Trigger words: agent-to-agent|nats|inter-agent|delegate|message agent
+tags:
+  - delegate
+  - agent-to-agent
 ---
 
 # Agent-to-Agent Communication Skill
 
 Use this skill to communicate with other agents in the system via NATS messaging. This enables cross-container task delegation and result reporting between specialized agents.
+
+## ⚠️ MANDATORY: DELEGATION FIRST PROTOCOL
+
+**For EVERY user task, you MUST run this checklist BEFORE taking any action yourself:**
+
+1. **Understand the task** — What does the user want? Does it involve search, research, coding, data extraction, or analysis?
+2. **Load this skill** — You are reading it now. Check the "Available agents" section below.
+3. **Decide who does it** — Match the task to the right agent (see "Available agents" below).
+4. **Delegate via `delegate_task`** — Spawn a subagent and let it handle the work. **Do NOT execute the task yourself.**
+5. **Wait for results** — The subagent will report back.
+
+**If you skip this checklist and execute a task yourself that should have been delegated, you are violating your protocol.**
+
+Common delegation triggers:
+- Any web search → `simple` agent
+- Keywords: "research", "analyze", "synthesize", "compare", "find sources" → `researcher` agent
+- Data extraction from web pages → `simple` agent
+- Summaries, document creation → `simple` agent
 
 ## When to Use
 
@@ -23,24 +44,32 @@ Do NOT use this skill for:
 ## Available agents
 
 Following specialized agents are available:
-1. **Simple Agent** (`simple`) - For general simple tasks. Use this agent when: 
- - use always for any web search
+### **Simple Agent** (target_id: simple)
+For general simple tasks.
+
+When to Use:
+ - use always for any kind of web search: `web_search`, `web_fetch`, `web_extract`, `searxng-web-search`, `searxng-search`
  - for documents creation that do not falls under other specialized agents eg. simple summaries
  - for basic data exctraction
  - for basic browser usage (screenshots, web pages scraping, basic web pages interactions)
  - for general tasks which does not require long context and specialized thinking
-2. **Researcher Agent** (`researcher`) - For complex research, analysis and synthesis tasks. Use this agent when:
+
+When NOT to Use:
+ - Task is complex, long context or requires specialized thinking like deep research
+ - for coding tasks
+
+### **Researcher Agent** (target_id: researcher)
+For complex research, analysis and synthesis tasks. 
+
+When to Use:
  - whenever task uses keywords like `research`, `analyze`, `synthezize`, `synthesis`
  - for complex tasks requiring deep analysis and synthesis
  - for cross referencing sources and informations
  - for creating comples research documents
 
-## Delegation procedure
-General delegation procedure for agents using this skill is that when you receive task, always do the following:
-1. **Understand the task** - Make sure you understand the task requirements. If task is even moderately complex, has multiple steps and requires tools and skills usage, it will require plan which should cover delegation to specialized agents.
-2. **Choose specialized agents** - This skill contains list of available specialized agents, and rules when to use them.
-3. **Plan** - Create plan which should cover what and how to delegate to specialized agents. If plan consist of multiple steps, save it as a files for further use. For plan creation you can use `delegate_task` command to delegate to subagent.
-4. **Delegate** - Execute plan delegating to proper specialized agents. When you delegate to agent, always spawn subagent directly using `delegate_task` command, and this subagent should be responsible for delegating further, waiting for results. and informing you about the progress and passing results.
+When NOT to Use:
+ - basic tasks that do not require deep analysis and synthesis
+ - for coding tasks
 
 ## Architecture
 
@@ -192,7 +221,7 @@ Send a task result back to the originating agent.
 
 ## Notes
 
-- IMPORTANT: always wait for a task completion for a few minutes. If no results came back, send another message to same agent asking for status before you decide that task timed out
+- IMPORTANT: always wait for a task completion for at least 5-6 minutes. If no results came back, send another message to same agent asking for status before you decide whether task timed out
 - Messages are routed to specific agents using NATS subjects — only the targeted agent receives the message
 - The background `register-nats.py` listener automatically executes incoming tasks and sends results back
 - Results are persisted to `/opt/data/nats-messages/incoming/` and consumed on read (check_messages removes them)

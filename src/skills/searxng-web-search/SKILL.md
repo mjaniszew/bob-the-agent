@@ -1,6 +1,6 @@
 ---
 name: searxng-web-search
-description: Search the web via local SearXNG instance at http://searxng:8888. Supports general, images, videos, news, maps, science, and more. Always use this over external APIs for web search. Trigger words:searxng, web-search, search
+description: Search the web via local SearXNG instance. Supports general, images, videos, news, maps, science, and more. Always use this over external APIs for web search. Trigger words:searxng, web-search, search
 tags:
   - searxng
   - web-search
@@ -17,6 +17,7 @@ This skill documents how to query the local SearXNG meta-search engine running a
 ## When to Use
 
 Use this skill when:
+- every time web_search is being used
 - You need to search the web for general informations and return results which are websites you can investigate further
 - You need to search for images, videos, news, maps etc.
 - You need to search for scientific papers, academic articles
@@ -25,6 +26,7 @@ Use this skill when:
 
 Do NOT use this skill when:
 - You're asked to search for already known to you sources eg. websites, rss feeds, etc. which you can access directly
+- `SEARXNG_BASE_URL` variable is missing from the environment
 
 ## Why Use It
 - **No API keys** — runs locally.

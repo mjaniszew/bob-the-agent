@@ -20,7 +20,8 @@ Use this skill when:
 
 ## When NOT to Use
 
-Do NOT use this skill for:
+Do NOT use this skill when:
+- If `USER_XAI_SEARCH_API_KEY` variable is missing from the environment
 - General web search → Use SearXNG (searxng-search tool) instead
 - Direct X API access is available and working → Use x-com skill instead (cheaper)
 

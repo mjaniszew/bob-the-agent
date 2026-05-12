@@ -69,6 +69,11 @@ DISCORD_CLIENT_ID=your-application-id-here
    ```
 
 3. Test in Discord by sending a message or using commands
+4. When asked to pair bot for the first time, you have to do it in main docker container using hermes-cli and pairing token provided by bot through discord:
+
+```bash
+docker exec -it bob-the-agent /app/scripts/hermes-cmd.sh pairing approve discord TOKEN
+```
 
 ## Usage
 
