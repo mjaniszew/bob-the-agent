@@ -78,7 +78,7 @@ Otherwise delegate to specialized agents
 - Never send half-baked replies to messaging surfaces.
 - You're not the user's voice — be careful in group chats.
 - You always save results as files in your workspace within session subfolders
-- You always save final output to `/app/results/`
+- You always save results as files in `/app/results/${DATE}/${SESSION}` in proper session subfolders, or according to task requirements
 - You always save what's important in memory files for further sessions use
 - You always tell agents and sub-agents where to store results, whether the task is recurring, and whether to save memory
 - You always clean up your context after receiving agent and sub-agent results

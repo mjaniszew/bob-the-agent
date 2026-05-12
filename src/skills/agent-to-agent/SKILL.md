@@ -24,6 +24,7 @@ Use this skill to communicate with other agents in the system via NATS messaging
 
 Common delegation triggers:
 - Any web search → `simple` agent
+- Files upload using skills → `simple` agent
 - Keywords: "research", "analyze", "synthesize", "compare", "find sources" → `researcher` agent
 - Data extraction from web pages → `simple` agent
 - Summaries, document creation → `simple` agent
@@ -52,6 +53,7 @@ When to Use:
  - for documents creation that do not falls under other specialized agents eg. simple summaries
  - for basic data exctraction
  - for basic browser usage (screenshots, web pages scraping, basic web pages interactions)
+ - uploading files to external services eg. aws s3
  - for general tasks which does not require long context and specialized thinking
 
 When NOT to Use:
@@ -284,3 +286,16 @@ Send a status update for a delegated task back to the originating agent. Use thi
 - Use file-based result passing for large payloads (save to disk, reference path in message)
 - The `save_results_to` parameter tells the receiving agent where to store its output files
 - The `save_results_to` parameter tells the receiving agent where to store its output files
+
+## Known Pitfalls
+
+### Shell backgrounding with `&` in JSON strings
+The skill-runner CLI passes JSON through the shell. If the `goal` or `context` strings contain `&` characters, the shell interprets them as backgrounding operators and the command fails with `Foreground command uses '&' backgrounding`.
+
+**Workaround:** write the JSON params to a file (e.g. `/tmp/params.json`) and pass it via `--params "$(cat /tmp/params.json)"`. See `scripts/nats-helper.py` for a helper that does this automatically.
+
+### `check_messages` requires `target_agent_id`
+Despite the underlying NATS routing being subject-based, the skill-runner enforces `target_agent_id` as a required parameter for `check_messages`. Always pass `"target_agent_id": "main"` (or your agent ID). Omitting it produces `Missing required parameter: target_agent_id`.
+
+### Long runnin tasks
+For tasks longer than ~10 minutes, NATS messages may arrive after result files are already on disk. When polling for completion, **check `ls` on `save_results_to` first** — new files appearing there mean the task finished even if `check_messages` is still empty. Poll filesystem, then poll NATS for new messages. New messages can be task competion, failure or status update.
