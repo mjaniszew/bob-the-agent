@@ -76,6 +76,9 @@ Examples:
 
   # Grok search (X.com fallback)
   node skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"xAI announcements"}'
+
+  # Agent-to-agent status update
+  node skill-runner.mjs --skill agent-to-agent --params '{"action":"update_status","target_agent_id":"main","original_message_id":"550e8400...","update_details":"Processing batch 3 of 10"}'
 `);
       process.exit(0);
     }

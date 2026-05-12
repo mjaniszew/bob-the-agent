@@ -30,6 +30,7 @@ INCOMING_DIR = os.environ.get("NATS_INCOMING_DIR", "/opt/data/nats-messages/inco
 # Message types
 TASK_TYPE_DELEGATE = "delegate_task"
 TASK_TYPE_RESULT = "task_result"
+TASK_TYPE_UPDATE = "task_update"
 
 
 def generate_message_id() -> str:
@@ -163,6 +164,49 @@ async def send_result(args: argparse.Namespace) -> None:
             await nc.drain()
 
 
+async def update_status(args: argparse.Namespace) -> None:
+    """Send a status update for a delegated task back to the originating agent via NATS."""
+    message = {
+        "message_id": generate_message_id(),
+        "task_type": TASK_TYPE_UPDATE,
+        "original_message_id": args.original_msg_id,
+        "sender_agent_id": AGENT_NAME,
+        "target_agent_id": args.target,
+        "timestamp": get_timestamp(),
+        "status": "update",
+        "payload": {
+            "update_details": args.update_details,
+            "progress_percentage": args.progress if args.progress is not None else None,
+        },
+    }
+
+    nc = None
+    try:
+        nc = await nats.connect(NATS_URL, name=f"agent-{AGENT_NAME}-update")
+        subject = f"agent.{args.target}.results"
+        await nc.publish(subject, json.dumps(message).encode())
+        await nc.flush()
+        result = {
+            "success": True,
+            "message_id": message["message_id"],
+            "subject": subject,
+            "sender_agent_id": AGENT_NAME,
+            "target_agent_id": args.target,
+        }
+        print(json.dumps(result, indent=2))
+    except (ConnectionClosedError, TimeoutError, NoServersError) as e:
+        result = {"success": False, "error": f"NATS connection error: {str(e)}"}
+        print(json.dumps(result, indent=2))
+        sys.exit(1)
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+        print(json.dumps(result, indent=2))
+        sys.exit(1)
+    finally:
+        if nc and nc.is_connected:
+            await nc.drain()
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -173,6 +217,7 @@ Actions:
   send_task       Send a task to a target agent via NATS
   check_messages  Check for pending incoming messages
   send_result     Send a task result back to the originating agent
+  update_status   Send a status update for a delegated task
 
 Examples:
   # Send a task to researcher agent
@@ -189,7 +234,7 @@ Examples:
     parser.add_argument(
         "--action",
         required=True,
-        choices=["send_task", "check_messages", "send_result"],
+        choices=["send_task", "check_messages", "send_result", "update_status"],
         help="Action to perform",
     )
 
@@ -210,14 +255,22 @@ Examples:
     )
     parser.add_argument(
         "--status",
-        choices=["completed", "failed"],
-        help="Task completion status",
+        choices=["completed", "failed", "update"],
+        help="Task completion status or update",
     )
     parser.add_argument("--summary", help="Summary of the task result")
     parser.add_argument("--result-path", help="Path to result files")
     parser.add_argument("--error", help="Error message if task failed")
     parser.add_argument(
         "--duration", type=int, help="Task duration in seconds"
+    )
+
+    # update_status arguments
+    parser.add_argument(
+        "--update-details", help="Status update details text (required for update_status)"
+    )
+    parser.add_argument(
+        "--progress", type=int, help="Progress percentage 0-100 (optional for update_status)"
     )
 
     # check_messages arguments
@@ -250,6 +303,16 @@ def validate_args(args: argparse.Namespace) -> None:
         if not args.status:
             parser = argparse.ArgumentParser()
             parser.error("--status is required for send_result action")
+    elif args.action == "update_status":
+        if not args.target:
+            parser = argparse.ArgumentParser()
+            parser.error("--target is required for update_status action")
+        if not args.original_msg_id:
+            parser = argparse.ArgumentParser()
+            parser.error("--original-msg-id is required for update_status action")
+        if not args.update_details:
+            parser = argparse.ArgumentParser()
+            parser.error("--update-details is required for update_status action")
 
 
 async def main() -> None:
@@ -263,6 +326,8 @@ async def main() -> None:
         await check_messages(args)
     elif args.action == "send_result":
         await send_result(args)
+    elif args.action == "update_status":
+        await update_status(args)
 
 
 if __name__ == "__main__":

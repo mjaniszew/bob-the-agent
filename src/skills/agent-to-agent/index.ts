@@ -18,7 +18,7 @@ const NATS_HELPER = process.env.NATS_HELPER_PATH ||
   path.join('/app/skills/agent-to-agent/scripts/nats-helper.py');
 
 // Valid actions
-type AgentToAgentAction = 'send_task' | 'check_messages' | 'send_result';
+type AgentToAgentAction = 'send_task' | 'check_messages' | 'send_result' | 'update_status';
 
 // Parameter types
 interface SendTaskParams {
@@ -46,7 +46,15 @@ interface SendResultParams {
   duration?: number;
 }
 
-type AgentToAgentParams = SendTaskParams | CheckMessagesParams | SendResultParams;
+interface UpdateStatusParams {
+  action: 'update_status';
+  target_agent_id: string;
+  original_message_id: string;
+  update_details: string;
+  progress_percentage?: number;
+}
+
+type AgentToAgentParams = SendTaskParams | CheckMessagesParams | SendResultParams | UpdateStatusParams;
 
 interface AgentToAgentResult {
   success: boolean;
@@ -59,8 +67,8 @@ interface AgentToAgentResult {
  */
 function validateParams(params: AgentToAgentParams): string | null {
   const action = params.action;
-  if (!action || !['send_task', 'check_messages', 'send_result'].includes(action)) {
-    return `Invalid action: ${action}. Must be 'send_task', 'check_messages', or 'send_result'`;
+  if (!action || !['send_task', 'check_messages', 'send_result', 'update_status'].includes(action)) {
+    return `Invalid action: ${action}. Must be 'send_task', 'check_messages', 'send_result', or 'update_status'`;
   }
 
   if (action === 'send_task') {
@@ -88,6 +96,20 @@ function validateParams(params: AgentToAgentParams): string | null {
     }
     if (!p.status) {
       return 'Missing required parameter: status is required for send_result action';
+    }
+    return null;
+  }
+
+  if (action === 'update_status') {
+    const p = params as UpdateStatusParams;
+    if (!p.target_agent_id) {
+      return 'Missing required parameter: target_agent_id is required for update_status action';
+    }
+    if (!p.original_message_id) {
+      return 'Missing required parameter: original_message_id is required for update_status action';
+    }
+    if (!p.update_details) {
+      return 'Missing required parameter: update_details is required for update_status action';
     }
     return null;
   }
@@ -143,6 +165,16 @@ function buildArgs(params: AgentToAgentParams): string[] {
       }
       break;
     }
+    case 'update_status': {
+      const p = params as UpdateStatusParams;
+      args.push('--target', p.target_agent_id);
+      args.push('--original-msg-id', p.original_message_id);
+      args.push('--update-details', p.update_details);
+      if (p.progress_percentage !== undefined) {
+        args.push('--progress', String(p.progress_percentage));
+      }
+      break;
+    }
   }
 
   return args;
@@ -156,7 +188,7 @@ function buildArgs(params: AgentToAgentParams): string[] {
  */
 export async function agentToAgent(params: AgentToAgentParams): Promise<AgentToAgentResult> {
   // Validate action
-  const validActions: AgentToAgentAction[] = ['send_task', 'check_messages', 'send_result'];
+  const validActions: AgentToAgentAction[] = ['send_task', 'check_messages', 'send_result', 'update_status'];
   if (!validActions.includes(params.action)) {
     return {
       success: false,

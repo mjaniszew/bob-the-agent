@@ -54,6 +54,30 @@ describe('Agent-to-Agent Skill Registry', () => {
     expect(module.default).toBe(module.agentToAgent);
   });
 
+  it('should include update_status in action enum', async () => {
+    const { skillRegistry } = await import('../src/skills/index.js');
+    const meta = skillRegistry['agent-to-agent'];
+    expect(meta.params.action.enum).toContain('update_status');
+  });
+
+  it('should include update in status enum', async () => {
+    const { skillRegistry } = await import('../src/skills/index.js');
+    const meta = skillRegistry['agent-to-agent'];
+    expect(meta.params.status.enum).toContain('update');
+  });
+
+  it('should have update_details parameter defined', async () => {
+    const { skillRegistry } = await import('../src/skills/index.js');
+    const meta = skillRegistry['agent-to-agent'];
+    expect(meta.params).toHaveProperty('update_details');
+  });
+
+  it('should have progress_percentage parameter defined', async () => {
+    const { skillRegistry } = await import('../src/skills/index.js');
+    const meta = skillRegistry['agent-to-agent'];
+    expect(meta.params).toHaveProperty('progress_percentage');
+  });
+
   it('should include agent-to-agent in skill-runner registry', async () => {
     // This test verifies the skill-runner.mjs includes agent-to-agent
     // We read the file content since it's a .mjs file (not TypeScript)
@@ -121,6 +145,39 @@ describe('Agent-to-Agent Skill Validation', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('status');
   });
+
+  it('should reject update_status without target_agent_id', async () => {
+    const { agentToAgent } = await import('../src/skills/agent-to-agent/index.js');
+    const result = await agentToAgent({
+      action: 'update_status',
+      original_message_id: 'test-id',
+      update_details: 'Working on it'
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('target_agent_id');
+  });
+
+  it('should reject update_status without original_message_id', async () => {
+    const { agentToAgent } = await import('../src/skills/agent-to-agent/index.js');
+    const result = await agentToAgent({
+      action: 'update_status',
+      target_agent_id: 'main',
+      update_details: 'Working on it'
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('original_message_id');
+  });
+
+  it('should reject update_status without update_details', async () => {
+    const { agentToAgent } = await import('../src/skills/agent-to-agent/index.js');
+    const result = await agentToAgent({
+      action: 'update_status',
+      target_agent_id: 'main',
+      original_message_id: 'test-id'
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('update_details');
+  });
 });
 
 // ============================================================
@@ -168,6 +225,26 @@ describe('NATS Message Format', () => {
     };
     expect(validResult.task_type).toBe('task_result');
     expect(validResult.status).toMatch(/^(completed|failed)$/);
+  });
+
+  it('should construct valid update message with all required fields', () => {
+    const validUpdate = {
+      message_id: expect.any(String),
+      task_type: 'task_update',
+      original_message_id: expect.any(String),
+      sender_agent_id: expect.any(String),
+      target_agent_id: expect.any(String),
+      timestamp: expect.any(String),
+      status: 'update',
+      payload: {
+        update_details: expect.any(String),
+        progress_percentage: expect.any(Number)
+      }
+    };
+    expect(validUpdate.task_type).toBe('task_update');
+    expect(validUpdate.status).toBe('update');
+    expect(validUpdate.payload).toBeDefined();
+    expect(validUpdate.payload.update_details).toBeDefined();
   });
 });
 
@@ -223,6 +300,26 @@ describe('nats-helper.py CLI', () => {
       (error, stdout, stderr) => {
         expect(error).not.toBeNull();
         expect(stderr).toContain('original_message_id');
+        done();
+      }
+    );
+  });
+
+  it('should include update_status in help text', (done) => {
+    execFile('python3', [helperPath, '--help'], (error, stdout) => {
+      expect(stdout).toContain('update_status');
+      done();
+    });
+  });
+
+  it('should validate required args for update_status action', (done) => {
+    execFile(
+      'python3',
+      [helperPath, '--action', 'update_status', '--target', 'main', '--original-msg-id', 'test-id'],
+      { env: { ...process.env, NATS_URL: 'nats://localhost:4222', AGENT_NAME: 'test' } },
+      (error, stdout, stderr) => {
+        expect(error).not.toBeNull();
+        expect(stderr).toContain('update-details');
         done();
       }
     );
@@ -355,5 +452,24 @@ describeDocker('Docker Integration - NATS Communication', () => {
     const result = JSON.parse(stdout);
     expect(result.success).toBe(true);
     expect(result.message_id).toBeDefined();
+  }, 60000);
+
+  it('should send update_status via skill and route to results subject', async () => {
+    // First send a task to get a message_id
+    const { stdout: sendOutput } = await execAsync(
+      `docker exec bob-the-agent node /app/scripts/skill-runner.mjs --skill agent-to-agent --params '{"action":"send_task","target_agent_id":"researcher","goal":"test goal"}'`,
+      { maxBuffer: 1024 * 1024 }
+    );
+    const sendResult = JSON.parse(sendOutput);
+    const originalMsgId = sendResult.result?.message_id || sendResult.message_id;
+
+    // Send a status update
+    const { stdout } = await execAsync(
+      `docker exec bob-the-agent node /app/scripts/skill-runner.mjs --skill agent-to-agent --params '{"action":"update_status","target_agent_id":"researcher","original_message_id":"${originalMsgId}","update_details":"Processing halfway done","progress_percentage":50}'`,
+      { maxBuffer: 1024 * 1024 }
+    );
+    const updateResult = JSON.parse(stdout);
+    expect(updateResult.success).toBe(true);
+    expect(updateResult.message_id || updateResult.result?.message_id).toBeDefined();
   }, 60000);
 });

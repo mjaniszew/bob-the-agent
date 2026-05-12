@@ -58,6 +58,8 @@ When NOT to Use:
  - Task is complex, long context or requires specialized thinking like deep research
  - for coding tasks
 
+Timeout: 15 minutes
+
 ### **Researcher Agent** (target_id: researcher)
 For complex research, analysis and synthesis tasks. 
 
@@ -70,6 +72,8 @@ When to Use:
 When NOT to Use:
  - basic tasks that do not require deep analysis and synthesis
  - for coding tasks
+
+Timeout: 60 minutes
 
 ## Architecture
 
@@ -118,6 +122,18 @@ node /app/scripts/skill-runner.mjs --skill agent-to-agent --params '{
 }'
 ```
 
+### Send a Status Update
+
+```bash
+node /app/scripts/skill-runner.mjs --skill agent-to-agent --params '{
+  "action": "update_status",
+  "target_agent_id": "main",
+  "original_message_id": "550e8400-e29b-41d4-a716-446655440000",
+  "update_details": "Processing batch 3 of 10. Approximately 20 minutes remaining.",
+  "progress_percentage": 30
+}'
+```
+
 ## Actions
 
 ### send_task
@@ -155,10 +171,22 @@ Send a task result back to the originating agent.
 | action | string | Yes | Must be `"send_result"` |
 | target_agent_id | string | Yes | ID of the agent to send the result to |
 | original_message_id | string | Yes | Message ID of the original task message |
-| status | string | Yes | `"completed"` or `"failed"` |
+| status | string | Yes | `"completed"`, `"failed"`, or `"update"` (for update_status action) |
 | summary | string | No | Summary of the task result |
 | result_path | string | No | Path to the result file(s) |
 | error | string | No | Error message if task failed |
+
+### update_status
+
+Send a status update for a delegated task back to the originating agent. Use this when a task takes longer than 5 minutes to provide progress updates every 3 minutes.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| action | string | Yes | Must be `"update_status"` |
+| target_agent_id | string | Yes | ID of the agent that delegated the task |
+| original_message_id | string | Yes | Message ID of the original task message |
+| update_details | string | Yes | Description of current progress |
+| progress_percentage | number | No | Progress percentage (0-100) |
 
 ## Output
 
@@ -192,9 +220,22 @@ Send a task result back to the originating agent.
         "toolsets": ["terminal", "file"],
         "save_results_to": "/app/data/..."
       }
+    },
+    {
+      "message_id": "...",
+      "task_type": "task_update",
+      "original_message_id": "...",
+      "sender_agent_id": "researcher",
+      "target_agent_id": "main",
+      "timestamp": "2026-05-08T14:35:00+00:00",
+      "status": "update",
+      "payload": {
+        "update_details": "Processing batch 3 of 10",
+        "progress_percentage": 30
+      }
     }
   ],
-  "count": 1
+  "count": 2
 }
 ```
 
@@ -210,20 +251,36 @@ Send a task result back to the originating agent.
 }
 ```
 
+### update_status Response
+
+```json
+{
+  "success": true,
+  "message_id": "770e8400-e29b-41d4-a716-446655440002",
+  "subject": "agent.main.results",
+  "sender_agent_id": "researcher",
+  "target_agent_id": "main"
+}
+```
+
 ## Error Handling
 
 | Error | Cause | Solution |
 |-------|-------|----------|
 | NATS connection error | NATS server unreachable | Check that the NATS container is running and NATS_URL is configured |
-| Missing target_agent_id | Required param not provided | Always specify target_agent_id for send_task and send_result |
+| Missing target_agent_id | Required param not provided | Always specify target_agent_id for send_task, send_result, and update_status |
 | Missing goal | Required param for send_task | Provide a clear task description |
+| Missing update_details | Required param for update_status | Always provide a clear progress description |
 | Message store empty | No messages pending | Use check_messages after a task delegation to get results |
 
 ## Notes
 
-- IMPORTANT: always wait for a task completion for at least 5-6 minutes. If no results came back, send another message to same agent asking for status before you decide whether task timed out
+- IMPORTANT: always wait for a task completion. Do not timeout agent unless you hit timeout limit specified for specific agent. Check periodically, and if no results came back within 10 minutes, send another message to same agent asking for status before you decide whether task, or see whether any new files in `/app/results` appeared before you decide that agent timed out
+- IMPORTANT: If you receive a delegated task that will take more than 5 minutes, you MUST send a status update every 3 minutes using the `update_status` action. This keeps the delegating agent informed of your progress
+- When checking for messages with `check_messages`, you may see messages with `status: "update"` and `task_type: "task_update"` — these are progress updates from agents working on your delegated tasks, not final results
 - Messages are routed to specific agents using NATS subjects — only the targeted agent receives the message
 - The background `register-nats.py` listener automatically executes incoming tasks and sends results back
 - Results are persisted to `/opt/data/nats-messages/incoming/` and consumed on read (check_messages removes them)
 - Use file-based result passing for large payloads (save to disk, reference path in message)
+- The `save_results_to` parameter tells the receiving agent where to store its output files
 - The `save_results_to` parameter tells the receiving agent where to store its output files
