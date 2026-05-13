@@ -60,7 +60,7 @@ echo "OpenCode CLI version: $(opencode --version 2>/dev/null || echo 'not availa
 # ===========================================
 # Step 3: Generate OpenCode config from template
 # ===========================================
-OPENCODE_CONFIG_DIR="/home/node/.opencode"
+OPENCODE_CONFIG_DIR="~/.config/opencode"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/opencode.json"
 OPENCODE_TEMPLATE="/app/config/opencode.template.json"
 
@@ -77,12 +77,6 @@ if [[ ! -f "$OPENCODE_CONFIG_FILE" ]]; then
       -e "s|OLLAMA_BASE_URL_PLACEHOLDER|${OLLAMA_URL}|g" \
       -e "s|SEARXNG_BASE_URL_PLACEHOLDER|${SEARXNG_URL}|g" \
       "$OPENCODE_TEMPLATE" > "$OPENCODE_CONFIG_FILE"
-
-    # Ensure proper ownership for node user
-    if [[ "$(id -u)" = "0" ]]; then
-      chown -R node:node "$OPENCODE_CONFIG_DIR"
-    fi
-
     echo "OpenCode config generated at $OPENCODE_CONFIG_FILE"
   else
     echo "Warning: OpenCode template not found at $OPENCODE_TEMPLATE"
@@ -93,7 +87,7 @@ else
 fi
 
 # ===========================================
-# Step 4: Create projects workspace directory
+# Step 4: Prepare projects workspace directory
 # ===========================================
 mkdir -p /app/projects
 echo "Projects workspace ready at /app/projects"
