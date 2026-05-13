@@ -21,20 +21,20 @@ The system runs as multiple Docker containers managed by Docker Compose. Each sp
 │   ┌────┴────────────────────────────────────────────┐                   │
 │   │         All agents depend on Ollama              │                   │
 │   │                                                   │                   │
-│   │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │                   │
-│   │  │ agent-main  │ │ researcher  │ │simple-agent │ │                   │
-│   │  │  :8642      │ │  :8101      │ │  :8102      │ │                   │
-│   │  │             │ │             │ │             │ │                   │
-│   │  │ Hermes      │ │ Hermes      │ │ Hermes      │ │                   │
-│   │  │ Orchestrator│ │ Research    │ │ Simple      │ │                   │
-│   │  │ + Discord   │ │ Specialist  │ │ Tasks       │ │                   │
-│   │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ │                   │
-│   └─────────┼───────────────┼───────────────┼─────────┘                   │
+│   │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │                   │
+│   │  │ agent-main  │ │ researcher  │ │simple-agent │ │    coder     │ │                   │
+│   │  │  :8642      │ │             │ │             │ │ Hermes +     │ │                   │
+│   │  │             │ │             │ │             │ │ OpenCode CLI │ │                   │
+│   │  │ Hermes      │ │ Hermes      │ │ Hermes      │ │ Coding       │ │                   │
+│   │  │ Orchestrator│ │ Research    │ │ Simple      │ │ Specialist   │ │                   │
+│   │  │ + Discord   │ │ Specialist  │ │ Tasks       │ │              │ │                   │
+│   │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ │                   │
+│   └─────────┼───────────────┼───────────────┼───────────┼─────────────┘
 │             │               │               │                              │
 │             │    NATS Inter-Agent Messaging                                  │
 │             │    (agent.{id}.tasks / agent.{id}.results)                    │
 │             │               │               │                              │
-│        ┌────┴───────────────┴───────────────┴────┐                        │
+│        ┌────┴───────────────┴───────────────┴────────────┘                        │
 │        │               NATS Server                │                        │
 │        │               :4222 / :8222              │                        │
 │        └─────────────────────────────────────────┘                        │
@@ -78,6 +78,7 @@ The `agent-to-agent` skill provides the sending interface, while `register-nats.
 | `agent-main` | Hermes Agent — main orchestrator with Discord bot | 8642 |
 | `researcher` | Hermes Agent — deep research specialist | |
 | `simple-agent` | Hermes Agent — simple/cheap task handler | |
+| `coder` | Hermes Agent + OpenCode CLI — software engineering specialist | |
 | `searxng` | Privacy-respecting metasearch engine | 8888 |
 | `valkey` | Redis-compatible cache for SearXNG | 6379 |
 | `nats` | NATS messaging server for inter-agent communication | 4222/8222 |
@@ -87,6 +88,7 @@ The `agent-to-agent` skill provides the sending interface, while `register-nats.
 - `agent-main` depends on `ollama` (LLM inference)
 - `researcher` depends on `ollama` (LLM inference)
 - `simple-agent` depends on `ollama` (LLM inference)
+- `coder` depends on `ollama` (LLM inference for both Hermes and OpenCode)
 - `searxng` depends on `valkey` (caching)
 - All agents connect to `searxng` for web search capabilities
 
@@ -97,6 +99,7 @@ The `agent-to-agent` skill provides the sending interface, while `register-nats.
 | `agent-main` | `kimi-k2.6:cloud` (via Ollama) | Main orchestrator — receives tasks, delegates to specialist agents, provides Discord bot, manages results |
 | `researcher` | `kimi-k2.6:cloud` (via Ollama) | Research specialist — performs deep research, analysis, cross-referencing of sources |
 | `simple-agent` | `minimax-m2.7:cloud` (via Ollama) | Simple task handler — lightweight, cost-effective model for straightforward tasks |
+| `coder` | `glm-5.1:cloud` (via Ollama) | Coding specialist — Hermes Agent orchestrating OpenCode CLI for software engineering tasks |
 
 ## Configuration Flow
 
@@ -135,6 +138,7 @@ Each agent container uses a two-stage startup process that merges a shared Herme
 | `src/config/hermes.template.yaml` | Shared Hermes config template (model defaults, toolsets, agent settings) |
 | `src/agents/{name}/hermes.partial.yml` | Per-agent config overrides (model, toolsets, providers) |
 | `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
+| `src/config/opencode.template.json` | OpenCode CLI config template for coder agent (env-substituted at startup) |
 | `src/agents/{name}/IDENTITY.md` | Agent identity metadata |
 | `src/agents/{name}/AGENTS.md` | Agent workspace instructions |
 | `src/agents/{name}/TOOLS.md` | Agent tool-specific notes |
@@ -142,6 +146,7 @@ Each agent container uses a two-stage startup process that merges a shared Herme
 | `src/scripts/generate-config.sh` | Config generation orchestrator |
 | `src/scripts/merge-yaml.mjs` | YAML deep-merge utility |
 | `src/scripts/hermes-cmd.sh` | Hermes command wrapper |
+| `src/scripts/coder-entrypoint.sh` | Coder agent entry point (Hermes setup + OpenCode CLI install + config) |
 | `src/scripts/register-nats.py` | NATS background listener for inter-agent messaging |
 | `src/config/searxng.settings.yml` | SearXNG configuration |
 
@@ -260,7 +265,9 @@ Hermes Agent supports two delegation mechanisms:
 | `/opt/data` | `./volumes/agent-main` | Main agent workspace (config, SOUL.md, memory, skills) |
 | `/opt/data` | `./volumes/agent-researcher` | Researcher agent workspace |
 | `/opt/data` | `./volumes/agent-simple` | Simple agent workspace |
+| `/opt/data` | `./volumes/agent-coder` | Coder agent workspace (config, SOUL.md, memory, skills) |
 | `/app/results` | `./volumes/results` | Agents results data |
+| `/app/projects` | `./volumes/projects` | Shared project workspace (git repos, code) |
 | `/root/.ollama` | `ollama_data` volume | Downloaded models |
 | `/etc/searxng` | `searxng_config` volume | SearXNG configuration |
 | `/var/cache/searxng` | `searxng_data` volume | SearXNG cache |

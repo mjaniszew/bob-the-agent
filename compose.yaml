@@ -118,6 +118,36 @@ services:
     healthcheck: *agent-healthcheck
     deploy:
       resources: *agent-resources
+  # =====================================================================
+  # Coder Agent - AI agent focused on software engineering tasks
+  # Uses Hermes Agent + OpenCode CLI two-layer architecture
+  # =====================================================================
+  coder:
+    image: *agent-image
+    container_name: bob-the-agent-coder
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      AGENT_NAME: coder
+    volumes:
+      - ./volumes/agent-coder:/opt/data
+      - ./volumes/results:/app/results
+      - ./volumes/projects:/app/projects
+    healthcheck: *agent-healthcheck
+    deploy:
+      resources:
+        reservations:
+          cpus: 2
+          memory: 4G
+        limits:
+          memory: 8G
+    entrypoint: ["/app/scripts/coder-entrypoint.sh"]
+    command: ["bash", "-c", "/usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh gateway run"]
 
   # ===========================================
   # SearXNG - Privacy-respecting metasearch engine

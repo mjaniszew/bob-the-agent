@@ -7,24 +7,24 @@ This file describes the agent architecture, roles, and communication patterns.
 The system uses a **hub-and-spoke** orchestration pattern with OpenClaw's multi-agent system:
 
 ```
-                    ┌──────────────┐
-                    │  Main Agent  │
+                    ┌────────────────┐
+                    │  Main Agent    │
                     │  (Orchestrator)│
-                    └──────┬───────┘
+                    └──────┬─────────┘
                            │
-              ┌────────────┼────────────┐────────────┐
-              │            │            │            │
-       ┌──────▼──────┐ ┌──▼───────┐ ┌──▼──────────┐ ┌──▼──────────────┐
-       │ web-searcher │ │ research- │ │ data-       │ │ document-       │
-       │              │ │ analyzer  │ │ extractor   │ │ creator         │
-       └──────────────┘ └─────┬─────┘ └─────────────┘ └─────────────────┘
+              ┌────────────┼─────────────┐
+              │            │             │            
+       ┌──────▼──────┐ ┌───▼────────┐ ┌──▼──────────┐ 
+       │ simple      │ │ researcher │ │ coder       │ 
+       │             │ │            │ │             │ 
+       └─────────────┘ └─────┬──────┘ └─────────────┘
                              │
-              ┌──────────────┼────────────┐
-              │              │             │
-      ┌───────▼──────┐ ┌────▼──────┐ ┌────▼──────────┐
-      │ web-searcher │ │ data-     │ │ document-    │
-      │              │ │ extractor │ │ creator      │
-      └──────────────┘ └───────────┘ └──────────────┘
+              ┌──────────────┼
+              │                         
+      ┌───────▼──────┐ 
+      │ simple       │ 
+      │              │ 
+      └──────────────┘
 ```
 
 ### Agents
@@ -32,16 +32,15 @@ The system uses a **hub-and-spoke** orchestration pattern with OpenClaw's multi-
 | Agent | ID | Role | Model | Can Spawn |
 |-------|----|------|-------|-----------|
 | Main | `main` | Orchestrator — receives tasks, delegates to specialists, collects and synthesizes results | kimi-k2.5:cloud | All agents (`*`) |
-| Web Searcher | `web-searcher` | Finds information on the web using SearXNG, X.com, and Grok | minimax-m2.7:cloud | None |
-| Research Analyzer | `research-analyzer` | Researches topics and analyzes data by delegating search and extraction | kimi-k2.5:cloud | web-searcher, data-extractor, document-creator |
-| Data Extractor | `data-extractor` | Extracts structured data from websites and documents | minimax-m2.7:cloud | None |
-| Document Creator | `document-creator` | Creates PDF, DOCX, Markdown, and plain text documents | minimax-m2.7:cloud | None |
+| Simple Agent | `simple` | Finds information on the web using SearXNG, X.com, and Grok, handles simple tasks | minimax-m2.7:cloud | None |
+| Researcher | `researcher` | Researches topics and analyzes data by delegating search and extraction | kimi-k2.5:cloud | simple |
+| Coder | `coder` | Handles Software engineering tasks: coding, review, design | glm-5.1:cloud | None |
 
 ### Agent Hierarchy
 
 - **Depth 0**: Main agent (orchestrator)
-- **Depth 1**: Sub-agents spawned by main (web-searcher, research-analyzer, data-extractor, document-creator)
-- **Depth 2**: Leaf agents spawned by research-analyzer (web-searcher, data-extractor, document-creator)
+- **Depth 1**: Sub-agents spawned by main (simple, researcher, coder)
+- **Depth 2**: Leaf agents spawned eg. by researcher (simple)
 
 The `maxSpawnDepth` is set to 2, allowing the research-analyzer to delegate further. Leaf agents (depth 2) cannot spawn additional agents.
 
@@ -49,44 +48,19 @@ The `maxSpawnDepth` is set to 2, allowing the research-analyzer to delegate furt
 
 ### Sessions and Spawning
 
-Agents communicate via OpenClaw's `sessions_spawn` tool:
+Agents communicate via `agent-to-agent` skill:
 
 1. **Main agent** analyzes the task and decides which specialist(s) to delegate to
-2. Main spawns a sub-agent with a task prompt using `sessions_spawn`
-3. Sub-agent executes the task and writes results to files in `/app/data/`
-4. Sub-agent reports back the **file path** of results (not the content)
+2. Main spawns a sub-agent with a task prompt using `delegate_task`, that sub-agent is responsible for delegating to agent using `agent-to-agent` skill, and coordinates tasks between agents
+3. Agent executes the task and writes results to files in `/app/results/`
+4. Agent reports back the **file path** of results (not the content)
 5. Main agent reads the results file, extracts what's needed, and continues
-
-### Result Passing Protocol
-
-**Critical**: Sub-agents must NEVER pass large content back to the orchestrator directly. They must:
-
-1. Write results to files in `/app/data/{YYYY-MM-DD}/{task-id}/`
-2. Create a `RESULTS.md` summary file with: task summary, output files list, key findings
-3. Report back ONLY the file path(s) to the orchestrator
-4. Create a `.manifest.json` listing all output files with descriptions
-
-This prevents context window bloat and keeps the orchestrator efficient.
-
-### Spawn Prompt Template
-
-When spawning a sub-agent, the orchestrator MUST include:
-
-```
-Task: <description of what to do>
-Result path: /app/data/YYYY-MM-DD/task-id/
-Task type: <one-shot | recurring>
-Save memory: <yes | no>
-Current date: YYYY-MM-DD
-Context: <relevant background information>
-```
 
 ## Data Paths
 
 | Path | Purpose | Used By |
 |------|---------|---------|
-| `/app/results/` | Final output files delivered to user | Main agent only |
-| `/opt/data/` | Agent files: configs, skills, workspace | Per agent files |
+| `/app/results/` | Final output files produced by agents | All agents |
 
 
 ## Memory and Learning
@@ -102,16 +76,6 @@ Agents should:
 - Mark recurring tasks and store useful reference data
 - The orchestrator always informs sub-agents whether a task is recurring and what to save
 
-## OpenClaw Configuration
-
-The agent system is configured in `src/config/openclaw.template.json` with:
-
-- `maxSpawnDepth: 2` — allows two levels of delegation
-- `maxChildrenPerAgent: 5` — max sub-agents per parent
-- `maxConcurrent: 8` — global concurrency cap
-- Each agent has its own workspace and model configuration
-- The main agent can spawn any other agent (`allowAgents: ["*"]`)
-- Research-analyzer can spawn web-searcher, data-extractor, and document-creator
 
 ## NATS Inter-Agent Communication
 

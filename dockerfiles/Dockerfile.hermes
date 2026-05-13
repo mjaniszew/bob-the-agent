@@ -15,12 +15,16 @@ RUN apt-get update && \
 # Install NATS Python client
 RUN pip3 install --no-cache-dir --break-system-packages nats-py==2.14.0
 
+# Install OpenCode CLI for coder agent
+RUN npm install -g opencode-ai@latest 2>/dev/null || echo "OpenCode install will be deferred to entrypoint"
+
 RUN mkdir -p /app/scripts
 COPY ./src/config/ /app/config/
 COPY ./src/scripts/ /app/scripts/
 COPY ./src/agents/ /app/agents/
 COPY ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/*
+
 RUN cd /app/scripts && npm install js-yaml@4.1.1
 
 # Set working directory for skills build
