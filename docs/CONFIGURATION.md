@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a multi-container architecture where each agent (main, researcher, simple) runs in its own container with its own configuration.
+Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a multi-container architecture where each agent (main, researcher, simple, coder) runs in its own container with its own configuration.
 
 ## Configuration Files
 
@@ -95,6 +95,26 @@ toolsets:
   - browser
 ```
 
+**Coder agent** (`src/agents/coder/hermes.partial.yml`):
+```yaml
+model:
+  default: glm-5.1:cloud
+  provider: custom
+  base_url: http://ollama:11434/v1
+custom_providers:
+  - name: ollama/glm-5.1:cloud
+    base_url: http://ollama:11434/v1
+    model: glm-5.1:cloud
+toolsets:
+  - hermes-cli
+  - browser
+agent:
+  max_turns: 120
+  gateway_timeout: 7200
+```
+
+The coder agent uses higher resource limits (4G/8G vs 2G/4G) and longer timeouts (7200s gateway_timeout, 120 max_turns) than other agents because coding tasks typically take longer to complete.
+
 **Merge behavior:**
 - Objects are deep-merged (nested keys override individually)
 - Arrays are replaced entirely (not concatenated)
@@ -112,6 +132,28 @@ Each agent also has identity and behavioral files that are copied to `/opt/data/
 | `src/agents/{name}/AGENTS.md` | Agent workspace instructions and conventions |
 | `src/agents/{name}/TOOLS.md` | Agent-specific tool notes and tips |
 
+### OpenCode Configuration (Coder Agent Only)
+
+The coder agent uses OpenCode CLI as its coding engine, configured via a template that is environment-substituted at container startup.
+
+**Template file:** `src/config/opencode.template.json`
+
+At startup, `coder-entrypoint.sh` generates the OpenCode config by replacing placeholders in the template:
+
+| Placeholder | Replaced With |
+|-------------|---------------|
+| `OLLAMA_BASE_URL_PLACEHOLDER` | Value of `OLLAMA_BASE_URL` env var |
+| `SEARXNG_BASE_URL_PLACEHOLDER` | Value of `SEARXNG_BASE_URL` env var |
+
+**Generated config location:** `~/.config/opencode/opencode.json`
+
+The OpenCode config defines:
+- **Provider**: Ollama with `glm-5.1:cloud` model
+- **Agents**: coder (16K token limit), task (8K token limit), title
+- **Tools**: Full tool profile with SearXNG web search
+- **Shell**: `/bin/bash -l`
+- **Auto-compact**: Enabled for long coding sessions
+
 ## Environment Variables
 
 ### Core Settings
@@ -121,7 +163,7 @@ Each agent also has identity and behavioral files that are copied to `/opt/data/
 | `LOG_LEVEL` | string | `info` | Logging level (debug, info, warn, error) |
 | `NODE_ENV` | string | `production` | Node environment |
 | `HERMES_YOLO_MODE` | string | `1` | Auto-approve mode (1=enabled) |
-| `AGENT_NAME` | string | `main` | Agent identity (main, researcher, simple) |
+| `AGENT_NAME` | string | `main` | Agent identity (main, researcher, simple, coder) |
 
 ### Model Providers
 
@@ -156,14 +198,16 @@ Each agent also has identity and behavioral files that are copied to `/opt/data/
 
 ### Service Architecture
 
-The compose file defines 6 services. All agent services share a single `bob-the-agent:latest` image, differentiated by the `AGENT_NAME` environment variable. Common configuration is shared via YAML anchors (`x-agent-image`, `x-agent-env`, `x-agent-healthcheck`, `x-agent-resources`).
+The compose file defines 8 services. All agent services share a single `bob-the-agent:latest` image, differentiated by the `AGENT_NAME` environment variable. Common configuration is shared via YAML anchors (`x-agent-image`, `x-agent-env`, `x-agent-healthcheck`, `x-agent-resources`). The coder agent uses a custom entrypoint (`coder-entrypoint.sh`) for its two-layer architecture.
 
 ```yaml
 services:
   ollama:          # LLM inference engine
+  nats:            # NATS messaging server for inter-agent communication
   agent-main:      # Main orchestrator agent (Hermes + Discord)
   researcher:      # Deep research specialist agent (Hermes)
   simple-agent:    # Simple/cheap task handler (Hermes)
+  coder:           # Software engineering specialist (Hermes + OpenCode CLI)
   searxng:         # Privacy-respecting metasearch engine
   valkey:          # Redis-compatible cache for SearXNG
 ```
@@ -181,6 +225,19 @@ x-agent-resources: &agent-resources
     memory: 4G
 ```
 
+The coder agent uses higher resource limits due to the demands of coding tasks (running both Hermes Agent and OpenCode CLI):
+
+```yaml
+coder:
+  deploy:
+    resources:
+      reservations:
+        cpus: 2
+        memory: 4G
+      limits:
+        memory: 8G
+```
+
 ### Volume Mounts
 
 | Host Path | Container Path | Service | Purpose |
@@ -188,6 +245,8 @@ x-agent-resources: &agent-resources
 | `./volumes/agent-main` | `/opt/data` | agent-main | Main agent workspace, config, memory, skills |
 | `./volumes/agent-researcher` | `/opt/data` | researcher | Researcher agent workspace |
 | `./volumes/agent-simple` | `/opt/data` | simple-agent | Simple agent workspace |
+| `./volumes/agent-coder` | `/opt/data` | coder | Coder agent workspace, config, memory, skills |
+| `./volumes/projects` | `/app/projects` | coder | Shared project workspace (git repos, code) |
 | `./volumes/results` | All agents | Final task output files |
 | `ollama_data` | `/root/.ollama` | ollama | Downloaded models |
 | `searxng_config` | `/etc/searxng/` | searxng | SearXNG configuration |
@@ -202,6 +261,7 @@ x-agent-resources: &agent-resources
 | `8642` | `8642` | agent-main Gateway |
 | `8101` | `8642` | researcher Gateway |
 | `8102` | `8642` | simple-agent Gateway |
+| `8103` | `8642` | coder Gateway |
 | `8888` | `8888` | SearXNG |
 
 ## Model Configuration
@@ -297,12 +357,14 @@ agent-main:
 ### Model Selection
 
 - Use cloud models (e.g., `kimi-k2.6:cloud`) for best quality
+- Use `glm-5.1:cloud` for coding tasks (coder agent's model, optimized for code)
 - Use `minimax-m2.7:cloud` for cheaper simple tasks
 - Use local models (e.g., `qwen3.5:2b-q4_K_M`) as fallback or for offline operation
 - The default template model `qwen3.5:2b-q4_K_M` is overridden by each agent's partial
 
 ### Agent Count
 
-The default setup runs 3 agent containers. For resource-constrained environments:
-- Run only `agent-main` for basic operation (comment out `researcher` and `simple-agent` in compose.yaml)
+The default setup runs 4 agent containers. For resource-constrained environments:
+- Run only `agent-main` for basic operation (comment out `researcher`, `simple-agent`, and `coder` in compose.yaml)
+- Commenting out the `coder` service saves the most resources (4G reservation, 8G limit)
 - Reduce CPU/memory reservations accordingly

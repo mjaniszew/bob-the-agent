@@ -9,8 +9,9 @@ The project uses a **multi-container architecture** built on the Hermes Agent fr
 - **agent-main** — Orchestrator that delegates tasks and provides the Discord bot interface
 - **researcher** — Deep research and analysis specialist
 - **simple-agent** — Lightweight handler for simple tasks
+- **coder** — Software engineering specialist using a two-layer architecture: Hermes Agent (supervisor/bridge) orchestrating OpenCode CLI (coding engine)
 
-All agents share an **Ollama** instance for LLM inference and a **SearXNG** search engine. Communication between agents uses Hermes' built-in `delegate_task` system.
+All agents share an **Ollama** instance for LLM inference and a **SearXNG** search engine. Communication between agents uses Hermes' built-in `delegate_task` system and **NATS** inter-agent messaging for cross-container delegation.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, container configuration, and data flow.
 

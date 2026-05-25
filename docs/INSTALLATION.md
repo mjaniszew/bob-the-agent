@@ -9,7 +9,7 @@
 | Storage | 20 GB | 50 GB |
 | GPU | Optional | NVIDIA with CUDA |
 
-**Note:** The default setup runs 3 agent containers (main, researcher, simple). For systems with less RAM, you can comment out `researcher` and `simple-agent` services in `compose.yaml` to run only the main agent (4 GB RAM minimum in that case).
+**Note:** The default setup runs 4 agent containers (main, researcher, simple, coder). The coder agent requires more resources (4G reservation, 8G limit) due to running both Hermes Agent and OpenCode CLI. For systems with less RAM, you can comment out `researcher`, `simple-agent`, and `coder` services in `compose.yaml` to run only the main agent (4 GB RAM minimum in that case).
 
 ## Prerequisites
 
@@ -95,7 +95,7 @@ docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
 # Start all services
 docker compose up -d
 
-# Check status (should show 6 running containers)
+# Check status (should show 8 running containers)
 docker compose ps
 ```
 
@@ -115,6 +115,8 @@ Expected containers:
 - `bob-the-agent` — Main orchestrator agent
 - `bob-the-agent-researcher` — Research specialist agent
 - `bob-the-agent-simple` — Simple task handler agent
+- `bob-the-agent-coder` — Software engineering specialist agent
+- `bob-the-agent-nats` — NATS inter-agent messaging
 - `bob-the-agent-searxng` — Web search engine
 - `bob-the-agent-valkey` — Cache for SearXNG
 
@@ -130,6 +132,9 @@ docker exec -it bob-the-agent-ollama ollama signin
 # Pull cloud model manifests
 docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 docker exec bob-the-agent-ollama ollama pull minimax-m2.7:cloud
+
+# Pull coder agent model (required for coder agent)
+docker exec bob-the-agent-ollama ollama pull glm-5.1:cloud
 ```
 
 ### Step 5: Verify Installation
@@ -143,6 +148,9 @@ curl http://localhost:8642/healthz
 
 # Check SearXNG
 curl http://localhost:8888/healthz
+
+# Check coder agent health (if running)
+docker compose logs coder --tail 5
 ```
 
 ### Step 6: Pair Discord Bot (Optional)
@@ -179,9 +187,11 @@ For detailed Discord setup instructions, see [Discord Setup](./DISCORD_SETUP.md)
 
 ### Run Only Main Agent (Low Resource)
 
-For systems with limited RAM, edit `compose.yaml` and comment out the `researcher` and `simple-agent` services:
+For systems with limited RAM, edit `compose.yaml` and comment out services you don't need. Commenting out the coder agent saves the most resources (8G memory limit):
 
 ```yaml
+# coder:
+#   ...
 # researcher:
 #   ...
 # simple-agent:

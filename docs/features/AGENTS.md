@@ -12,29 +12,29 @@ The system uses a **hub-and-spoke** orchestration pattern with OpenClaw's multi-
                     │  (Orchestrator)│
                     └──────┬─────────┘
                            │
-              ┌────────────┼─────────────┐
-              │            │             │            
-       ┌──────▼──────┐ ┌───▼────────┐ ┌──▼──────────┐ 
-       │ simple      │ │ researcher │ │ coder       │ 
-       │             │ │            │ │             │ 
-       └─────────────┘ └─────┬──────┘ └─────────────┘
-                             │
-              ┌──────────────┼
-              │                         
-      ┌───────▼──────┐ 
-      │ simple       │ 
-      │              │ 
-      └──────────────┘
+           ┌───────────────┼───────────────┐
+           │               │               │
+    ┌──────▼──────┐ ┌─────▼───────┐ ┌─────▼──────────┐
+    │ simple      │ │ researcher  │ │ coder          │
+    │             │ │             │ │ ┌────────────┐ │
+    │             │ │             │ │ │Hermes +    │ │
+    │             │ │             │ │ │OpenCode CLI│ │
+    └─────────────┘ └──────┬──────┘ │ └────────────┘ │
+                          │        └────────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │ simple      │
+                   └─────────────┘
 ```
 
 ### Agents
 
 | Agent | ID | Role | Model | Can Spawn |
 |-------|----|------|-------|-----------|
-| Main | `main` | Orchestrator — receives tasks, delegates to specialists, collects and synthesizes results | kimi-k2.5:cloud | All agents (`*`) |
+| Main | `main` | Orchestrator — receives tasks, delegates to specialists, collects and synthesizes results | kimi-k2.6:cloud | All agents (`*`) |
 | Simple Agent | `simple` | Finds information on the web using SearXNG, X.com, and Grok, handles simple tasks | minimax-m2.7:cloud | None |
-| Researcher | `researcher` | Researches topics and analyzes data by delegating search and extraction | kimi-k2.5:cloud | simple |
-| Coder | `coder` | Handles Software engineering tasks: coding, review, design | glm-5.1:cloud | None |
+| Researcher | `researcher` | Researches topics and analyzes data by delegating search and extraction | kimi-k2.6:cloud | simple |
+| Coder | `coder` | Handles Software engineering tasks: coding, review, design | glm-5.1:cloud | simple |
 
 ### Agent Hierarchy
 
@@ -110,6 +110,7 @@ Each agent container runs a `register-nats.py` background listener alongside the
 |----------|-----------|------|
 | `researcher` | bob-the-agent-researcher | Deep research and analysis |
 | `simple` | bob-the-agent-simple | Lightweight simple tasks |
+| `coder` | bob-the-agent-coder | Software engineering (coding, review, architecture) |
 
 ### Configuration
 

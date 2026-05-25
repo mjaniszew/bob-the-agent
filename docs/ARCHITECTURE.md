@@ -10,55 +10,60 @@ The system runs as multiple Docker containers managed by Docker Compose. Each sp
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Docker Compose                                │
 │                                                                         │
-│  ┌───────────┐                                                           │
-│  │  ollama   │                                                           │
-│  │  :11434   │                                                           │
-│  │           │                                                           │
-│  │  LLM      │                                                           │
-│  │  Inference│                                                           │
-│  └─────┬─────┘                                                           │
+│  ┌───────────┐                                                          │
+│  │  ollama   │                                                          │
+│  │  :11434   │                                                          │
+│  │           │                                                          │
+│  │  LLM      │                                                          │
+│  │  Inference│                                                          │
+│  └─────┬─────┘                                                          │
 │        │                                                                 │
-│   ┌────┴────────────────────────────────────────────┐                   │
-│   │         All agents depend on Ollama              │                   │
-│   │                                                   │                   │
-│   │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │                   │
-│   │  │ agent-main  │ │ researcher  │ │simple-agent │ │    coder     │ │                   │
-│   │  │  :8642      │ │             │ │             │ │ Hermes +     │ │                   │
-│   │  │             │ │             │ │             │ │ OpenCode CLI │ │                   │
-│   │  │ Hermes      │ │ Hermes      │ │ Hermes      │ │ Coding       │ │                   │
-│   │  │ Orchestrator│ │ Research    │ │ Simple      │ │ Specialist   │ │                   │
-│   │  │ + Discord   │ │ Specialist  │ │ Tasks       │ │              │ │                   │
-│   │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ │                   │
-│   └─────────┼───────────────┼───────────────┼───────────┼─────────────┘
-│             │               │               │                              │
-│             │    NATS Inter-Agent Messaging                                  │
-│             │    (agent.{id}.tasks / agent.{id}.results)                    │
-│             │               │               │                              │
-│        ┌────┴───────────────┴───────────────┴────────────┘                        │
-│        │               NATS Server                │                        │
-│        │               :4222 / :8222              │                        │
-│        └─────────────────────────────────────────┘                        │
-│                                                                         │
-│   ┌─────────┴───────────────┴───────────────┴─────────┐                   │
-│   │              SearXNG + Valkey                     │                   │
-│   │  ┌─────────────┐        ┌─────────────┐           │                   │
-│   │  │  searxng    │◄───────│   valkey    │           │                   │
-│   │  │   :8888     │        │   :6379     │           │                   │
-│   │  │ Web Search  │        │ Cache       │           │                   │
-│   │  └─────────────┘        └─────────────┘           │                   │
-│   └───────────────────────────────────────────────────┘                   │
-│                                                                         │
-│  ┌───────────────────────────────────────────────────────────────────┐   │
-│  │                        Docker Volumes                             │   │
-│  │  - ollama_data (models)                                           │   │
-│  │  - searxng_config, searxng_data (search engine)                  │   │
-│  │  - valkey_data (cache)                                           │   │
-│  │  - ./volumes/agent-main (main agent workspace & config)         │   │
-│  │  - ./volumes/agent-researcher (researcher workspace & config)    │   │
-│  │  - ./volumes/agent-simple (simple agent workspace & config)     │   │
-│  │  - ./volumes/results (task outputs)                              │   │
-│  └───────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
+│   ┌────┴────────────────────────────────────────────────────┐          │
+│   │         All agents depend on Ollama                      │          │
+│   │                                                          │          │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ │          │
+│   │  │main      │ │researcher│ │simple    │ │   coder     │ │          │
+│   │  │ :8642    │ │          │ │  agent   │ │ ┌────────┐ │ │          │
+│   │  │          │ │          │ │          │ │ │Hermes  │ │ │          │
+│   │  │ Hermes   │ │ Hermes   │ │ Hermes   │ │ │Supervis│ │ │          │
+│   │  │Orchestr. │ │ Research │ │ Simple   │ │ ├────────┤ │ │          │
+│   │  │+Discord  │ │          │ │ Tasks    │ │ │OpenCode│ │ │          │
+│   │  │          │ │          │ │          │ │ │  CLI   │ │ │          │
+│   │  └────┬─────┘ └────┬─────┘ └────┬─────┘ │ └───┬────┘ │ │          │
+│   └──────┼─────────────┼────────────┼───────┼─────┼──────┘          │
+│          │             │            │       │     │                  │
+│          └─────────────┼────────────┘       │     │                  │
+│                        │                    │     │                  │
+│             NATS Inter-Agent Messaging       │     │                  │
+│             (agent.{id}.tasks / .results)    │     │                  │
+│                        │                    │     │                  │
+│        ┌───────────────┴────────────────────┘     │                  │
+│        │           NATS Server                    │                  │
+│        │           :4222 / :8222                  │                  │
+│        └──────────────────────────────────────────┘                  │
+│                                                                      │
+│   ┌──────────────────────────────────────────────────┐              │
+│   │          SearXNG + Valkey                          │              │
+│   │  ┌──────────┐       ┌──────────┐                   │              │
+│   │  │ searxng  │◄──────│  valkey  │                   │              │
+│   │  │  :8888   │       │  :6379   │                   │              │
+│   │  │Web Search│       │  Cache   │                   │              │
+│   │  └──────────┘       └──────────┘                   │              │
+│   └──────────────────────────────────────────────────┘              │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                      Docker Volumes                           │   │
+│  │  - ollama_data (models)                                      │   │
+│  │  - searxng_config, searxng_data (search engine)              │   │
+│  │  - valkey_data (cache)                                       │   │
+│  │  - ./volumes/agent-main (main agent workspace & config)      │   │
+│  │  - ./volumes/agent-researcher (researcher workspace & config) │   │
+│  │  - ./volumes/agent-simple (simple agent workspace & config)  │   │
+│  │  - ./volumes/agent-coder (coder agent workspace & config)    │   │
+│  │  - ./volumes/projects (shared project workspace for coder)   │   │
+│  │  - ./volumes/results (task outputs)                          │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Inter-Agent Communication
@@ -101,6 +106,44 @@ The `agent-to-agent` skill provides the sending interface, while `register-nats.
 | `simple-agent` | `minimax-m2.7:cloud` (via Ollama) | Simple task handler — lightweight, cost-effective model for straightforward tasks |
 | `coder` | `glm-5.1:cloud` (via Ollama) | Coding specialist — Hermes Agent orchestrating OpenCode CLI for software engineering tasks |
 
+### Coder Agent: Two-Layer Architecture
+
+Unlike other agents that use a single Hermes Agent instance, the coder agent uses a **two-layer architecture** where Hermes acts as a supervisor and communication bridge, and OpenCode CLI serves as the coding engine:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Coder Agent Container                         │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  Layer 1: Hermes Agent (Supervisor/Bridge)                  ││
+│  │                                                             ││
+│  │  - Receives tasks via NATS (agent.coder.tasks)              ││
+│  │  - Translates tasks into OpenCode prompts                   ││
+│  │  - Monitors OpenCode via terminal/process tools             ││
+│  │  - Reports results back to main agent via NATS              ││
+│  │  - Sends status updates for long-running tasks              ││
+│  │                                                             ││
+│  │  Communication:  terminal() + process() tools               ││
+│  │                  ──────────────────────                     ││
+│  │                  ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                     ││
+│  ├─────────────────────────────────────────────────────────────┤│
+│  │  Layer 2: OpenCode CLI (Coding Engine)                      ││
+│  │                                                             ││
+│  │  - Executes coding tasks (write, refactor, debug, review)   ││
+│  │  - Operates on repos in /app/projects/                     ││
+│  │  - Uses glm-5.1:cloud model via Ollama                     ││
+│  │  - Supports one-shot (opencode run) and                    ││
+│  │    interactive modes                                        ││
+│  │  - Configured via opencode.json (env-substituted template)  ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  Volumes:                                                       │
+│  - /opt/data         <- agent workspace (config, SOUL.md, etc.) │
+│  - /app/projects     <- shared git repos and code              │
+│  - /app/results      <- task output files                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Configuration Flow
 
 Each agent container uses a two-stage startup process that merges a shared Hermes template with agent-specific overrides:
@@ -129,6 +172,32 @@ Each agent container uses a two-stage startup process that merges a shared Herme
 │  3. Hermes Agent starts                                      │
 │     └── Uses merged config from /opt/data/config.yaml        │
 └──────────────────────────────────────────────────────────────┘
+```
+
+### Coder Agent Startup Flow
+
+The coder agent uses a custom entrypoint (`coder-entrypoint.sh`) that extends the standard startup with OpenCode CLI installation and configuration:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                Coder Container Startup Flow                       │
+│                                                                   │
+│  coder-entrypoint.sh                                             │
+│     ├── Step 1: Generate Hermes config (same as standard)        │
+│     │         (generate-config.sh + partial merge)               │
+│     ├── Step 2: Install OpenCode CLI                              │
+│     │         (npm install -g opencode-ai@latest)                │
+│     │         (fallback: curl install from opencode.ai)          │
+│     ├── Step 3: Generate OpenCode config                         │
+│     │         (env-substitute opencode.template.json ->           │
+│     │          ~/.config/opencode/opencode.json)                 │
+│     ├── Step 4: Prepare projects workspace                       │
+│     │         (mkdir -p /app/projects)                           │
+│     ├── Step 5: Start NATS listener                              │
+│     │         (register-nats.py &)                               │
+│     └── Step 6: Start Hermes gateway                             │
+│               (exec tini -- entrypoint.sh gateway run)           │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Files
@@ -206,38 +275,37 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 │                        ▼                                             │
 │                  Main Agent (Orchestrator)                            │
 │                        │                                             │
-│           ┌────────────┼──────────────┐                              │
-│           │            │              │                               │
-│           ▼            ▼              ▼                               │
-│     delegate_task  NATS messaging  direct execution                  │
-│     (in-process)  (cross-container)                                 │
-│           │            │                                              │
-│           ▼            ▼                                              │
-│     researcher    simple-agent                                       │
-│     (deep research) (simple tasks)                                    │
-│           │            │                                              │
-│           ▼            ▼                                              │
-│    ┌─────────────────────────────────────┐                            │
-│    │   /opt/data/ (agent workspace)     │                            │
-│    │   - SOUL.md, AGENTS.md, TOOLS.md   │                            │
-│    │   - memory/ (daily notes)          │                            │
-│    │   - config.yaml (Hermes config)    │                            │
-│    │   - skills/                         │                            │
-│    │   - nats-messages/ (inter-agent)    │                            │
-│    └─────────────────────────────────────┘                            │
+│           ┌────────────┼──────────────┬──────────────┐               │
+│           │            │              │              │                │
+│           ▼            ▼              ▼              ▼                │
+│     delegate_task  NATS messaging  NATS messaging  direct          │
+│     (in-process)  (cross-container)              execution          │
+│           │            │              │                              │
+│           ▼            ▼              ▼                              │
+│     researcher    simple-agent       coder                          │
+│     (deep research) (simple tasks)  (Hermes + OpenCode)              │
+│           │            │              │                              │
+│           ▼            ▼              ▼                              │
+│    ┌─────────────────────────────────────────────────────┐          │
+│    │   /opt/data/ (agent workspace)                      │          │
+│    │   - SOUL.md, AGENTS.md, TOOLS.md                    │          │
+│    │   - memory/ (daily notes)                           │          │
+│    │   - config.yaml (Hermes config)                     │          │
+│    │   - skills/                                         │          │
+│    │   - nats-messages/ (inter-agent)                    │          │
+│    └─────────────────────────────────────────────────────┘          │
 │                        │                                             │
 │                        ▼                                             │
 │                 ./volumes/results/                                    │
 │              (final output to user)                                  │
-│                 /opt/data/ (agent workspace output)                  │
 │                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐    │
-│  │                    External Services                          │    │
-│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌─────────┐  │    │
-│  │  │ SearXNG  │  │ X.com API    │  │ xAI Grok │  │ AWS S3  │  │    │
-│  │  │  :8888   │  │ (via x-com)  │  │ (grok)   │  │         │  │    │
-│  │  └──────────┘  └──────────────┘  └──────────┘  └─────────┘  │    │
-│  └──────────────────────────────────────────────────────────────┘    │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    External Services                          │   │
+│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌─────────┐  │   │
+│  │  │ SearXNG  │  │ X.com API    │  │ xAI Grok │  │ AWS S3  │  │   │
+│  │  │  :8888   │  │ (via x-com)  │  │ (grok)   │  │         │  │   │
+│  │  └──────────┘  └──────────────┘  └──────────┘  └─────────┘  │   │
+│  └──────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -288,7 +356,7 @@ See `.env.template` for all configurable variables:
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
 | `USER_AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
 | `USER_AWS_S3_REGION` | For AWS S3 | S3 bucket region |
-| `AGENT_NAME` | No | Agent identity name (main, researcher, simple) |
+| `AGENT_NAME` | No | Agent identity name (main, researcher, simple, coder) |
 | `HERMES_YOLO_MODE` | No | Auto-approve mode (1=enabled, 0=manual approval) |
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |
 | `NATS_URL` | No | NATS server URL (default: nats://nats:4222) |
