@@ -189,8 +189,8 @@ The coder agent uses a custom entrypoint (`coder-entrypoint.sh`) that extends th
 │     │         (npm install -g opencode-ai@latest)                │
 │     │         (fallback: curl install from opencode.ai)          │
 │     ├── Step 3: Generate OpenCode config                         │
-│     │         (env-substitute opencode.template.json ->           │
-│     │          ~/.config/opencode/opencode.json)                 │
+│     │         (env-substitute opencode.template.jsonc ->           │
+│     │          ~/.config/opencode/opencode.jsonc)                 │
 │     ├── Step 4: Prepare projects workspace                       │
 │     │         (mkdir -p /app/projects)                           │
 │     ├── Step 5: Start NATS listener                              │
@@ -207,7 +207,7 @@ The coder agent uses a custom entrypoint (`coder-entrypoint.sh`) that extends th
 | `src/config/hermes.template.yaml` | Shared Hermes config template (model defaults, toolsets, agent settings) |
 | `src/agents/{name}/hermes.partial.yml` | Per-agent config overrides (model, toolsets, providers) |
 | `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
-| `src/config/opencode.template.json` | OpenCode CLI config template for coder agent (env-substituted at startup) |
+| `src/config/opencode.template.jsonc` | OpenCode CLI config template for coder agent (env-substituted at startup) |
 | `src/agents/{name}/IDENTITY.md` | Agent identity metadata |
 | `src/agents/{name}/AGENTS.md` | Agent workspace instructions |
 | `src/agents/{name}/TOOLS.md` | Agent tool-specific notes |

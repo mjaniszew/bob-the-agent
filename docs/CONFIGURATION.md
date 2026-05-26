@@ -136,7 +136,7 @@ Each agent also has identity and behavioral files that are copied to `/opt/data/
 
 The coder agent uses OpenCode CLI as its coding engine, configured via a template that is environment-substituted at container startup.
 
-**Template file:** `src/config/opencode.template.json`
+**Template file:** `src/config/opencode.template.jsonc`
 
 At startup, `coder-entrypoint.sh` generates the OpenCode config by replacing placeholders in the template:
 

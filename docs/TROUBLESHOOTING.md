@@ -191,7 +191,7 @@ docker compose logs coder
    ```
 2. Check if the template exists:
    ```bash
-   docker exec bob-the-agent-coder cat /app/config/opencode.template.json
+   docker exec bob-the-agent-coder cat /app/config/opencode.template.jsonc
    ```
 3. Remove existing config and restart to force regeneration:
    ```bash

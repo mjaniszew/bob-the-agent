@@ -125,7 +125,7 @@ describe('Coder Agent hermes.partial.yml', () => {
 // ============================================================
 
 describe('OpenCode Template Config', () => {
-  const templatePath = path.join(PROJECT_ROOT, 'src/config/opencode.template.json');
+  const templatePath = path.join(PROJECT_ROOT, 'src/config/opencode.template.jsonc');
 
   it('should exist', () => {
     expect(fs.existsSync(templatePath)).toBe(true);
@@ -203,7 +203,7 @@ describe('Coder Entrypoint Script', () => {
 
   it('should generate opencode config from template', () => {
     const content = fs.readFileSync(scriptPath, 'utf-8');
-    expect(content).toContain('opencode.template.json');
+    expect(content).toContain('opencode.template.jsonc');
     expect(content).toContain('OLLAMA_BASE_URL');
     expect(content).toContain('sed');
   });
@@ -316,7 +316,7 @@ describe('Main Agent SOUL.md - Coder Delegation', () => {
 // ============================================================
 
 describe('OpenCode Template Env Substitution', () => {
-  const templatePath = path.join(PROJECT_ROOT, 'src/config/opencode.template.json');
+  const templatePath = path.join(PROJECT_ROOT, 'src/config/opencode.template.jsonc');
 
   it('should produce valid JSON after placeholder substitution', () => {
     const content = fs.readFileSync(templatePath, 'utf-8');
@@ -388,7 +388,7 @@ describeDocker('Docker Integration - Coder Agent', () => {
 
   it('should have OpenCode config generated', () => {
     const result = execSync(
-      'docker exec bob-the-agent-coder cat /home/node/.opencode/opencode.json',
+      'docker exec bob-the-agent-coder cat /home/node/.opencode/opencode.jsonc',
       { encoding: 'utf-8', timeout: 10000 }
     );
     expect(result).toContain('ollama');

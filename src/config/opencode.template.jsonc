@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "OLLAMA_BASE_URL_PLACEHOLDER/v1",
+        "apiKey": "opencode"
+      },
+      "models": {
+        "glm-5.1:cloud": {
+          "name": "GLM-5.1 Cloud",
+          "reasoning": true,
+          "limit": {
+            "context": 256000,
+            "output": 25600
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "build": {
+      "model": "ollama/glm-5.1:cloud",
+      "mode": "primary",
+      "temperature": 0.1,
+      "maxTokens": 16000
+    },
+    "plan": {
+      "model": "ollama/glm-5.1:cloud",
+      "mode": "primary",
+      "temperature": 0.1,
+      "maxTokens": 16000
+    },
+    "general": {
+      "model": "ollama/glm-5.1:cloud",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "maxTokens": 16000,
+      "reasoningEffort": "medium"
+    },
+    "explore": {
+      "model": "ollama/glm-5.1:cloud",
+      "mode": "subagent",
+      "temperature": 0.3,
+      "maxTokens": 8000,
+      "reasoningEffort": "medium"
+    },
+    "code-reviewer": {
+      "description": "Reviews code for best practices and potential issues",
+      "mode": "subagent",
+      "model": "ollama/glm-5.1:cloud",
+      "temperature": 0.7,
+      "maxTokens": 8000,
+      "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    }
+  }
+}

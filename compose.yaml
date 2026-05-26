@@ -135,6 +135,7 @@ services:
     environment:
       <<: *agent-env
       AGENT_NAME: coder
+      OPENCODE_CONFIG: /root/.config/opencode/opencode.jsonc
     volumes:
       - ./volumes/agent-coder:/opt/data
       - ./volumes/results:/app/results

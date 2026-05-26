@@ -57,12 +57,9 @@ fi
 
 echo "OpenCode CLI version: $(opencode --version 2>/dev/null || echo 'not available')"
 
-# ===========================================
-# Step 3: Generate OpenCode config from template
-# ===========================================
-OPENCODE_CONFIG_DIR="~/.config/opencode"
-OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/opencode.json"
-OPENCODE_TEMPLATE="/app/config/opencode.template.json"
+OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
+OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/opencode.jsonc"
+OPENCODE_TEMPLATE="/app/config/opencode.template.jsonc"
 
 if [[ ! -f "$OPENCODE_CONFIG_FILE" ]]; then
   echo "OpenCode config not found, generating from template..."
@@ -85,6 +82,9 @@ if [[ ! -f "$OPENCODE_CONFIG_FILE" ]]; then
 else
   echo "OpenCode config already exists, skipping generation."
 fi
+
+export OPENCODE_CONFIG="$OPENCODE_CONFIG_FILE"
+echo "OPENCODE_CONFIG set to $OPENCODE_CONFIG"
 
 # ===========================================
 # Step 4: Prepare projects workspace directory
