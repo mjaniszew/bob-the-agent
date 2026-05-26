@@ -46,6 +46,7 @@ Do NOT use this skill for:
 ## Available agents
 
 Following specialized agents are available:
+
 ### **Simple Agent** (target_id: simple)
 For general simple tasks.
 

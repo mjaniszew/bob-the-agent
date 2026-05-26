@@ -73,6 +73,7 @@ services:
     volumes:
       - ./volumes/agent-main:/opt/data
       - ./volumes/results:/app/results
+      - ./volumes/projects:/app/projects
     healthcheck: *agent-healthcheck
     deploy:
       resources: *agent-resources
