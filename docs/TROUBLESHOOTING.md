@@ -114,7 +114,7 @@
    ```bash
    docker exec bob-the-agent ping ollama
    ```
-4. Verify gateway port is available (8642 for main, 8101 for researcher, 8102 for simple)
+4. Verify gateway port is available (8642 for main, 8101 for researcher, 8102 for simple, 8103 for coder)
 5. Check volume mounts exist:
    ```bash
    ls -la volumes/agent-main/
@@ -151,7 +151,90 @@ docker compose logs researcher
 
 # Simple agent
 docker compose logs simple-agent
+
+# Coder agent
+docker compose logs coder
 ```
+
+#### Coder Agent Issues
+
+##### OpenCode CLI Not Installed
+
+**Symptoms**: Coder agent logs show "opencode: command not found" or coding tasks fail
+
+**Solutions**:
+1. Check coder logs for installation errors:
+   ```bash
+   docker compose logs coder | grep -i opencode
+   ```
+2. Manually install OpenCode CLI in the container:
+   ```bash
+   docker exec bob-the-agent-coder npm install -g opencode-ai@latest
+   ```
+3. Verify installation:
+   ```bash
+   docker exec bob-the-agent-coder opencode --version
+   ```
+4. Restart the coder container to retry auto-installation:
+   ```bash
+   docker compose restart coder
+   ```
+
+##### OpenCode Config Not Generated
+
+**Symptoms**: OpenCode uses default configuration instead of project-specific settings
+
+**Solutions**:
+1. Check if the config file exists:
+   ```bash
+   docker exec bob-the-agent-coder cat ~/.config/opencode/opencode.json
+   ```
+2. Check if the template exists:
+   ```bash
+   docker exec bob-the-agent-coder cat /app/config/opencode.template.jsonc
+   ```
+3. Remove existing config and restart to force regeneration:
+   ```bash
+   docker exec bob-the-agent-coder rm -f ~/.config/opencode/opencode.json
+   docker compose restart coder
+   ```
+
+##### Coder Agent Out of Memory
+
+**Symptoms**: Coder container crashes or is OOM-killed during large coding tasks
+
+**Solutions**:
+1. The coder agent has higher memory limits (8G) than other agents (4G). If this is still insufficient:
+   ```yaml
+   coder:
+     deploy:
+       resources:
+         limits:
+           memory: 12G
+   ```
+2. Check current memory usage:
+   ```bash
+   docker stats bob-the-agent-coder
+   ```
+3. For resource-constrained systems, disable the coder agent and delegate coding tasks to the main agent instead.
+
+##### Projects Workspace Issues
+
+**Symptoms**: OpenCode cannot find or access project files
+
+**Solutions**:
+1. Verify the projects directory exists and is mounted:
+   ```bash
+   docker exec bob-the-agent-coder ls -la /app/projects
+   ```
+2. Check host-side directory:
+   ```bash
+   ls -la ./volumes/projects/
+   ```
+3. Ensure the directory has proper permissions:
+   ```bash
+   docker exec bob-the-agent-coder chmod -R 755 /app/projects
+   ```
 
 ### SearXNG Issues
 
@@ -240,6 +323,7 @@ docker compose logs
 docker compose logs -f agent-main
 docker compose logs -f researcher
 docker compose logs -f simple-agent
+docker compose logs -f coder
 
 # Check container status
 docker compose ps
@@ -252,6 +336,7 @@ docker stats
 
 # Enter container shell
 docker exec -it bob-the-agent bash
+docker exec -it bob-the-agent-coder bash
 
 # Test main agent health
 curl http://localhost:8642/healthz
@@ -267,6 +352,15 @@ docker exec bob-the-agent cat /opt/data/config.yaml
 
 # View agent SOUL.md
 docker exec bob-the-agent cat /opt/data/SOUL.md
+
+# Verify OpenCode is installed in coder container
+docker exec bob-the-agent-coder opencode --version
+
+# Check coder agent volume
+ls -la volumes/agent-coder/
+
+# Check projects workspace
+ls -la volumes/projects/
 ```
 
 ## Getting Help

@@ -5,13 +5,14 @@ A containerized multi-agent system that runs 24/7 autonomously via Docker Compos
 
 ## Features
 
-- **Multi-Agent Architecture** — Specialized agents (orchestrator, researcher, simple tasks) each in their own container
+- **Multi-Agent Architecture** — Specialized agents (orchestrator, researcher, simple tasks, coder) each in their own container
 - **Autonomous Operation** — Runs tasks without user interaction via Discord or CLI
 - **Local & Cloud Models** — Uses Ollama for both local and cloud model inference
 - **Web Search** — Built-in SearXNG metasearch engine (free, no API keys needed)
 - **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, agent to agent communication
 - **Discord Bot** — Chat with your agent through Discord
-- **Delegation** — Main agent delegates specialized tasks to researcher and simple agents using NATS communication
+- **Delegation** — Main agent delegates specialized tasks to researcher, simple, and coder agents using NATS communication
+- **Coding Agent** — Dedicated coder agent with two-layer architecture: Hermes Agent supervising OpenCode CLI for software engineering tasks
 - **Docker** — Easy deployment with Docker Compose
 
 ## Quick Start
@@ -95,29 +96,34 @@ See [Discord Setup](docs/DISCORD_SETUP.md) for detailed instructions.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Docker Compose                           │
-│                                                                 │
-│  ┌───────────┐                                                  │
-│  │  ollama   │  LLM Inference (local + cloud models)           │
-│  │  :11434   │                                                  │
-│  └─────┬─────┘                                                  │
-│        │                                                         │
-│  ┌─────┴──────────────────────────────────────┐                 │
-│  │                                             │                 │
-│  │  ┌─────────────┐ ┌──────────┐ ┌──────────┐│                 │
-│  │  │ agent-main  │ │researcher│ │  simple  │ │                 │
-│  │  │  :8642      │ │  :8101   │ │  :8102   │ │                 │
-│  │  │ Orchestrator│ │ Research │ │  Simple  │ │                 │
-│  │  │ + Discord   │ │          │ │  Agent   │ │                 │
-│  │  └─────────────┘ └──────────┘ └──────────┘ │                 │
-│  └─────────────────────────────────────────────┘                 │
-│                                                                 │
-│  ┌─────────────┐  ┌─────────┐                                  │
-│  │  SearXNG    │  │ Valkey  │  Web Search + Cache              │
-│  │   :8888     │◄─┤ :6379   │                                  │
-│  └─────────────┘  └─────────┘                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        Docker Compose                            │
+│                                                                  │
+│  ┌───────────┐                                                   │
+│  │  ollama   │  LLM Inference (local + cloud models)             │
+│  │  :11434   │                                                   │
+│  └─────┬─────┘                                                   │
+│        │                                                          │
+│  ┌─────┴──────────────────────────────────────────────┐         │
+│  │                                                     │         │
+│  │  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ │         │
+│  │  │main      │ │researcher│ │ simple │ │  coder    │ │         │
+│  │  │ :8642    │ │          │ │        │ │┌────────┐│ │         │
+│  │  │Orchestr. │ │ Research │ │ Simple │ ││Hermes +││ │         │
+│  │  │+Discord  │ │          │ │  Agent │ ││OpenCode││ │         │
+│  │  │          │ │          │ │        │ ││  CLI   ││ │         │
+│  │  └──────────┘ └──────────┘ └────────┘ │└────────┘│ │         │
+│  └───────────────────────────────────────┼──────────┘         │
+│                                          │                      │
+│        ┌─────────────────────────────────┘                      │
+│        │  NATS (:4222) Inter-Agent Messaging                    │
+│        └─────────────────────────────────┘                      │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────┐  Web Search + Cache              │
+│  │  SearXNG    │  │ Valkey  │                                   │
+│  │   :8888     │◄─┤ :6379   │                                   │
+│  └─────────────┘  └─────────┘                                   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed diagrams and documentation.
@@ -149,11 +155,14 @@ Each agent has its own configuration in `src/agents/{name}/hermes.partial.yml` t
 | `./volumes/agent-main` | Main agent workspace (config, memory, skills) |
 | `./volumes/agent-researcher` | Researcher agent workspace |
 | `./volumes/agent-simple` | Simple agent workspace |
+| `./volumes/agent-coder` | Coder agent workspace (config, memory, skills) |
+| `./volumes/projects` | Shared project workspace (git repos for coder) |
 
 ## Skills
 
 Built-in skills for:
 - agent to agent communication
+- OpenCode CLI integration (coder agent coding engine)
 - SearXNG web search capabilities
 - x-com(Twitter) searching directly
 - extracting data from URLs/documents and performing calculations.
@@ -168,10 +177,11 @@ bob-the-agent/
 ├── dockerfiles/
 │   └── Dockerfile.hermes     # Hermes Agent container
 ├── src/
-│   ├── agents/               # Agent definitions (main, researcher, simple)
+│   ├── agents/               # Agent definitions (main, researcher, simple, coder)
 │   │   ├── main/             # Main orchestrator
 │   │   ├── researcher/       # Research specialist
-│   │   └── simple/           # Simple task handler
+│   │   ├── simple/           # Simple task handler
+│   │   └── coder/            # Coding specialist (Hermes + OpenCode CLI)
 │   ├── config/               # Hermes and SearXNG configuration
 │   ├── scripts/              # Container setup and skill runner
 │   └── skills/               # Skill implementations

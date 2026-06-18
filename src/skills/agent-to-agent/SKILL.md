@@ -26,6 +26,7 @@ Common delegation triggers:
 - Any web search → `simple` agent
 - Files upload using skills → `simple` agent
 - Keywords: "research", "analyze", "synthesize", "compare", "find sources" → `researcher` agent
+- Keywords: "code", "implement", "refactor", "debug", "review code", "architecture", "fix bug" → `coder` agent
 - Data extraction from web pages → `simple` agent
 - Summaries, document creation → `simple` agent
 
@@ -45,6 +46,7 @@ Do NOT use this skill for:
 ## Available agents
 
 Following specialized agents are available:
+
 ### **Simple Agent** (target_id: simple)
 For general simple tasks.
 
@@ -76,6 +78,23 @@ When NOT to Use:
  - for coding tasks
 
 Timeout: 60 minutes
+
+### **Coder Agent** (target_id: coder)
+For software engineering tasks: coding, code review, architecture planning.
+
+When to Use:
+ - coding tasks (write code, implement features, refactor, fix bugs)
+ - code review tasks (review PRs, review code quality)
+ - architecture planning and design
+ - git operations on project repositories
+ - any task involving software development or modification of code
+
+When NOT to Use:
+ - simple web search (use `simple` agent instead)
+ - deep research/analysis (use `researcher` agent instead)
+ - tasks that don't involve coding or software engineering
+
+Timeout: 120 minutes
 
 ## Architecture
 
@@ -154,6 +173,7 @@ Send a task to a target agent via NATS.
 **Available target agents:**
 - `researcher` — Deep research and analysis specialist
 - `simple` — Lightweight handler for simple tasks
+- `coder` — Software engineering specialist (coding, review, architecture)
 
 ### check_messages
 
