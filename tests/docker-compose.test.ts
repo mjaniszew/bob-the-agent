@@ -46,5 +46,107 @@ describe('compose.yaml infrastructure services', () => {
   });
 });
 
-// The single-agent-service assertions are added in Task 4 (compose refactor),
-// deliberately, so this file evolves TDD-style per task.
+describe('compose.yaml single-agent architecture', () => {
+  test('has exactly one agent service named "agent"', () => {
+    const c = composeText();
+    expect(c).toMatch(/^  agent:\s*$/m);
+    expect(c).not.toMatch(/^  agent-main:\s*$/m);
+    expect(c).not.toMatch(/^  researcher:\s*$/m);
+    expect(c).not.toMatch(/^  simple-agent:\s*$/m);
+    expect(c).not.toMatch(/^  coder:\s*$/m);
+  });
+
+  test('has no NATS service and no NATS url anywhere', () => {
+    const c = composeText();
+    expect(c).not.toMatch(/^  nats:\s*$/m);
+    expect(c).not.toMatch(/NATS_URL/);
+    expect(c).not.toMatch(/nats:/);
+  });
+
+  test('no per-service AGENT_NAME env pattern remains', () => {
+    expect(composeText()).not.toMatch(/AGENT_NAME/);
+  });
+
+  test('agent service mounts single volume ./volumes/agent at /opt/data', () => {
+    const c = composeText();
+    expect(c).toMatch(/\.\/volumes\/agent:\/opt\/data/);
+    expect(c).not.toMatch(/agent-main:\/opt\/data/);
+    expect(c).not.toMatch(/agent-researcher:\/opt\/data/);
+    expect(c).not.toMatch(/agent-simple:\/opt\/data/);
+    expect(c).not.toMatch(/agent-coder:\/opt\/data/);
+  });
+
+  test('agent keeps results and projects mounts', () => {
+    const c = composeText();
+    expect(c).toMatch(/\.\/volumes\/results:\/app\/results/);
+    expect(c).toMatch(/\.\/volumes\/projects:\/app\/projects/);
+  });
+
+  test('agent resource limits at least match old coder service (4G / 8G)', () => {
+    const c = composeText();
+    expect(c).toMatch(/memory: 4G/);
+    expect(c).toMatch(/memory: 8G/);
+  });
+
+  test('agent runs bootstrap.sh as command and exposes 8642', () => {
+    const c = composeText();
+    expect(c).toMatch(/command: \["\/app\/scripts\/bootstrap\.sh"\]/);
+    expect(c).toMatch(/8642:8642/);
+  });
+
+  test('agent no longer sets HERMES_YOLO_MODE (denylisted in v0.21)', () => {
+    expect(composeText()).not.toMatch(/HERMES_YOLO_MODE/);
+  });
+
+  test('agent sets OPENCODE_CONFIG at compose level (docker exec can verify it)', () => {
+    // Under /opt/data — the CMD is dropped to the `hermes` user by the image's
+    // main-wrapper (s6-setuidgid), so /root/.config is unwritable.
+    expect(composeText()).toMatch(/OPENCODE_CONFIG: \/opt\/data\/\.config\/opencode\/opencode\.jsonc/);
+  });
+
+  test('agent depends on ollama and searxng, not nats', () => {
+    const c = composeText();
+    expect(c).toMatch(/depends_on:\s*\n\s+ollama:\s*\n\s+condition: service_healthy\s*\n\s+searxng:/);
+    expect(c).not.toMatch(/nats:/);
+  });
+});
+
+// Runtime tests against the real stack — executed in Task 9 with DOCKER_TESTS=1.
+describe('running stack (DOCKER_TESTS=1 only)', () => {
+  const maybe = dockerAvailable ? describe : describe.skip;
+
+  maybe('single-container runtime', () => {
+    test('agent container becomes healthy', () => {
+      for (let i = 0; i < 12; i++) {
+        const s = require('child_process').execSync(
+          'docker inspect --format "{{.State.Health.Status}}" bob-the-agent',
+          { encoding: 'utf8' }).trim();
+        if (s === 'healthy') return;
+        require('child_process').execSync('sleep 5');
+      }
+      throw new Error('bob-the-agent never became healthy');
+    }, 120_000);
+
+    test('multiplexed gateway port 8642 reachable from host', () => {
+      require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8642"');
+    });
+
+    test('profiles researcher/simple/coder provisioned in /opt/data', () => {
+      const out = require('child_process').execSync(
+        'docker exec bob-the-agent ls /opt/data/profiles', { encoding: 'utf8' });
+      expect(out).toMatch(/researcher/);
+      expect(out).toMatch(/simple/);
+      expect(out).toMatch(/coder/);
+    });
+
+    test('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {
+      // Deterministic assertion for a persisted test: the one-shot run exits 0
+      // and returns non-empty output. The strict "pong" word check stays in the
+      // manual Task 9 Step 4 gate — LLM replies are inherently non-deterministic.
+      const out = require('child_process').execSync(
+        'docker exec bob-the-agent hermes -p simple chat --oneshot -q "Reply with the single word: pong"',
+        { encoding: 'utf8', timeout: 300_000, stdio: 'pipe' });
+      expect(out.trim().length).toBeGreaterThan(0);
+    }, 300_000);
+  });
+});

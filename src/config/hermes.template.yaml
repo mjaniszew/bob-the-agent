@@ -305,7 +305,11 @@ slack:
 mattermost:
   channel_prompts: {}
 approvals:
-  mode: manual
+  # 'off' is the v0.21 replacement for the denylisted HERMES_YOLO_MODE env var:
+  # full approval bypass across interactive, gateway, cron and unattended
+  # contexts (required for 24/7 unattended operation). Valid modes:
+  # manual | smart | off.
+  mode: off
   timeout: 60
   cron_mode: deny
   mcp_reload_confirm: true
