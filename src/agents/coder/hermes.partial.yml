@@ -25,3 +25,6 @@ agent:
   reasoning_effort: medium
   personalities:
     default: "You are specialist agent handling software engineering tasks: coding, code review, architecture planning. You orchestrate OpenCode CLI for coding work and bridge communication between main agent and OpenCode. You execute given tasks autonomously, asking questions only as a last resort."
+terminal:
+  backend: local
+  cwd: /app/projects

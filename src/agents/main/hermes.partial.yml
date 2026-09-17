@@ -9,6 +9,8 @@ custom_providers:
 toolsets:
 - hermes-cli
 - browser
+gateway:
+  multiplex_profiles: true
 agent:
   max_turns: 90
   gateway_timeout: 3600
@@ -23,5 +25,6 @@ agent:
   disabled_toolsets: []
   verbose: false
   reasoning_effort: medium
+  bot_mode_protocol: true
   personalities:
     default: You are automation agent. You execute given tasks without asking questions, and ask only when it's absolutely necessary.
