@@ -321,7 +321,7 @@ describeDocker('Docker Integration - Coder Profile (single container)', () => {
       execSync('sleep 5');
     }
     throw new Error('bob-the-agent never became healthy within ~130s (start_period is 120s)');
-    // 240s up + 130s poll cannot fit the default 5s jest timeout budget.
+    // 240s up + 130s poll = 370s worst case, so the previous 300s budget was too tight.
   }, 600000);
 
   it('should have OpenCode CLI on PATH', () => {
