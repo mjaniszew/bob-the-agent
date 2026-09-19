@@ -7,7 +7,7 @@ export { dataExtraction } from './data-extraction/index.js';
 export { mathOperations } from './math-operations/index.js';
 export { xComSearch } from './x-com/index.js';
 export { awsS3 } from './aws-s3/index.js';
-export { agentToAgent } from './agent-to-agent/index.js';
+export { default as delegateProfile, targetTimeouts } from './delegate-profile/index.js';
 
 // Skill metadata for registration
 export const skillRegistry = {
@@ -72,24 +72,17 @@ export const skillRegistry = {
       action: { type: 'string', enum: ['searchPosts', 'searchPostsAll', 'searchUsers', 'getUserTimeline'], required: true, description: 'Action to perform: searchPosts, searchPostsAll, searchUsers, or getUserTimeline' },
     }
   },
-  'agent-to-agent': {
-    name: 'Agent-to-Agent',
-    description: 'Communicate with other agents via NATS inter-agent messaging. Send tasks, check for messages, and report results.',
+  'delegate-profile': {
+    name: 'Delegate Profile',
+    description: 'Delegate tasks to specialized agent profiles (simple, researcher, coder) running as Hermes profiles in this same container, via the hermes CLI. Send tasks in the foreground or as background tasks with log polling.',
     version: '1.0.0',
     params: {
-      action: { type: 'string', enum: ['send_task', 'check_messages', 'send_result', 'update_status'], required: true, description: 'Action to perform: send_task, check_messages, send_result, or update_status' },
-      target_agent_id: { type: 'string', required: true, description: 'ID of the target agent (e.g., researcher, simple)' },
-      goal: { type: 'string', description: 'Task goal description (required for send_task)' },
+      action: { type: 'string', enum: ['send_task', 'send_task_background', 'check_task'], required: true, description: 'Action to perform: send_task, send_task_background, or check_task' },
+      target_agent_id: { type: 'string', required: true, description: 'ID of the target agent profile (simple, researcher, or coder; required for send_task and send_task_background)' },
+      goal: { type: 'string', description: 'Task goal description (required for send_task and send_task_background)' },
       context: { type: 'string', description: 'Additional context for the task' },
-      toolsets: { type: 'string', description: 'Comma-separated list of toolsets for the task' },
       save_results_to: { type: 'string', description: 'Path where results should be saved' },
-      original_message_id: { type: 'string', description: 'Original message ID for send_result and update_status' },
-      status: { type: 'string', enum: ['completed', 'failed', 'update'], description: 'Task completion status or update (required for send_result)' },
-      summary: { type: 'string', description: 'Summary of the task result' },
-      result_path: { type: 'string', description: 'Path to result files' },
-      update_details: { type: 'string', description: 'Status update details text (required for update_status)' },
-      progress_percentage: { type: 'number', description: 'Progress percentage 0-100 (optional for update_status)' },
-      timeout: { type: 'number', default: 0, description: 'Timeout in seconds to wait for messages' }
+      task_id: { type: 'string', description: 'ID of the background task (required for check_task)' }
     }
   }
 };
@@ -133,9 +126,9 @@ export async function executeSkill(skillName: string, params: Record<string, any
       const { grokSearch } = await import('./grok-search/index.js');
       return grokSearch(params as any);
     }
-    case 'agent-to-agent': {
-      const { agentToAgent } = await import('./agent-to-agent/index.js');
-      return agentToAgent(params as any);
+    case 'delegate-profile': {
+      const { delegateProfile } = await import('./delegate-profile/index.js');
+      return delegateProfile(params as any);
     }
     default:
       throw new Error(`Skill not implemented: ${skillName}`);
