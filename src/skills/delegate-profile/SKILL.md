@@ -64,12 +64,21 @@ Prefer foreground `send_task` for tasks expected to finish under ~10 minutes.
 For longer tasks, start in the background and poll:
 
 1. `send_task_background` — returns `task_id` and `log_file`; the task runs detached, appending output to `log_file`
-2. Poll `check_task` with the `task_id` — returns `status: "running"` while the task is in progress and `status: "finished"` once done, along with the last 4000 characters of the log (`log_tail`)
+2. Poll `check_task` with `action` + `task_id` ONLY — returns `status: "running"` while the task is in progress, `status: "finished"` or `status: "failed"` once done, along with the last ~4000 characters of the log (`log_tail`)
 
 ```bash
 node /app/scripts/skill-runner.mjs --skill delegate-profile --params '{"action": "send_task_background", "target_agent_id": "coder", "goal": "...", "context": "...", "save_results_to": "/app/results/..."}'
 node /app/scripts/skill-runner.mjs --skill delegate-profile --params '{"action": "check_task", "task_id": "<task_id from send_task_background>"}'
 ```
+
+### check_task result contract
+
+- `status: "running"` — the task is still in progress (its `.running` marker exists and is fresh)
+- `status: "finished"` — the task completed successfully; includes `exit_code: 0` (from the wrapper's `EXIT:0` sentinel line)
+- `status: "failed"` — the task ended non-zero (`exit_code` from the sentinel; rc=124 means the target's timeout was hit) or `stale: true` when the task was orphaned by a container restart (its marker outlived the target's timeout + grace)
+- `log_tail` — the last ~4000 characters of the task's log
+- Timeouts are enforced per target (15m / 60m / 120m) on BOTH the foreground and background paths — the background wrapper enforces them via coreutils `timeout`
+- Delegation logs and `.running` markers are auto-cleaned after 7 days
 
 ## Actions
 

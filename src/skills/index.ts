@@ -78,11 +78,11 @@ export const skillRegistry = {
     version: '1.0.0',
     params: {
       action: { type: 'string', enum: ['send_task', 'send_task_background', 'check_task'], required: true, description: 'Action to perform: send_task, send_task_background, or check_task' },
-      target_agent_id: { type: 'string', required: true, description: 'ID of the target agent profile (simple, researcher, or coder; required for send_task and send_task_background)' },
-      goal: { type: 'string', description: 'Task goal description (required for send_task and send_task_background)' },
+      target_agent_id: { type: 'string', description: 'ID of the target agent profile (simple, researcher, or coder; required for send_task/send_task_background, validated by the skill)' },
+      goal: { type: 'string', description: 'Task goal description (required for send_task/send_task_background, validated by the skill)' },
       context: { type: 'string', description: 'Additional context for the task' },
       save_results_to: { type: 'string', description: 'Path where results should be saved' },
-      task_id: { type: 'string', description: 'ID of the background task (required for check_task)' }
+      task_id: { type: 'string', description: 'ID of the background task (required for check_task, validated by the skill)' }
     }
   }
 };
