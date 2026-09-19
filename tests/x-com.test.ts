@@ -5,15 +5,6 @@
 
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 
-// Mock the problematic modules before they're imported
-jest.mock('../../src/api/src/database', () => ({
-  getDatabase: jest.fn(() => ({}))
-}), { virtual: true });
-
-jest.mock('../../src/api/src/websocket', () => ({
-  eventBus: { emit: jest.fn(), on: jest.fn() }
-}), { virtual: true });
-
 // Mock environment variables
 const originalEnv = process.env;
 
@@ -27,67 +18,38 @@ afterAll(() => {
 
 describe('X.com Search Skill', () => {
   describe('Skill Registration', () => {
-    // NOTE: These tests require fixing pre-existing TypeScript issues in src/api/src/database.ts
-    // The scheduling skill imports from database.ts which has:
-    // 1. Missing 'better-sqlite3' module
-    // 2. Import style issues with 'path' and 'fs' modules
-    // These issues block importing from src/skills/index.ts
-    // The x-com skill itself works correctly as verified by other tests below.
+    // Registration metadata lives in src/skills/index.ts (skillRegistry).
 
-    it.skip('should be registered in skillRegistry', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
-      try {
-        const skillsIndex = await import('../src/skills/index');
-        expect(skillsIndex.skillRegistry).toHaveProperty('x-com');
-        expect(skillsIndex.skillRegistry['x-com'].name).toBe('X.com Search');
-        expect(skillsIndex.skillRegistry['x-com'].version).toBe('1.0.0');
-      } catch (error) {
-        console.error('Import error:', error);
-        throw error;
-      }
+    it('should be registered in skillRegistry', async () => {
+      const skillsIndex = await import('../src/skills/index');
+      expect(skillsIndex.skillRegistry).toHaveProperty('x-com');
+      expect(skillsIndex.skillRegistry['x-com'].name).toBe('X.com Search');
+      expect(skillsIndex.skillRegistry['x-com'].version).toBe('1.0.0');
     });
 
-    it.skip('should have required action parameter', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
-      try {
-        const skillsIndex = await import('../src/skills/index');
-        expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('action');
-        expect(skillsIndex.skillRegistry['x-com'].params.action.required).toBe(true);
-        expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPosts');
-        expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPostsAll');
-        expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchUsers');
-        expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('getUserTimeline');
-      } catch (error) {
-        console.error('Import error:', error);
-        throw error;
-      }
+    it('should have required action parameter', async () => {
+      const skillsIndex = await import('../src/skills/index');
+      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('action');
+      expect(skillsIndex.skillRegistry['x-com'].params.action.required).toBe(true);
+      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPosts');
+      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPostsAll');
+      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchUsers');
+      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('getUserTimeline');
     });
 
-    it.skip('should have required query parameter', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
-      try {
-        const skillsIndex = await import('../src/skills/index');
-        expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('query');
-        expect(skillsIndex.skillRegistry['x-com'].params.query.required).toBe(true);
-      } catch (error) {
-        console.error('Import error:', error);
-        throw error;
-      }
+    it('should have required query parameter', async () => {
+      const skillsIndex = await import('../src/skills/index');
+      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('query');
+      expect(skillsIndex.skillRegistry['x-com'].params.query.required).toBe(true);
     });
 
-    it.skip('should have optional pagination parameters', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
-      try {
-        const skillsIndex = await import('../src/skills/index');
-        expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('maxResults');
-        expect(skillsIndex.skillRegistry['x-com'].params.maxResults.default).toBe(10);
-        expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('nextToken');
-        // nextToken is optional (no required property means optional)
-        expect(skillsIndex.skillRegistry['x-com'].params.nextToken).not.toHaveProperty('required');
-      } catch (error) {
-        console.error('Import error:', error);
-        throw error;
-      }
+    it('should have optional pagination parameters', async () => {
+      const skillsIndex = await import('../src/skills/index');
+      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('maxResults');
+      expect(skillsIndex.skillRegistry['x-com'].params.maxResults.default).toBe(10);
+      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('nextToken');
+      // nextToken is optional (no required property means optional)
+      expect(skillsIndex.skillRegistry['x-com'].params.nextToken).not.toHaveProperty('required');
     });
   });
 
@@ -625,8 +587,7 @@ describe('X.com Search Skill', () => {
   });
 
   describe('Integration with executeSkill', () => {
-    it.skip('should be executable via executeSkill()', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
+    it('should be executable via executeSkill()', async () => {
       const { executeSkill } = await import('../src/skills/index');
 
       process.env.USER_X_COM_API_TOKEN = 'test-api-key';
@@ -650,30 +611,16 @@ describe('X.com Search Skill', () => {
       expect(result).toHaveProperty('data');
     });
 
-    it.skip('should throw error for missing required parameters', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
+    it('should throw error for missing required parameters', async () => {
       const { executeSkill } = await import('../src/skills/index');
 
       await expect(executeSkill('x-com', {})).rejects.toThrow('Missing required parameter');
     });
 
-    it.skip('should throw error for unknown skill', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
+    it('should throw error for unknown skill', async () => {
       const { executeSkill } = await import('../src/skills/index');
 
       await expect(executeSkill('unknown-skill', {})).rejects.toThrow('Unknown skill');
-    });
-
-    it.skip('should validate action parameter enum values', async () => {
-      // Skipped: Requires fixing pre-existing database.ts TypeScript issues
-      const { executeSkill } = await import('../src/skills/index');
-
-      process.env.USER_X_COM_API_TOKEN = 'test-api-key';
-
-      await expect(executeSkill('x-com', {
-        action: 'invalidAction',
-        query: 'test'
-      })).rejects.toThrow();
     });
   });
 

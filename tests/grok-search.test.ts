@@ -5,15 +5,6 @@
 
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 
-// Mock the problematic modules before they're imported
-jest.mock('../../src/api/src/database', () => ({
-  getDatabase: jest.fn(() => ({}))
-}), { virtual: true });
-
-jest.mock('../../src/api/src/websocket', () => ({
-  eventBus: { emit: jest.fn(), on: jest.fn() }
-}), { virtual: true });
-
 // Mock environment variables
 const originalEnv = process.env;
 
@@ -656,7 +647,7 @@ describe('Grok Search Skill', () => {
 
     it.skip('should use USER_XAI_SEARCH_API_KEY from Docker environment', async () => {
       // Verifies the skill picks up the USER_XAI_SEARCH_API_KEY env var
-      // that is configured in docker-compose.yml
+      // that is configured in compose.yaml
     });
   });
 });

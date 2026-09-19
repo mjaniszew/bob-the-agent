@@ -101,7 +101,7 @@ const DEFAULT_USER_FIELDS = [
  * Get the API key from environment variables
  */
 function getApiKey(): string | null {
-  return process.env.USER_X_COM_API_TOKEN || null;
+  return process.env.USER_X_COM_API_TOKEN || process.env.XAI_API_KEY || null;
 }
 
 /**

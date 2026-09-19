@@ -18,27 +18,30 @@ afterAll(() => {
 
 describe('AWS S3 Skill', () => {
   describe('Skill Registration', () => {
-    it('should export skillRegistry metadata', async () => {
-      const awsS3Module = await import('../src/skills/aws-s3/index');
+    // Registration metadata lives in src/skills/index.ts (skillRegistry),
+    // not in the skill module itself.
 
-      expect(awsS3Module.skillRegistry).toHaveProperty('aws-s3');
-      expect(awsS3Module.skillRegistry['aws-s3'].name).toBe('AWS S3');
-      expect(awsS3Module.skillRegistry['aws-s3'].version).toBe('1.0.0');
+    it('should export skillRegistry metadata', async () => {
+      const skillsIndex = await import('../src/skills/index');
+
+      expect(skillsIndex.skillRegistry).toHaveProperty('aws-s3');
+      expect(skillsIndex.skillRegistry['aws-s3'].name).toBe('AWS S3');
+      expect(skillsIndex.skillRegistry['aws-s3'].version).toBe('1.0.0');
     });
 
     it('should have required parameters defined', async () => {
-      const awsS3Module = await import('../src/skills/aws-s3/index');
+      const skillsIndex = await import('../src/skills/index');
 
-      expect(awsS3Module.skillRegistry['aws-s3'].params).toHaveProperty('action');
-      expect(awsS3Module.skillRegistry['aws-s3'].params.action.required).toBe(true);
+      expect(skillsIndex.skillRegistry['aws-s3'].params).toHaveProperty('action');
+      expect(skillsIndex.skillRegistry['aws-s3'].params.action.required).toBe(true);
     });
 
     it('should have action enum with upload and getUrl options', async () => {
-      const awsS3Module = await import('../src/skills/aws-s3/index');
+      const skillsIndex = await import('../src/skills/index');
 
-      expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('upload');
-      expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('getUrl');
-      expect(awsS3Module.skillRegistry['aws-s3'].params.action.enum).toContain('getPublicUrl');
+      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('upload');
+      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('getUrl');
+      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('getPublicUrl');
     });
   });
 
@@ -523,37 +526,26 @@ describe('AWS S3 Skill', () => {
 
   describe('Integration with executeSkill', () => {
     it('should be executable via executeSkill()', async () => {
-      // This test requires full skills index import
-      // Skipping if there are pre-existing TypeScript issues
-      try {
-        const { executeSkill } = await import('../src/skills/index');
+      const { executeSkill } = await import('../src/skills/index');
 
-        process.env.USER_AWS_S3_BUCKET = 'test-bucket';
-        process.env.USER_AWS_S3_REGION = 'eu-central-1';
-        process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
-        process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
+      process.env.USER_AWS_S3_BUCKET = 'test-bucket';
+      process.env.USER_AWS_S3_REGION = 'eu-central-1';
+      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
+      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
-        const result = await executeSkill('aws-s3', {
-          action: 'upload',
-          key: 'test/file.txt',
-          content: 'Test content'
-        });
+      const result = await executeSkill('aws-s3', {
+        action: 'upload',
+        key: 'test/file.txt',
+        content: 'Test content'
+      });
 
-        expect(result).toHaveProperty('success');
-      } catch (error) {
-        // Skip if skills index has import issues (e.g., database module issues)
-        console.log('Skipping executeSkill test due to import issues:', error);
-      }
+      expect(result).toHaveProperty('success');
     });
 
     it('should throw error for missing required parameters', async () => {
-      try {
-        const { executeSkill } = await import('../src/skills/index');
+      const { executeSkill } = await import('../src/skills/index');
 
-        await expect(executeSkill('aws-s3', {})).rejects.toThrow('Missing required parameter');
-      } catch (error) {
-        console.log('Skipping executeSkill test due to import issues');
-      }
+      await expect(executeSkill('aws-s3', {})).rejects.toThrow('Missing required parameter');
     });
   });
 });
