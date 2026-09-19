@@ -311,6 +311,10 @@ approvals:
   # manual | smart | off.
   mode: off
   timeout: 60
+  # NOTE: cron_mode/mcp_reload_confirm below are inert while mode is 'off'
+  # (the gate short-circuits before consulting them). Left as-is for parity;
+  # if mode is ever flipped back, cron_mode: deny would silently deny cron
+  # tasks on a 24/7 agent — revisit then.
   cron_mode: deny
   mcp_reload_confirm: true
 command_allowlist: []

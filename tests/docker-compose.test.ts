@@ -47,6 +47,15 @@ describe('compose.yaml infrastructure services', () => {
 });
 
 describe('compose.yaml single-agent architecture', () => {
+  // Slice out just the `agent:` service block. Several asserted keys
+  // (memory: 4G, 8642) also appear in infra services — whole-file regexes
+  // stayed green even if the agent block were gutted (Task 4 quality review).
+  const agentBlock = () => {
+    const m = composeText().match(/^  agent:\n([\s\S]*?)(?=^  \w|^#|^\w)/m);
+    if (!m) throw new Error('agent service block not found in compose.yaml');
+    return m[1];
+  };
+
   test('has exactly one agent service named "agent"', () => {
     const c = composeText();
     expect(c).toMatch(/^  agent:\s*$/m);
@@ -68,8 +77,9 @@ describe('compose.yaml single-agent architecture', () => {
   });
 
   test('agent service mounts single volume ./volumes/agent at /opt/data', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/\.\/volumes\/agent:\/opt\/data/);
     const c = composeText();
-    expect(c).toMatch(/\.\/volumes\/agent:\/opt\/data/);
     expect(c).not.toMatch(/agent-main:\/opt\/data/);
     expect(c).not.toMatch(/agent-researcher:\/opt\/data/);
     expect(c).not.toMatch(/agent-simple:\/opt\/data/);
@@ -77,21 +87,25 @@ describe('compose.yaml single-agent architecture', () => {
   });
 
   test('agent keeps results and projects mounts', () => {
-    const c = composeText();
-    expect(c).toMatch(/\.\/volumes\/results:\/app\/results/);
-    expect(c).toMatch(/\.\/volumes\/projects:\/app\/projects/);
+    const b = agentBlock();
+    expect(b).toMatch(/\.\/volumes\/results:\/app\/results/);
+    expect(b).toMatch(/\.\/volumes\/projects:\/app\/projects/);
   });
 
-  test('agent resource limits at least match old coder service (4G / 8G)', () => {
-    const c = composeText();
-    expect(c).toMatch(/memory: 4G/);
-    expect(c).toMatch(/memory: 8G/);
+  test('agent resource limits: 2 CPUs reserved and capped, 4G reserved / 8G limit', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/reservations:\s*\n\s+cpus: 2\s*\n\s+memory: 4G/);
+    expect(b).toMatch(/limits:\s*\n\s+cpus: 2\s*\n\s+memory: 8G/);
   });
 
-  test('agent runs bootstrap.sh as command and exposes 8642', () => {
-    const c = composeText();
-    expect(c).toMatch(/command: \["\/app\/scripts\/bootstrap\.sh"\]/);
-    expect(c).toMatch(/8642:8642/);
+  test('agent runs bootstrap.sh as command and exposes 8642 on loopback only', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/command: \["\/app\/scripts\/bootstrap\.sh"\]/);
+    // Loopback-only (user decision, 2026-09-19): the single gateway fronts ALL
+    // profiles behind approvals.mode: off and its auth is unverified; nothing
+    // documented needs LAN exposure (health checks and tests use localhost,
+    // Discord connects outbound). Remote access via SSH tunnel if ever needed.
+    expect(b).toMatch(/127\.0\.0\.1:8642:8642/);
   });
 
   test('agent no longer sets HERMES_YOLO_MODE (denylisted in v0.21)', () => {
@@ -101,13 +115,12 @@ describe('compose.yaml single-agent architecture', () => {
   test('agent sets OPENCODE_CONFIG at compose level (docker exec can verify it)', () => {
     // Under /opt/data — the CMD is dropped to the `hermes` user by the image's
     // main-wrapper (s6-setuidgid), so /root/.config is unwritable.
-    expect(composeText()).toMatch(/OPENCODE_CONFIG: \/opt\/data\/\.config\/opencode\/opencode\.jsonc/);
+    expect(agentBlock()).toMatch(/OPENCODE_CONFIG: \/opt\/data\/\.config\/opencode\/opencode\.jsonc/);
   });
 
   test('agent depends on ollama and searxng, not nats', () => {
-    const c = composeText();
-    expect(c).toMatch(/depends_on:\s*\n\s+ollama:\s*\n\s+condition: service_healthy\s*\n\s+searxng:/);
-    expect(c).not.toMatch(/nats:/);
+    expect(agentBlock()).toMatch(/depends_on:\s*\n\s+ollama:\s*\n\s+condition: service_healthy\s*\n\s+searxng:/);
+    expect(composeText()).not.toMatch(/nats:/);
   });
 });
 
@@ -117,15 +130,23 @@ describe('running stack (DOCKER_TESTS=1 only)', () => {
 
   maybe('single-container runtime', () => {
     test('agent container becomes healthy', () => {
-      for (let i = 0; i < 12; i++) {
-        const s = require('child_process').execSync(
-          'docker inspect --format "{{.State.Health.Status}}" bob-the-agent',
-          { encoding: 'utf8' }).trim();
+      // Poll ~130s: start_period alone is 120s (bootstrap provisions three
+      // profiles before the gateway listens), so a 12x5s window spuriously
+      // failed on any first boot in the 60-120s band (Task 4 quality review).
+      for (let i = 0; i < 26; i++) {
+        let s: string;
+        try {
+          s = require('child_process').execSync(
+            'docker inspect --format "{{.State.Health.Status}}" bob-the-agent',
+            { encoding: 'utf8', stdio: 'pipe' }).trim();
+        } catch {
+          throw new Error('bob-the-agent container not found — did the stack come up?');
+        }
         if (s === 'healthy') return;
         require('child_process').execSync('sleep 5');
       }
-      throw new Error('bob-the-agent never became healthy');
-    }, 120_000);
+      throw new Error('bob-the-agent never became healthy within ~130s (start_period is 120s)');
+    }, 300_000);
 
     test('multiplexed gateway port 8642 reachable from host', () => {
       require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8642"');
@@ -147,6 +168,7 @@ describe('running stack (DOCKER_TESTS=1 only)', () => {
         'docker exec bob-the-agent hermes -p simple chat --oneshot -q "Reply with the single word: pong"',
         { encoding: 'utf8', timeout: 300_000, stdio: 'pipe' });
       expect(out.trim().length).toBeGreaterThan(0);
-    }, 300_000);
+    }, 330_000); // jest headroom above execSync's 300s so a hung docker exec
+                // surfaces execSync's clearer timeout error, not jest's
   });
 });

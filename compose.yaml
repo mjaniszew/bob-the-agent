@@ -55,7 +55,10 @@ services:
     container_name: bob-the-agent
     command: ["/app/scripts/bootstrap.sh"]
     ports:
-      - "8642:8642"
+      # Loopback-only (user decision 2026-09-19): the gateway fronts all
+      # profiles behind approvals.mode: off and its auth is unverified —
+      # nothing documented needs LAN exposure (Discord connects outbound).
+      - "127.0.0.1:8642:8642"
     environment:
       <<: *agent-env
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
@@ -77,6 +80,7 @@ services:
           cpus: 2
           memory: 4G
         limits:
+          cpus: 2
           memory: 8G
 
   # ===========================================
