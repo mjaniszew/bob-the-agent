@@ -57,7 +57,7 @@ Main skills, which you should not modify if not neccessary are:
 ### Delegate-Profile Skill (delegate-profile)
 - All agents are Hermes profiles in this same container — delegation is in-process, no network transport
 - `main` delegates tasks to your profile via this skill; your final response is returned to it synchronously
-- If you ever need to hand work to another profile, use `send_task` (foreground, blocks until finished) or `send_task_background` + `check_task` polling for longer work
+- You are the terminal executor — you do not delegate to other profiles; if a task exceeds your scope (deep research, coding), say so in your final response so `main` can re-delegate to the right profile
 
 ## Search Tips
 

@@ -113,9 +113,9 @@ Main skills, which you should not modify if not neccessary are:
 
 ### Delegate-Profile Skill (delegate-profile)
 - Delegate tasks to specialized agent profiles (`simple`, `researcher`, `coder`) running in the same container as you — delegation is in-process, no network transport
-- Foreground `send_task` blocks until the target profile finishes (up to its timeout: simple 15m, researcher 60m, coder 120m) and returns its summary synchronously — prefer it for tasks expected to finish under ~10 minutes
-- Background `send_task_background` returns a `task_id` + `log_file` immediately — use it for longer work and poll with `check_task`
-- `check_task` returns `running`, `finished` (exit_code 0), or `failed` (non-zero exit_code; `stale: true` if a container restart orphaned the task) — retry or handle failures, don't poll forever
+- Foreground `send_task` blocks until the target profile finishes (up to its timeout: simple 15m, researcher 60m, coder 120m) and returns its summary synchronously — this blocks **your own session**, so you cannot respond to Discord while it runs; prefer it for tasks expected to finish under ~10 minutes. A foreground `send_task` that fails or times out surfaces as an error from the skill (no summary) — treat it as a failed task: retry once, then report to the user
+- Background `send_task_background` returns a `task_id` + `log_file` immediately — use it for longer work and poll with `check_task` at a relaxed cadence (e.g. every few minutes — a `sleep` in your terminal call between checks is fine), never in a tight loop
+- `check_task` returns `running`, `finished` (usually exit_code 0), or `failed` (non-zero exit_code; `stale: true` if a container restart orphaned the task) — retry or handle failures, don't poll forever
 - Available target profiles are described in the `delegate-profile` skill itself, read it always before deciding on delegation
 
 ## Search Tips

@@ -16,15 +16,24 @@ describe('SOUL.md single-container wording', () => {
     });
   }
 
-  test('main mandates delegate-profile with delegation-first protocol', () => {
-    expect(soul('main')).toMatch(/delegate-profile/);
-    expect(soul('main')).toMatch(/delegation/i);
+  test('main teaches the real delegate-profile contract', () => {
+    const s = soul('main');
+    expect(s).toMatch(/delegate-profile/);
+    expect(s).toMatch(/send_task_background/);
+    expect(s).toMatch(/check_task/);
+    expect(s).toMatch(/simple 15m, researcher 60m, coder 120m/);
+    expect(s).toMatch(/your own session/);
   });
 
   test('researcher, simple, coder know they are profiles delegated to by main', () => {
     for (const name of ['researcher', 'simple', 'coder']) {
-      expect(soul(name)).toMatch(/profile/i);
+      expect(soul(name)).toContain(`You run as the \`${name}\` profile`);
     }
+  });
+
+  test('simple is the terminal executor (no blanket delegation license)', () => {
+    expect(soul('simple')).toMatch(/terminal executor/);
+    expect(soul('simple')).toMatch(/you do not delegate/i);
   });
 
   test('coder keeps OpenCode two-layer instructions', () => {

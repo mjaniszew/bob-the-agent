@@ -17,8 +17,8 @@ Use this skill to delegate tasks to specialized agent profiles. All agents (simp
 1. **Understand the task** — What does the user want? Does it involve search, research, coding, data extraction, or analysis?
 2. **Load this skill** — You are reading it now. Check the "Available profiles" section below.
 3. **Decide who does it** — Match the task to the right agent (see "Available profiles" below).
-4. **Delegate via `delegate_task`** — Spawn a subagent and let it handle the work. **Do NOT execute the task yourself.**
-5. **Wait for results** — The subagent will report back.
+4. **Delegate via `send_task` (or `send_task_background` for long tasks)** — Run the target profile and let it handle the work. **Do NOT execute the task yourself.**
+5. **Collect results** — The target profile's summary is returned synchronously (foreground) or via `check_task` polling (background).
 
 **If you skip this checklist and execute a task yourself that should have been delegated, you are violating your protocol.**
 
