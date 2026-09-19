@@ -528,18 +528,19 @@ describe('AWS S3 Skill', () => {
     it('should be executable via executeSkill()', async () => {
       const { executeSkill } = await import('../src/skills/index');
 
+      // Deterministic offline action: getPublicUrl only constructs a URL
+      // (no credentials, no network). The upload path would hit live AWS
+      // with fake credentials and assert nothing beyond `success` existing.
       process.env.USER_AWS_S3_BUCKET = 'test-bucket';
       process.env.USER_AWS_S3_REGION = 'eu-central-1';
-      process.env.USER_AWS_S3_ACCESS_KEY_ID = 'test-key';
-      process.env.USER_AWS_S3_SECRET_ACCESS_KEY = 'test-secret';
 
       const result = await executeSkill('aws-s3', {
-        action: 'upload',
-        key: 'test/file.txt',
-        content: 'Test content'
+        action: 'getPublicUrl',
+        key: 'test/file.txt'
       });
 
-      expect(result).toHaveProperty('success');
+      expect(result).toHaveProperty('success', true);
+      expect(result).toHaveProperty('url');
     });
 
     it('should throw error for missing required parameters', async () => {

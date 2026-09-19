@@ -288,6 +288,12 @@ describe('Main Agent SOUL.md - Coder Delegation', () => {
 // ============================================================
 // Docker Integration Tests (skipped unless DOCKER_TESTS=1)
 // ============================================================
+// NOTE: the DOCKER_TESTS=1 gated suites (this file and docker-compose.test.ts)
+// must be run with --runInBand or against an already-running stack: parallel
+// jest workers race — docker-compose.test.ts polls health immediately and
+// throws on its first failed inspect while this suite's `up -d agent` is
+// still pulling images / waiting on the ollama healthcheck.
+// Every gated test passes an explicit timeout (no jest.setTimeout needed).
 
 const DOCKER_TESTS_ENABLED = process.env.DOCKER_TESTS === '1';
 const describeDocker = DOCKER_TESTS_ENABLED ? describe : describe.skip;
@@ -295,12 +301,10 @@ const describeDocker = DOCKER_TESTS_ENABLED ? describe : describe.skip;
 describeDocker('Docker Integration - Coder Profile (single container)', () => {
   const { execSync } = require('child_process');
 
-  beforeAll(() => {
-    jest.setTimeout(300000);
-  });
-
   it('should start the agent container and become healthy', () => {
-    execSync('docker compose up -d agent', { cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 120000 });
+    // `up -d` blocks until ollama is service_healthy; a cold-machine pull of
+    // the multi-GB ollama image can exceed 120s, so allow 240s.
+    execSync('docker compose up -d agent', { cwd: PROJECT_ROOT, encoding: 'utf-8', timeout: 240000 });
     // Health-poll ~130s: start_period alone is 120s (bootstrap provisions three
     // profiles before the gateway listens) — same window as docker-compose.test.ts.
     for (let i = 0; i < 26; i++) {
@@ -317,7 +321,8 @@ describeDocker('Docker Integration - Coder Profile (single container)', () => {
       execSync('sleep 5');
     }
     throw new Error('bob-the-agent never became healthy within ~130s (start_period is 120s)');
-  }, 300000);
+    // 240s up + 130s poll cannot fit the default 5s jest timeout budget.
+  }, 600000);
 
   it('should have OpenCode CLI on PATH', () => {
     const result = execSync(
