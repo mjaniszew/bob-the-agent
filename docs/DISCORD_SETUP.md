@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bob The Agent includes a Discord bot powered by the Hermes Agent framework for managing tasks through Discord slash commands and natural language interaction.
+Bob The Agent includes a Discord bot powered by the Hermes Agent framework for managing tasks through Discord slash commands and natural language interaction. The bot is served by the single `agent` container's gateway (default `main` profile) — it connects outbound to Discord, so no inbound port is needed.
 
 ## Prerequisites
 
@@ -58,21 +58,21 @@ DISCORD_CLIENT_ID=your-application-id-here
 
 ## Step 5: Verify Bot Works
 
-1. Restart the main agent container:
+1. Restart the agent container:
    ```bash
-   docker compose restart agent-main
+   docker compose restart agent
    ```
 
 2. Check logs:
    ```bash
-   docker compose logs agent-main | grep -i discord
+   docker compose logs agent | grep -i discord
    ```
 
 3. Test in Discord by sending a message or using commands
-4. When asked to pair bot for the first time, you have to do it in main docker container using hermes-cli and pairing token provided by bot through discord:
+4. When asked to pair bot for the first time, you have to do it in the agent container using the hermes CLI (installed on PATH in the image) and the pairing token provided by the bot through Discord:
 
 ```bash
-docker exec -it bob-the-agent /app/scripts/hermes-cmd.sh pairing approve discord TOKEN
+docker exec -it bob-the-agent hermes pairing approve discord TOKEN
 ```
 
 ## Usage
@@ -103,14 +103,14 @@ discord:
 
 1. Check if bot is online in Discord
 2. Verify token and client ID are correct in `.env`
-3. Check agent-main logs for Discord errors:
+3. Check the agent container's logs for Discord errors:
    ```bash
-   docker compose logs agent-main | grep -i discord
+   docker compose logs agent | grep -i discord
    ```
 
 ### Commands Not Appearing
 
-1. Restart the agent container: `docker compose restart agent-main`
+1. Restart the agent container: `docker compose restart agent`
 2. Wait up to 1 hour for Discord to refresh command cache
 3. Verify `hermes-cli` and `hermes-discord` toolsets are enabled in config
 
