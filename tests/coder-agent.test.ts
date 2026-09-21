@@ -76,10 +76,10 @@ describe('Coder Agent hermes.partial.yml', () => {
     expect(fs.existsSync(configPath)).toBe(true);
   });
 
-  it('should configure glm-5.1:cloud model', () => {
+  it('should configure qwen3.5:2b-q4_K_M model', () => {
     const content = fs.readFileSync(configPath, 'utf-8');
     const config = yaml.load(content) as any;
-    expect(config.model.default).toBe('glm-5.1:cloud');
+    expect(config.model.default).toBe('qwen3.5:2b-q4_K_M');
   });
 
   it('should configure Ollama provider pointing to ollama:11434', () => {
@@ -112,11 +112,11 @@ describe('Coder Agent hermes.partial.yml', () => {
     expect(config.toolsets).toContain('browser');
   });
 
-  it('should have custom provider for glm-5.1:cloud', () => {
+  it('should have custom provider for qwen3.5:2b-q4_K_M', () => {
     const content = fs.readFileSync(configPath, 'utf-8');
     const config = yaml.load(content) as any;
     expect(config.custom_providers).toBeDefined();
-    expect(config.custom_providers[0].name).toContain('glm-5.1:cloud');
+    expect(config.custom_providers[0].name).toContain('qwen3.5:2b-q4_K_M');
   });
 });
 
@@ -148,10 +148,10 @@ describe('OpenCode Template Config', () => {
     expect(config.provider.ollama.npm).toBe('@ai-sdk/openai-compatible');
   });
 
-  it('should configure glm-5.1:cloud model', () => {
+  it('should configure qwen3.5:2b-q4_K_M model', () => {
     const content = fs.readFileSync(templatePath, 'utf-8');
     const config = JSON.parse(content);
-    expect(config.provider.ollama.models['glm-5.1:cloud']).toBeDefined();
+    expect(config.provider.ollama.models['qwen3.5:2b-q4_K_M']).toBeDefined();
   });
 
   it('should use "agent" (not "agents") as the top-level agent key', () => {
@@ -161,10 +161,10 @@ describe('OpenCode Template Config', () => {
     expect(config.agents).toBeUndefined();
   });
 
-  it('should configure the build agent with glm-5.1:cloud model', () => {
+  it('should configure the build agent with qwen3.5:2b-q4_K_M model', () => {
     const content = fs.readFileSync(templatePath, 'utf-8');
     const config = JSON.parse(content);
-    expect(config.agent.build.model).toContain('glm-5.1:cloud');
+    expect(config.agent.build.model).toContain('qwen3.5:2b-q4_K_M');
   });
 });
 
@@ -342,11 +342,11 @@ describeDocker('Docker Integration - Coder Profile (single container)', () => {
     expect(result).toContain('ollama');
   }, 15000);
 
-  it('should have coder profile config with glm-5.1:cloud model', () => {
+  it('should have coder profile config with qwen3.5:2b-q4_K_M model', () => {
     const result = execSync(
       'docker exec bob-the-agent cat /opt/data/profiles/coder/config.yaml',
       { encoding: 'utf-8', timeout: 10000 }
     );
-    expect(result).toContain('glm-5.1:cloud');
+    expect(result).toContain('qwen3.5:2b-q4_K_M');
   }, 15000);
 });

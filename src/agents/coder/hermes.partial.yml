@@ -1,11 +1,16 @@
 model:
-  default: glm-5.1:cloud
+  default: qwen3.5:2b-q4_K_M
   provider: custom
   base_url: http://ollama:11434/v1
+  # CPU-only host: cap the per-request ollama context (GGUF advertises 256k;
+  # hermes auto-detects and would otherwise send num_ctx=262144 per request).
+  # 65536 is hermes' minimum for reliable tool use on its ~16k-token coder
+  # prompts (KV cost is small thanks to GQA — RAM is not the constraint).
+  ollama_num_ctx: 65536
 custom_providers:
-- name: ollama/glm-5.1:cloud
+- name: ollama/qwen3.5:2b-q4_K_M
   base_url: http://ollama:11434/v1
-  model: glm-5.1:cloud
+  model: qwen3.5:2b-q4_K_M
 toolsets:
 - hermes-cli
 - browser
@@ -22,9 +27,19 @@ agent:
   image_input_mode: auto
   disabled_toolsets: []
   verbose: false
-  reasoning_effort: medium
+  # CPU-only host: qwen3.5 thinking runs ~9 min per trivial reply on the
+  # ollama container (no GPU). reasoning_effort: false makes hermes send
+  # reasoning_effort "none" + think=false (see Task 9 verification).
+  reasoning_effort: false
+  # CPU-only host: fresh ~16k-token prompts prefill at ~20 tok/s (~13-15 min) —
+  # hermes' 900s local stale-stream detector kills the connection mid-prefill.
+  local_stream_stale_timeout: 3600
   personalities:
     default: "You are specialist agent handling software engineering tasks: coding, code review, architecture planning. You orchestrate OpenCode CLI for coding work and bridge communication between main agent and OpenCode. You execute given tasks autonomously, asking questions only as a last resort."
 terminal:
   backend: local
   cwd: /app/projects
+  # OpenCode runs driven via the terminal tool take several minutes per LLM
+  # call on a CPU-only host (opencode sends no reasoning_effort, so ollama's
+  # auto-thinking applies) — the template's 180s default kills them mid-run.
+  timeout: 3600

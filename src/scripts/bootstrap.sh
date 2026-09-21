@@ -51,6 +51,15 @@ copy_skills() { # <target_profile_dir> — skip node_modules/ and dist/ (volume 
 if [ ! -f "$HERMES_HOME/config.yaml" ]; then
   log "generating default (main) profile config"
   /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" main "$HERMES_HOME/config.yaml"
+else
+  # Reconcile a pre-existing (e.g. migrated) config with the current partial:
+  # deep-merge, partial wins on overlapping keys, user-only keys preserved.
+  # Without this, a migrated config predating the single-container refactor
+  # never gains gateway.multiplex_profiles (or any new partial keys).
+  log "reconciling default (main) profile config with current partial"
+  node /app/scripts/merge-yaml.mjs "$HERMES_HOME/config.yaml" \
+    "$AGENTS_DIR/main/hermes.partial.yml" "$HERMES_HOME/config.yaml" \
+    || log "WARN: main config reconciliation failed; keeping existing config"
 fi
 [ -f "$HERMES_HOME/SOUL.md" ] || cp "$AGENTS_DIR/main/SOUL.md" "$HERMES_HOME/SOUL.md"
 copy_skills "$HERMES_HOME"
@@ -62,6 +71,14 @@ for name in $PROFILE_NAMES; do
     log "provisioning profile: $name"
     mkdir -p "$dir"
     /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" "$name" "$dir/config.yaml"
+  else
+    # Same reconcile-as-main rationale: keep existing profile configs aligned
+    # with the current partial (e.g. model wiring) without discarding keys
+    # the partial does not manage.
+    log "reconciling profile $name config with current partial"
+    node /app/scripts/merge-yaml.mjs "$dir/config.yaml" \
+      "$AGENTS_DIR/$name/hermes.partial.yml" "$dir/config.yaml" \
+      || log "WARN: profile $name config reconciliation failed; keeping existing config"
   fi
   # Idempotent if-missing writes, OUTSIDE the config guard: a boot that died
   # mid-provisioning must not leave a half-built profile the guard skips forever.
@@ -86,10 +103,30 @@ mkdir -p "$(dirname "$OPENCODE_TARGET")"
 sed -e "s|OLLAMA_BASE_URL_PLACEHOLDER|${OLLAMA_BASE_URL:-http://ollama:11434}|g" \
     "/app/config/opencode.template.jsonc" > "$OPENCODE_TARGET"
 
-# ---- 4. Shared workspaces ---------------------------------------------------
+# ---- 4. Default Ollama model -------------------------------------------------
+# The ollama container ships empty and (unauthenticated) cannot serve the
+# ollama.com cloud proxy used by "<model>:cloud" names, so every profile must
+# be able to resolve the template's local default model on first boot. Pull is
+# best-effort and non-fatal: the gateway starts regardless (ollama retries/
+# errors surface per-request), but a successful pull here keeps the first
+# real model call from being a 404.
+OLLAMA_MODEL="$(node -e "const {createRequire}=require('module');const r=createRequire('/app/scripts/merge-yaml.mjs');const y=r('js-yaml');const c=y.load(require('fs').readFileSync('$TEMPLATE_FILE','utf8'));process.stdout.write((c&&c.model&&c.model.default)||'')" 2>/dev/null || true)"
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3.5:2b-q4_K_M}"
+if ! curl -fsS "${OLLAMA_BASE_URL:-http://ollama:11434}/api/tags" 2>/dev/null | grep -q "\"$OLLAMA_MODEL\""; then
+  log "pulling ollama model: $OLLAMA_MODEL"
+  curl -fsS "${OLLAMA_BASE_URL:-http://ollama:11434}/api/pull" \
+    -H 'Content-Type: application/json' -d "{\"model\":\"$OLLAMA_MODEL\"}" \
+    | grep -o '"status":"success"' >/dev/null \
+    && log "pulled ollama model: $OLLAMA_MODEL" \
+    || log "WARN: could not pull ollama model $OLLAMA_MODEL (continuing)"
+else
+  log "ollama model present: $OLLAMA_MODEL"
+fi
+
+# ---- 5. Shared workspaces ---------------------------------------------------
 mkdir -p /app/projects /app/results
 
-# ---- 5. Exec the long-running gateway ---------------------------------------
+# ---- 6. Exec the long-running gateway ---------------------------------------
 # s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init). This command runs
 # as a child of the already-running s6; exec-ing the gateway makes the container's lifetime
 # equal to the gateway process — the documented foreground daemon command for

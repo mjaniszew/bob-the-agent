@@ -30,6 +30,18 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/generate-config\.sh "\$TEMPLATE_FILE" "\$AGENTS_DIR" main/);
   });
 
+  test('reconciles pre-existing (migrated) configs with the current partial', () => {
+    // A migrated config predating the single-container refactor must still
+    // gain gateway.multiplex_profiles etc. — merge partial over existing.
+    expect(script()).toMatch(/merge-yaml\.mjs "\$HERMES_HOME\/config\.yaml"/);
+    expect(script()).toMatch(/merge-yaml\.mjs "\$dir\/config\.yaml"/);
+  });
+
+  test('pulls the template default ollama model when missing', () => {
+    expect(script()).toMatch(/api\/pull/);
+    expect(script()).toMatch(/api\/tags/);
+  });
+
   test('creates secondary profiles researcher, simple, coder under profiles/', () => {
     for (const name of ['researcher', 'simple', 'coder']) {
       expect(script()).toMatch(new RegExp(`profiles/\\$\\{?name\\}?`));

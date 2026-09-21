@@ -6,6 +6,13 @@ const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const composeText = () => read('compose.yaml');
 const dockerfileText = () => read('dockerfiles/Dockerfile.hermes');
 const dockerAvailable = process.env.DOCKER_TESTS === '1';
+// Tests that drive REAL model inference (minutes of runtime on CPU-only
+// ollama) are additionally gated behind OLLAMA_LIVE_TESTS=1. User decision
+// 2026-09-21: local CPU inference made this verification hang/timeout, so it
+// is skipped in the standard suite; the user verifies inference separately
+// (later, against cloud models).
+const liveInference = process.env.OLLAMA_LIVE_TESTS === '1';
+const testLive = liveInference ? test : test.skip;
 
 describe('Dockerfile.hermes', () => {
   test('pins the newest Hermes base image (>= v0.21.2 required for profile isolation fixes)', () => {
@@ -160,15 +167,18 @@ describe('running stack (DOCKER_TESTS=1 only)', () => {
       expect(out).toMatch(/coder/);
     });
 
-    test('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {
+    testLive('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {
       // Deterministic assertion for a persisted test: the one-shot run exits 0
       // and returns non-empty output. The strict "pong" word check stays in the
       // manual Task 9 Step 4 gate — LLM replies are inherently non-deterministic.
+      // 900s (Task 9): the default qwen3.5:2b-q4_K_M runs on the ollama
+      // container with CPU-only inference — a single one-shot with thinking
+      // took ~11 minutes on the Task 9 host, far above the previous 300s.
       const out = require('child_process').execSync(
         'docker exec bob-the-agent hermes -p simple chat --oneshot -q "Reply with the single word: pong"',
-        { encoding: 'utf8', timeout: 300_000, stdio: 'pipe' });
+        { encoding: 'utf8', timeout: 900_000, stdio: 'pipe' });
       expect(out.trim().length).toBeGreaterThan(0);
-    }, 330_000); // jest headroom above execSync's 300s so a hung docker exec
-                // surfaces execSync's clearer timeout error, not jest's
+    }, 930_000); // jest headroom above execSync's 900s so a hung docker exec
+                 // surfaces execSync's clearer timeout error, not jest's
   });
 });

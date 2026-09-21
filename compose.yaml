@@ -30,6 +30,11 @@ services:
     image: ollama/ollama:latest
     container_name: bob-the-agent-ollama
     restart: unless-stopped
+    environment:
+      # Hermes reaches ollama via the OpenAI-compatible endpoint, which cannot
+      # pass num_ctx per request — without this the server defaults to 4096 and
+      # truncates real agent prompts (~16k tokens) to destruction.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-65536}
     ports:
       - "11434:11434"
     volumes:
@@ -63,6 +68,9 @@ services:
       <<: *agent-env
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
+      # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
+      # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
+      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
     volumes:
       - ./volumes/agent:/opt/data
       - ./volumes/results:/app/results
