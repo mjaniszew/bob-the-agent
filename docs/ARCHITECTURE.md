@@ -65,7 +65,7 @@ Profiles are delegated to **in-process** — there is no messaging layer. The `d
 - **Background**: the skill starts the same one-shot run detached with a log file and a `.running` marker, which `check_task` polls (state lives under `/opt/data/delegation/`)
 - **File handoff**: result files are written to `/app/results` (mounted at `./volumes/results` on the host), passed via the `save_results_to` parameter
 
-Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60m, coder 120m). A gateway limitation prevents a multiplexed gateway session from messaging other profiles via `message_agent` (tracked upstream in Hermes issue #91260); the CLI-based delegation above is the working path today, and the per-profile Bot Chat sessions (`message_agent`/Bot Chat) created at bootstrap are the future messaging path once that issue is resolved.
+Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60m, coder 120m). Orphaned background tasks (a `.running` marker that outlived the target's timeout + grace, e.g. after a container restart) are reported with `stale: true`; delegation logs and `.running` markers are auto-cleaned after 7 days. A gateway limitation prevents a multiplexed gateway session from messaging other profiles via `message_agent` (tracked upstream in Hermes issue #91260); the CLI-based delegation above is the working path today, and the per-profile Bot Chat sessions (`message_agent`/Bot Chat) created at bootstrap are the future messaging path once that issue is resolved.
 
 ### Services
 
@@ -214,8 +214,10 @@ src/skills/
 │   ├── SKILL.md
 │   └── index.ts
 ├── data-extraction/
+│   ├── SKILL.md
 │   └── index.ts
 └── math-operations/
+    ├── SKILL.md
     └── index.ts
 ```
 

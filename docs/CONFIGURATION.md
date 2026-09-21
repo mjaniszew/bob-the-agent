@@ -78,7 +78,7 @@ agent:
   local_stream_stale_timeout: 3600
 ```
 
-**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same model wiring and runtime knobs as main (without `gateway.multiplex_profiles`, which only the default profile sets).
+**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same model wiring and the same CPU-host runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) as main (without `gateway.multiplex_profiles`, which only the default profile sets). Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5, main 3600/6.
 
 **Coder profile** (`src/agents/coder/hermes.partial.yml`):
 ```yaml
@@ -144,21 +144,18 @@ The coder profile uses OpenCode CLI as its coding engine, configured via a templ
 
 **Template file:** `src/config/opencode.template.jsonc`
 
-At startup, `bootstrap.sh` generates the OpenCode config by replacing placeholders in the template:
+At startup, `bootstrap.sh` generates the OpenCode config by substituting the template's placeholder:
 
 | Placeholder | Replaced With |
 |-------------|---------------|
 | `OLLAMA_BASE_URL_PLACEHOLDER` | Value of `OLLAMA_BASE_URL` env var |
-| `SEARXNG_BASE_URL_PLACEHOLDER` | Value of `SEARXNG_BASE_URL` env var |
 
 **Generated config location:** `/opt/data/.config/opencode/opencode.jsonc` (pinned by the `OPENCODE_CONFIG` compose env var)
 
-The OpenCode config defines:
-- **Provider**: Ollama with the coder profile's model
-- **Agents**: coder (16K token limit), task (8K token limit), title
-- **Tools**: Full tool profile with SearXNG web search
-- **Shell**: `/bin/bash -l`
-- **Auto-compact**: Enabled for long coding sessions
+The OpenCode config defines (see `src/config/opencode.template.jsonc` for the full template):
+- **Provider**: Ollama via the OpenAI-compatible endpoint, model `qwen3.5:2b-q4_K_M` (context limit 65536, output limit 8192)
+- **Agents**: `build` and `plan` (primary mode), `general`, `explore`, and `code-reviewer` (subagent mode) — all with an 8192-token output limit
+- **code-reviewer**: read-only subagent (`write`/`edit` tools disabled), tuned for security/performance/maintainability review
 
 ## Environment Variables
 

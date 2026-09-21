@@ -66,7 +66,7 @@ docker compose up -d
 # Pull local model (required)
 docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
 
-# Sign into Ollama for cloud models (recommended)
+# Sign into Ollama for cloud models (optional)
 docker exec -it bob-the-agent-ollama ollama signin
 
 # Pull cloud model manifests
@@ -194,6 +194,19 @@ bob-the-agent/
 │   └── skills/               # Skill implementations
 ├── volumes/                  # Runtime data (per-agent workspaces)
 └── docs/                      # Documentation
+```
+
+### Running the Test Suite
+
+```bash
+# Local (hermetic) suite — no stack or model calls
+npm test
+
+# Docker-gated suites against a running stack
+DOCKER_TESTS=1 npx jest --runInBand --config tests/jest.config.js tests/docker-compose.test.ts tests/coder-agent.test.ts
+
+# Add OLLAMA_LIVE_TESTS=1 to also run the live-inference delegation smoke
+# (slow on CPU-only local inference — prefer verifying with cloud models)
 ```
 
 ### Building from Source

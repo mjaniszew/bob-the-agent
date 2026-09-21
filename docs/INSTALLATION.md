@@ -9,7 +9,7 @@
 | Storage | 20 GB | 50 GB |
 | GPU | Optional | NVIDIA with CUDA |
 
-**Note:** The default setup runs 4 agent containers (main, researcher, simple, coder). The coder agent requires more resources (4G reservation, 8G limit) due to running both Hermes Agent and OpenCode CLI. For systems with less RAM, you can comment out `researcher`, `simple-agent`, and `coder` services in `compose.yaml` to run only the main agent (4 GB RAM minimum in that case).
+**Note:** The default setup runs 4 containers: one `agent` container (all agent profiles — main orchestrator plus multiplexed researcher/simple/coder) plus ollama, searxng, and valkey. For systems with less RAM, reduce the `agent` container's memory limits in `compose.yaml`.
 
 ## Prerequisites
 
@@ -86,7 +86,13 @@ USER_AWS_S3_SECRET_ACCESS_KEY=your-secret
 
 ### Step 3: Build Image & Start Services
 
-All agent services share a single `bob-the-agent:latest` image. Build it before starting:
+If you have runtime data from a previous per-agent-container install (`volumes/agent-main`, `volumes/agent-researcher`, ...), migrate it into the new single-volume layout before the first start (fresh installs can skip this):
+
+```bash
+bash src/scripts/migrate-volumes.sh volumes volumes/agent
+```
+
+All agent profiles run in a single `bob-the-agent:latest` image. Build it before starting:
 
 ```bash
 # Build the agent image
@@ -95,7 +101,7 @@ docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
 # Start all services
 docker compose up -d
 
-# Check status (should show 8 running containers)
+# Check status (4 containers)
 docker compose ps
 ```
 
@@ -112,29 +118,20 @@ docker compose up -d
 
 Expected containers:
 - `bob-the-agent-ollama` — LLM inference
-- `bob-the-agent` — Main orchestrator agent
-- `bob-the-agent-researcher` — Research specialist agent
-- `bob-the-agent-simple` — Simple task handler agent
-- `bob-the-agent-coder` — Software engineering specialist agent
-- `bob-the-agent-nats` — NATS inter-agent messaging
+- `bob-the-agent` — Single Hermes Agent container (default profile `main` plus multiplexed researcher/simple/coder profiles under `/opt/data/profiles/`)
 - `bob-the-agent-searxng` — Web search engine
 - `bob-the-agent-valkey` — Cache for SearXNG
 
-### Step 4: Pull Ollama Models
+### Step 4: Ollama Models
+
+The default local model is pulled automatically by bootstrap on first boot (~1.6GB download, can take longer than the health start_period on the very first boot). Optional, for cloud models (user choice — sign-in is not required for local inference):
 
 ```bash
-# Pull the default local model
-docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
-
-# Sign into Ollama for cloud models
+# Sign into Ollama for cloud models (optional)
 docker exec -it bob-the-agent-ollama ollama signin
 
-# Pull cloud model manifests
+# Pull cloud model manifests referenced in your profile partials
 docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
-docker exec bob-the-agent-ollama ollama pull minimax-m2.7:cloud
-
-# Pull coder agent model (required for coder agent)
-docker exec bob-the-agent-ollama ollama pull glm-5.1:cloud
 ```
 
 ### Step 5: Verify Installation
@@ -149,8 +146,8 @@ curl http://localhost:8642/healthz
 # Check SearXNG
 curl http://localhost:8888/healthz
 
-# Check coder agent health (if running)
-docker compose logs coder --tail 5
+# Check agent logs (all profiles)
+docker compose logs agent --tail 5
 ```
 
 ### Step 6: Pair Discord Bot (Optional)
@@ -158,8 +155,8 @@ docker compose logs coder --tail 5
 If using the Discord bot with Hermes Agent:
 
 1. Ensure `DISCORD_BOT_TOKEN` is set in `.env`
-2. Restart the main agent: `docker compose restart agent-main`
-3. Check logs for Discord connection: `docker compose logs agent-main | grep -i discord`
+2. Restart the agent: `docker compose restart agent`
+3. Check logs for Discord connection: `docker compose logs agent | grep -i discord`
 
 For detailed Discord setup instructions, see [Discord Setup](./DISCORD_SETUP.md).
 
@@ -183,29 +180,23 @@ For detailed Discord setup instructions, see [Discord Setup](./DISCORD_SETUP.md)
 - Add user to docker group: `sudo usermod -aG docker $USER`
 - NVIDIA GPU requires nvidia-container-toolkit
 
-## Managing Agent Containers
+## Managing the Agent Container
 
-### Run Only Main Agent (Low Resource)
+### Low Resource
 
-For systems with limited RAM, edit `compose.yaml` and comment out services you don't need. Commenting out the coder agent saves the most resources (8G memory limit):
+All profiles run inside the single `agent` container — there are no per-agent services to disable. For systems with limited RAM, reduce the container's memory limits in `compose.yaml`:
 
 ```yaml
-# coder:
-#   ...
-# researcher:
-#   ...
-# simple-agent:
-#   ...
-```
-
-Then start with:
-```bash
-docker compose up -d
+agent:
+  deploy:
+    resources:
+      limits:
+        memory: 4G
 ```
 
 ### Rebuild After Config Changes
 
-When you change agent configuration files (partials, SOUL.md, etc.), rebuild the image (this affects all agents since they share one image):
+When you change profile configuration files (partials, SOUL.md, etc.), rebuild the image (all profiles share one image):
 
 ```bash
 # Rebuild the image

@@ -65,7 +65,11 @@
    ```bash
    docker exec bob-the-agent-ollama ollama list
    ```
-2. Pull the model referenced in the agent's `hermes.partial.yml`:
+2. Pull the model referenced in the profile's `hermes.partial.yml` (the pinned default is local):
+   ```bash
+   docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
+   ```
+   For a cloud model (after `ollama signin`):
    ```bash
    docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
    ```
