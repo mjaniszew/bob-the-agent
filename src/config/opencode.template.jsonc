@@ -13,7 +13,7 @@
           "name": "Qwen3.5 2B (local)",
           "reasoning": false,
           "limit": {
-            "context": 32768,
+            "context": 65536,
             "output": 8192
           }
         }
@@ -25,34 +25,32 @@
       "model": "ollama/qwen3.5:2b-q4_K_M",
       "mode": "primary",
       "temperature": 0.1,
-      "maxTokens": 16000
+      "maxTokens": 8192
     },
     "plan": {
       "model": "ollama/qwen3.5:2b-q4_K_M",
       "mode": "primary",
       "temperature": 0.1,
-      "maxTokens": 16000
+      "maxTokens": 8192
     },
     "general": {
       "model": "ollama/qwen3.5:2b-q4_K_M",
       "mode": "subagent",
       "temperature": 0.1,
-      "maxTokens": 16000,
-      "reasoningEffort": "medium"
+      "maxTokens": 8192
     },
     "explore": {
       "model": "ollama/qwen3.5:2b-q4_K_M",
       "mode": "subagent",
       "temperature": 0.3,
-      "maxTokens": 8000,
-      "reasoningEffort": "medium"
+      "maxTokens": 8192
     },
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
       "mode": "subagent",
       "model": "ollama/qwen3.5:2b-q4_K_M",
       "temperature": 0.7,
-      "maxTokens": 8000,
+      "maxTokens": 8192,
       "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
       "tools": {
         "write": false,

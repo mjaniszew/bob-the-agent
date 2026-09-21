@@ -20,6 +20,10 @@ x-agent-healthcheck: &agent-healthcheck
   interval: 30s
   timeout: 10s
   retries: 3
+  # 120s normally covers provisioning; on a FIRST boot with an empty ollama
+  # volume, bootstrap's model pull (~1.6GB download) delays time-to-listen
+  # beyond this — the pull is capped at 30 min (bootstrap.sh), so expect a
+  # long "starting" window on the very first boot.
   start_period: 120s
 
 services:
@@ -34,6 +38,8 @@ services:
       # Hermes reaches ollama via the OpenAI-compatible endpoint, which cannot
       # pass num_ctx per request — without this the server defaults to 4096 and
       # truncates real agent prompts (~16k tokens) to destruction.
+      # Must stay >= the ollama_num_ctx (65536) pinned in
+      # src/agents/*/hermes.partial.yml.
       OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-65536}
     ports:
       - "11434:11434"

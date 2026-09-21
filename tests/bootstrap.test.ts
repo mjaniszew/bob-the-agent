@@ -10,9 +10,11 @@ const script = () => fs.readFileSync(scriptPath, 'utf8');
 const q = (p: string): string => `"${p}"`;
 
 afterAll(() => {
-  // The merged-config test writes tmp/merged-main-config.yaml — don't leave
-  // untracked noise behind in the working tree.
-  fs.rmSync(path.join(ROOT, 'tmp', 'merged-main-config.yaml'), { force: true });
+  // The merged-config tests write tmp/*.yaml — don't leave untracked noise
+  // behind in the working tree.
+  for (const f of ['merged-main-config.yaml', 'atomic-in-place.yaml', 'atomic-partial.yaml']) {
+    fs.rmSync(path.join(ROOT, 'tmp', f), { force: true });
+  }
 });
 
 describe('bootstrap.sh', () => {
@@ -37,9 +39,35 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/merge-yaml\.mjs "\$dir\/config\.yaml"/);
   });
 
+  test('in-place reconcile takes a one-time .pre-reconcile.bak and writes atomically', () => {
+    const src = script();
+    // Backup is created only when absent, so reboots never clobber the
+    // original pre-reconcile state with already-reconciled content.
+    expect(src).toMatch(/\[ -f "\$1\.pre-reconcile\.bak" \] \|\| cp "\$1" "\$1\.pre-reconcile\.bak"/);
+    // merge-yaml in-place (input == output, the reconcile shape) must leave a
+    // complete file behind — atomic temp+rename, not truncate-then-write.
+    const io = path.join(ROOT, 'tmp', 'atomic-in-place.yaml');
+    const partial = path.join(ROOT, 'tmp', 'atomic-partial.yaml');
+    fs.mkdirSync(path.join(ROOT, 'tmp'), { recursive: true });
+    fs.writeFileSync(io, 'a: 1\nb: 2\n');
+    fs.writeFileSync(partial, 'a: 2\n');
+    execSync(`node ${q(path.join(ROOT, 'src/scripts/merge-yaml.mjs'))} ${q(io)} ${q(partial)} ${q(io)}`);
+    const merged = fs.readFileSync(io, 'utf8');
+    expect(merged).toMatch(/a: 2/);
+    expect(merged).toMatch(/b: 2/);
+    // No temp debris left in the output directory.
+    expect(fs.readdirSync(path.join(ROOT, 'tmp')).filter(f => f.includes('merge-yaml.tmp'))).toEqual([]);
+  });
+
   test('pulls the template default ollama model when missing', () => {
-    expect(script()).toMatch(/api\/pull/);
-    expect(script()).toMatch(/api\/tags/);
+    const src = script();
+    expect(src).toMatch(/api\/pull/);
+    expect(src).toMatch(/api\/tags/);
+    // Model pull must be settled before the gateway execs (section 4 of 6).
+    const pullAt = src.indexOf('api/pull');
+    const execAt = src.indexOf('exec hermes gateway run');
+    expect(pullAt).toBeGreaterThanOrEqual(0);
+    expect(execAt).toBeGreaterThan(pullAt);
   });
 
   test('creates secondary profiles researcher, simple, coder under profiles/', () => {
