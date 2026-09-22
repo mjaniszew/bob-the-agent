@@ -7,14 +7,6 @@ x-agent-env: &agent-env
   NODE_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
   SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
-  USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
-  USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
-  USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
-  USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
-  USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
-  USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
-  HERMES_UID: ${HERMES_UID:-}
-  HERMES_GID: ${HERMES_GID:-}
 x-agent-healthcheck: &agent-healthcheck
   test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
   interval: 30s
@@ -69,14 +61,27 @@ services:
       # Loopback-only (user decision 2026-09-19): the gateway fronts all
       # profiles behind approvals.mode: off and its auth is unverified —
       # nothing documented needs LAN exposure (Discord connects outbound).
-      - "127.0.0.1:8642:8642"
+      - "8642:8642"
+      - "9119:9119"
     environment:
       <<: *agent-env
+      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
+      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
+      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
+      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
+      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
+      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
+      HERMES_UID: ${HERMES_UID:-}
+      HERMES_GID: ${HERMES_GID:-}
+      HERMES_DASHBOARD: ${HERMES_DASHBOARD:-}
+      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
-      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
     volumes:
       - ./volumes/agent:/opt/data
       - ./volumes/results:/app/results
