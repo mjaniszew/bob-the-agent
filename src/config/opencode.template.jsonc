@@ -9,6 +9,14 @@
         "apiKey": "opencode"
       },
       "models": {
+        "glm-5.3-flash:cloud": {
+          "name": "GLM 5.3 Flash",
+          "reasoning": true,
+          "limit": {
+            "context": 256000,
+            "output": 25600
+          }
+        },
         "qwen3.5:2b-q4_K_M": {
           "name": "Qwen3.5 2B (local)",
           "reasoning": false,
@@ -22,35 +30,35 @@
   },
   "agent": {
     "build": {
-      "model": "ollama/qwen3.5:2b-q4_K_M",
+      "model": "ollama/glm-5.3-flash:cloud",
       "mode": "primary",
       "temperature": 0.1,
-      "maxTokens": 8192
+      "maxTokens": 16000
     },
     "plan": {
-      "model": "ollama/qwen3.5:2b-q4_K_M",
+      "model": "ollama/glm-5.3-flash:cloud",
       "mode": "primary",
       "temperature": 0.1,
-      "maxTokens": 8192
+      "maxTokens": 16000
     },
     "general": {
-      "model": "ollama/qwen3.5:2b-q4_K_M",
+      "model": "ollama/glm-5.3-flash:cloud",
       "mode": "subagent",
       "temperature": 0.1,
-      "maxTokens": 8192
+      "maxTokens": 16000
     },
     "explore": {
-      "model": "ollama/qwen3.5:2b-q4_K_M",
+      "model": "ollama/glm-5.3-flash:cloud",
       "mode": "subagent",
       "temperature": 0.3,
-      "maxTokens": 8192
+      "maxTokens": 16000
     },
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
       "mode": "subagent",
-      "model": "ollama/qwen3.5:2b-q4_K_M",
+      "model": "ollama/glm-5.3-flash:cloud",
       "temperature": 0.7,
-      "maxTokens": 8192,
+      "maxTokens": 16000,
       "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
       "tools": {
         "write": false,
