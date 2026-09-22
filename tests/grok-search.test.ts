@@ -5,15 +5,6 @@
 
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 
-// Mock the problematic modules before they're imported
-jest.mock('../../src/api/src/database', () => ({
-  getDatabase: jest.fn(() => ({}))
-}), { virtual: true });
-
-jest.mock('../../src/api/src/websocket', () => ({
-  eventBus: { emit: jest.fn(), on: jest.fn() }
-}), { virtual: true });
-
 // Mock environment variables
 const originalEnv = process.env;
 
@@ -636,27 +627,6 @@ describe('Grok Search Skill', () => {
       const headers = mockCall[1]?.headers;
       expect(headers?.['Content-Type']).toBe('application/json');
       expect(headers?.Authorization).toBe('Bearer test-key');
-    });
-  });
-
-  describe('Docker Integration', () => {
-    // These tests verify the skill works in the Docker container environment
-    // They are skipped in unit test runs and should be run via Docker Compose
-    it.skip('should be callable via skill-runner in Docker', async () => {
-      // This test runs inside the Docker container
-      // Verifies the skill is properly registered and callable via:
-      // node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"test"}'
-      // Requires USER_XAI_SEARCH_API_KEY to be set in Docker env
-    });
-
-    it.skip('should return structured results when called from Docker', async () => {
-      // Verifies the skill returns the expected GrokSearchResult shape
-      // when invoked through the skill-runner in the container
-    });
-
-    it.skip('should use USER_XAI_SEARCH_API_KEY from Docker environment', async () => {
-      // Verifies the skill picks up the USER_XAI_SEARCH_API_KEY env var
-      // that is configured in docker-compose.yml
     });
   });
 });

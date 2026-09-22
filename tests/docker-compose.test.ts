@@ -1,287 +1,184 @@
-/**
- * Docker Compose Integration Tests
- * Tests for verifying the docker compose stack builds and runs correctly
- *
- * These tests require Docker to be running and will create/destroy containers.
- * Run with: npm run test:docker
- *
- * Note: These tests are skipped by default. Use --testPathPattern=docker-compose to run them.
- */
-
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Configuration
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-const DOCKER_COMPOSE_FILE = path.join(PROJECT_ROOT, 'compose.yaml');
-const TIMEOUT_MS = 300000; // 5 minutes for build operations
+const ROOT = path.join(__dirname, '..');
+const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const composeText = () => read('compose.yaml');
+const dockerfileText = () => read('dockerfiles/Dockerfile.hermes');
+const dockerAvailable = process.env.DOCKER_TESTS === '1';
+// Tests that drive REAL model inference (minutes of runtime on CPU-only
+// ollama) are additionally gated behind OLLAMA_LIVE_TESTS=1. User decision
+// 2026-09-21: local CPU inference made this verification hang/timeout, so it
+// is skipped in the standard suite; the user verifies inference separately
+// (later, against cloud models).
+const liveInference = process.env.OLLAMA_LIVE_TESTS === '1';
+const testLive = liveInference ? test : test.skip;
 
-// Helper to run docker compose commands
-const runDockerCompose = (args: string, timeout = TIMEOUT_MS): { stdout: string; stderr: string; status: number } => {
-  try {
-    const stdout = execSync(`docker compose ${args}`, {
-      cwd: PROJECT_ROOT,
-      encoding: 'utf-8',
-      timeout
-    });
-    return { stdout, stderr: '', status: 0 };
-  } catch (error: any) {
-    return {
-      stdout: error.stdout || '',
-      stderr: error.stderr || error.message,
-      status: error.status || 1
-    };
-  }
-};
+describe('Dockerfile.hermes', () => {
+  test('pins the newest Hermes base image (>= v0.21.2 required for profile isolation fixes)', () => {
+    expect(dockerfileText()).toMatch(/FROM nousresearch\/hermes-agent:v2026\.9\.14/);
+  });
 
-// Helper to check if Docker is available
-const isDockerAvailable = (): boolean => {
-  try {
-    execSync('docker --version', { encoding: 'utf-8', timeout: 5000 });
-    return true;
-  } catch {
-    return false;
-  }
-};
+  test('does not override the image entrypoint (s6-overlay must stay PID 1)', () => {
+    // \s* + case-insensitive: Docker allows leading whitespace and lowercase
+    // keywords; still line-anchored so explanatory comments do not match.
+    expect(dockerfileText()).not.toMatch(/^\s*ENTRYPOINT/im);
+  });
 
-// Helper to check if containers are running
-const getContainerStatus = (containerName: string): string | null => {
-  try {
-    const result = execSync(
-      `docker ps --filter "name=${containerName}" --format "{{.Status}}"`,
-      { encoding: 'utf-8', timeout: 10000 }
-    ).trim();
-    return result || null;
-  } catch {
-    return null;
-  }
-};
+  test('installs OpenCode CLI in the shared image (coder two-layer, single container)', () => {
+    expect(dockerfileText()).toMatch(/npm install -g opencode-ai@latest/);
+  });
 
-// Helper to wait for container health
-const waitForHealthy = async (containerName: string, maxWaitMs = 120000): Promise<boolean> => {
-  const startTime = Date.now();
-  while (Date.now() - startTime < maxWaitMs) {
-    try {
-      const result = execSync(
-        `docker inspect --format "{{.State.Health.Status}}" ${containerName}`,
-        { encoding: 'utf-8', timeout: 5000 }
-      ).trim();
-      if (result === 'healthy') {
-        return true;
+  test('pre-creates workspace dirs chowned to hermes (CMD drops to hermes user)', () => {
+    expect(dockerfileText()).toMatch(/mkdir -p \/app\/projects \/app\/results/);
+    expect(dockerfileText()).toMatch(/chown hermes:hermes \/app\/projects \/app\/results/);
+  });
+
+  test('does not install the NATS python client', () => {
+    expect(dockerfileText()).not.toMatch(/nats-py/);
+  });
+
+  test('no coder-specific entrypoint remains', () => {
+    expect(dockerfileText()).not.toMatch(/coder-entrypoint\.sh/);
+    expect(dockerfileText()).not.toMatch(/hermes-entrypoint\.sh/);
+  });
+});
+
+describe('compose.yaml infrastructure services', () => {
+  test('keeps ollama, searxng and valkey services unchanged', () => {
+    const c = composeText();
+    expect(c).toMatch(/ollama:\s*\n/);
+    expect(c).toMatch(/searxng:\s*\n/);
+    expect(c).toMatch(/valkey:\s*\n/);
+  });
+});
+
+describe('compose.yaml single-agent architecture', () => {
+  // Slice out just the `agent:` service block. Several asserted keys
+  // (memory: 4G, 8642) also appear in infra services — whole-file regexes
+  // stayed green even if the agent block were gutted (Task 4 quality review).
+  const agentBlock = () => {
+    const m = composeText().match(/^  agent:\n([\s\S]*?)(?=^  \w|^#|^\w)/m);
+    if (!m) throw new Error('agent service block not found in compose.yaml');
+    return m[1];
+  };
+
+  test('has exactly one agent service named "agent"', () => {
+    const c = composeText();
+    expect(c).toMatch(/^  agent:\s*$/m);
+    expect(c).not.toMatch(/^  agent-main:\s*$/m);
+    expect(c).not.toMatch(/^  researcher:\s*$/m);
+    expect(c).not.toMatch(/^  simple-agent:\s*$/m);
+    expect(c).not.toMatch(/^  coder:\s*$/m);
+  });
+
+  test('has no NATS service and no NATS url anywhere', () => {
+    const c = composeText();
+    expect(c).not.toMatch(/^  nats:\s*$/m);
+    expect(c).not.toMatch(/NATS_URL/);
+    expect(c).not.toMatch(/nats:/);
+  });
+
+  test('no per-service AGENT_NAME env pattern remains', () => {
+    expect(composeText()).not.toMatch(/AGENT_NAME/);
+  });
+
+  test('agent service mounts single volume ./volumes/agent at /opt/data', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/\.\/volumes\/agent:\/opt\/data/);
+    const c = composeText();
+    expect(c).not.toMatch(/agent-main:\/opt\/data/);
+    expect(c).not.toMatch(/agent-researcher:\/opt\/data/);
+    expect(c).not.toMatch(/agent-simple:\/opt\/data/);
+    expect(c).not.toMatch(/agent-coder:\/opt\/data/);
+  });
+
+  test('agent keeps results and projects mounts', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/\.\/volumes\/results:\/app\/results/);
+    expect(b).toMatch(/\.\/volumes\/projects:\/app\/projects/);
+  });
+
+  test('agent resource limits: 2 CPUs reserved and capped, 4G reserved / 8G limit', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/reservations:\s*\n\s+cpus: 2\s*\n\s+memory: 4G/);
+    expect(b).toMatch(/limits:\s*\n\s+cpus: 2\s*\n\s+memory: 8G/);
+  });
+
+  test('agent runs bootstrap.sh as command and exposes 8642 on loopback only', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/command: \["\/app\/scripts\/bootstrap\.sh"\]/);
+    // Loopback-only (user decision, 2026-09-19): the single gateway fronts ALL
+    // profiles behind approvals.mode: off and its auth is unverified; nothing
+    // documented needs LAN exposure (health checks and tests use localhost,
+    // Discord connects outbound). Remote access via SSH tunnel if ever needed.
+    expect(b).toMatch(/127\.0\.0\.1:8642:8642/);
+  });
+
+  test('agent no longer sets HERMES_YOLO_MODE (denylisted in v0.21)', () => {
+    expect(composeText()).not.toMatch(/HERMES_YOLO_MODE/);
+  });
+
+  test('agent sets OPENCODE_CONFIG at compose level (docker exec can verify it)', () => {
+    // Under /opt/data — the CMD is dropped to the `hermes` user by the image's
+    // main-wrapper (s6-setuidgid), so /root/.config is unwritable.
+    expect(agentBlock()).toMatch(/OPENCODE_CONFIG: \/opt\/data\/\.config\/opencode\/opencode\.jsonc/);
+  });
+
+  test('agent depends on ollama and searxng, not nats', () => {
+    expect(agentBlock()).toMatch(/depends_on:\s*\n\s+ollama:\s*\n\s+condition: service_healthy\s*\n\s+searxng:/);
+    expect(composeText()).not.toMatch(/nats:/);
+  });
+});
+
+// Runtime tests against the real stack — executed in Task 9 with DOCKER_TESTS=1.
+describe('running stack (DOCKER_TESTS=1 only)', () => {
+  const maybe = dockerAvailable ? describe : describe.skip;
+
+  maybe('single-container runtime', () => {
+    test('agent container becomes healthy', () => {
+      // Poll ~130s: start_period alone is 120s (bootstrap provisions three
+      // profiles before the gateway listens), so a 12x5s window spuriously
+      // failed on any first boot in the 60-120s band (Task 4 quality review).
+      for (let i = 0; i < 26; i++) {
+        let s: string;
+        try {
+          s = require('child_process').execSync(
+            'docker inspect --format "{{.State.Health.Status}}" bob-the-agent',
+            { encoding: 'utf8', stdio: 'pipe' }).trim();
+        } catch {
+          throw new Error('bob-the-agent container not found — did the stack come up?');
+        }
+        if (s === 'healthy') return;
+        require('child_process').execSync('sleep 5');
       }
-    } catch {
-      // Container may not exist yet
-    }
-    await new Promise(resolve => setTimeout(resolve, 5000));
-  }
-  return false;
-};
+      throw new Error('bob-the-agent never became healthy within ~130s (start_period is 120s)');
+    }, 300_000);
 
-// Skip all tests if Docker is not available
-const describeDocker = isDockerAvailable() ? describe : describe.skip;
-
-describeDocker('Docker Compose Build Tests', () => {
-  beforeAll(() => {
-    jest.setTimeout(TIMEOUT_MS);
-  });
-
-  afterAll(() => {
-    // Cleanup: Stop and remove containers
-    runDockerCompose('down --volumes --remove-orphans');
-  });
-
-  describe('Dockerfile Validation', () => {
-    it('should have valid Dockerfile.agent syntax', () => {
-      const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles', 'Dockerfile.agent');
-      expect(fs.existsSync(dockerfilePath)).toBe(true);
-
-      const result = runDockerCompose(`build --no-cache --progress=plain agent`);
-      expect(result.status).toBe(0);
-    });
-  });
-
-  describe('Base Image Requirements', () => {
-    it('should use Node.js 24 base image in Dockerfile.agent', () => {
-      const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles', 'Dockerfile.agent');
-      const content = fs.readFileSync(dockerfilePath, 'utf-8');
-      expect(content).toMatch(/FROM\s+node:24/);
-    });
-  });
-});
-
-describeDocker('Docker Compose Runtime Tests', () => {
-  beforeAll(() => {
-    // Build all images first
-    runDockerCompose('build');
-  });
-
-  afterAll(() => {
-    // Cleanup: Stop and remove containers
-    runDockerCompose('down --volumes --remove-orphans');
-  });
-
-  describe('Container Startup', () => {
-    it('should start Ollama container', async () => {
-      const result = runDockerCompose('up -d ollama');
-      expect(result.status).toBe(0);
-
-      // Wait for container to be running
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      const status = getContainerStatus('bob-the-agent-ollama');
-      expect(status).not.toBeNull();
-    }, 60000);
-
-    it('should have healthy Ollama container', async () => {
-      const healthy = await waitForHealthy('bob-the-agent-ollama', 60000);
-      expect(healthy).toBe(true);
-    }, 90000);
-
-    it('should start agent container', async () => {
-      const result = runDockerCompose('up -d agent');
-      expect(result.status).toBe(0);
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      const status = getContainerStatus('bob-the-agent');
-      expect(status).not.toBeNull();
-    }, 60000);
-
-    it('should have healthy agent container', async () => {
-      const healthy = await waitForHealthy('bob-the-agent', 90000);
-      expect(healthy).toBe(true);
-    }, 120000);
-  });
-
-  describe('Port Availability', () => {
-    it('should expose Ollama on port 11434', () => {
-      const result = execSync('docker port bob-the-agent-ollama', { encoding: 'utf-8' });
-      expect(result).toContain('11434');
+    test('multiplexed gateway port 8642 reachable from host', () => {
+      require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8642"');
     });
 
-    it('should expose agent on port 18789', () => {
-      const result = execSync('docker port bob-the-agent', { encoding: 'utf-8' });
-      expect(result).toContain('18789');
-    });
-  });
-
-  describe('Service Connectivity', () => {
-    it('should have network connectivity between services', () => {
-      const result = execSync(
-        'docker exec bob-the-agent curl -s -o /dev/null -w "%{http_code}" http://ollama:11434/api/tags',
-        { encoding: 'utf-8', timeout: 10000 }
-      ).trim();
-
-      // Accept 200 (success) or 404 (endpoint exists but may need model)
-      expect(['200', '404']).toContain(result);
-    });
-  });
-
-  describe('Volume Mounts', () => {
-    it('should mount results volume', () => {
-      const result = execSync(
-        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/results\\"}}{{.Source}}{{end}}{{end}}"',
-        { encoding: 'utf-8' }
-      ).trim();
-
-      expect(result).toBeTruthy();
+    test('profiles researcher/simple/coder provisioned in /opt/data', () => {
+      const out = require('child_process').execSync(
+        'docker exec bob-the-agent ls /opt/data/profiles', { encoding: 'utf8' });
+      expect(out).toMatch(/researcher/);
+      expect(out).toMatch(/simple/);
+      expect(out).toMatch(/coder/);
     });
 
-    it('should mount user-files volume', () => {
-      const result = execSync(
-        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/user-files\\"}}{{.Source}}{{end}}{{end}}"',
-        { encoding: 'utf-8' }
-      ).trim();
-
-      expect(result).toBeTruthy();
-    });
-
-    it('should mount data volume', () => {
-      const result = execSync(
-        'docker inspect bob-the-agent --format "{{range .Mounts}}{{if eq .Destination \\"/app/data\\"}}{{.Source}}{{end}}{{end}}"',
-        { encoding: 'utf-8' }
-      ).trim();
-
-      expect(result).toBeTruthy();
-    });
-  });
-});
-
-describeDocker('Health Endpoint Tests', () => {
-  beforeAll(async () => {
-    // Ensure containers are up
-    runDockerCompose('up -d');
-    // Wait longer for containers to be ready after previous suite teardown
-    await new Promise(resolve => setTimeout(resolve, 90000));
-    // Wait for containers to be healthy
-    await waitForHealthy('bob-the-agent-ollama', 60000);
-    await waitForHealthy('bob-the-agent', 60000);
-  }, 180000); // Increase timeout for this hook
-
-  afterAll(() => {
-    runDockerCompose('down --volumes --remove-orphans');
-  });
-
-  describe('Agent Health', () => {
-    it('should have open TCP port for WebSocket gateway', async () => {
-      // Agent gateway speaks WebSocket, test TCP connectivity
-      const result = execSync(
-        'docker exec bob-the-agent bash -c "echo > /dev/tcp/localhost/18789 && echo OK || echo FAIL"',
-        { encoding: 'utf-8', timeout: 10000 }
-      ).trim();
-      expect(result).toBe('OK');
-    });
-  });
-
-  describe('Ollama Health', () => {
-    it('should respond to /api/tags endpoint', async () => {
-      const result = execSync(
-        'docker exec bob-the-agent-ollama curl -s http://localhost:11434/api/tags',
-        { encoding: 'utf-8', timeout: 10000 }
-      );
-
-      expect(result).toBeTruthy();
-      // Should return valid JSON
-      expect(() => JSON.parse(result)).not.toThrow();
-    });
-  });
-});
-
-describeDocker('Compose File Validation', () => {
-  it('should have valid docker-compose.yml syntax', () => {
-    const result = runDockerCompose('config --quiet');
-    expect(result.status).toBe(0);
-  });
-
-  it('should define all required services', () => {
-    const content = fs.readFileSync(DOCKER_COMPOSE_FILE, 'utf-8');
-    expect(content).toContain('ollama:');
-    expect(content).toContain('agent:');
-  });
-
-  it('should define required volumes', () => {
-    const content = fs.readFileSync(DOCKER_COMPOSE_FILE, 'utf-8');
-    expect(content).toContain('ollama_data:');
-    expect(content).toContain('agent_workspace:');
-  });
-
-  it('should define health checks for all services', () => {
-    const content = fs.readFileSync(DOCKER_COMPOSE_FILE, 'utf-8');
-    expect(content).toMatch(/healthcheck:[\s\S]*test:/);
-  });
-
-  it('should not reference missing .env files', () => {
-    const content = fs.readFileSync(DOCKER_COMPOSE_FILE, 'utf-8');
-    // Should not have env_file directive pointing to .env
-    expect(content).not.toMatch(/env_file:\s*\n\s*-\s*\.env/);
-  });
-});
-
-describe('Package.json Validation', () => {
-  it('should require Node.js 24+ in root package.json', () => {
-    const packagePath = path.join(PROJECT_ROOT, 'package.json');
-    const content = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-    expect(content.engines?.node).toMatch(/>=24/);
+    testLive('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {
+      // Deterministic assertion for a persisted test: the one-shot run exits 0
+      // and returns non-empty output. The strict "pong" word check stays in the
+      // manual Task 9 Step 4 gate — LLM replies are inherently non-deterministic.
+      // 900s (Task 9): the default qwen3.5:2b-q4_K_M runs on the ollama
+      // container with CPU-only inference — a single one-shot with thinking
+      // took ~11 minutes on the Task 9 host, far above the previous 300s.
+      const out = require('child_process').execSync(
+        'docker exec bob-the-agent hermes -p simple chat --oneshot -q "Reply with the single word: pong"',
+        { encoding: 'utf8', timeout: 900_000, stdio: 'pipe' });
+      expect(out.trim().length).toBeGreaterThan(0);
+    }, 930_000); // jest headroom above execSync's 900s so a hung docker exec
+                 // surfaces execSync's clearer timeout error, not jest's
   });
 });

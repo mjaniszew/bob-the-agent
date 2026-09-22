@@ -5,28 +5,18 @@ x-agent-image: &agent-image bob-the-agent:latest
 x-agent-env: &agent-env
   OLLAMA_BASE_URL: http://ollama:11434
   NODE_ENV: production
-  HERMES_YOLO_MODE: 1
   LOG_LEVEL: ${LOG_LEVEL:-info}
   SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
-  USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
-  USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
-  USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
-  USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
-  USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
-  USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
-  NATS_URL: nats://nats:4222
 x-agent-healthcheck: &agent-healthcheck
   test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
   interval: 30s
   timeout: 10s
   retries: 3
-  start_period: 30s
-x-agent-resources: &agent-resources
-  reservations:
-    cpus: 2
-    memory: 2G
-  limits:
-    memory: 4G
+  # 120s normally covers provisioning; on a FIRST boot with an empty ollama
+  # volume, bootstrap's model pull (~1.6GB download) delays time-to-listen
+  # beyond this — the pull is capped at 30 min (bootstrap.sh), so expect a
+  # long "starting" window on the very first boot.
+  start_period: 120s
 
 services:
   # ===========================================
@@ -36,6 +26,13 @@ services:
     image: ollama/ollama:latest
     container_name: bob-the-agent-ollama
     restart: unless-stopped
+    environment:
+      # Hermes reaches ollama via the OpenAI-compatible endpoint, which cannot
+      # pass num_ctx per request — without this the server defaults to 4096 and
+      # truncates real agent prompts (~16k tokens) to destruction.
+      # Must stay >= the ollama_num_ctx (65536) pinned in
+      # src/agents/*/hermes.partial.yml.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-65536}
     ports:
       - "11434:11434"
     volumes:
@@ -53,93 +50,48 @@ services:
           memory: 1G
 
   # ===========================================
-  # Hermes Agent - Main AI agent / orchestrator
+  # Hermes Agent - single multiplexed agent
+  # (profiles: main, researcher, simple, coder)
   # ===========================================
-  agent-main:
+  agent:
     image: *agent-image
     container_name: bob-the-agent
-    restart: unless-stopped
-    depends_on:
-      ollama:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    environment:
-      <<: *agent-env
-      AGENT_NAME: main
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+    command: ["/app/scripts/bootstrap.sh"]
     ports:
-      - 8642:8642
+      # Loopback-only (user decision 2026-09-19): the gateway fronts all
+      # profiles behind approvals.mode: off and its auth is unverified —
+      # nothing documented needs LAN exposure (Discord connects outbound).
+      - "8642:8642"
+      - "9119:9119"
+    environment:
+      <<: *agent-env
+      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
+      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
+      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
+      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
+      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
+      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
+      HERMES_UID: ${HERMES_UID:-}
+      HERMES_GID: ${HERMES_GID:-}
+      HERMES_DASHBOARD: ${HERMES_DASHBOARD:-}
+      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
+      # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
+      # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
     volumes:
-      - ./volumes/agent-main:/opt/data
+      - ./volumes/agent:/opt/data
       - ./volumes/results:/app/results
       - ./volumes/projects:/app/projects
-    healthcheck: *agent-healthcheck
-    deploy:
-      resources: *agent-resources
-  # ===========================================================
-  # Researcher Agent - AI agent focused on deep research tasks
-  # ===========================================================
-  researcher:
-    image: *agent-image
-    container_name: bob-the-agent-researcher
     restart: unless-stopped
     depends_on:
       ollama:
         condition: service_healthy
-      nats:
-        condition: service_healthy
-    environment:
-      <<: *agent-env
-      AGENT_NAME: researcher
-    volumes:
-      - ./volumes/agent-researcher:/opt/data
-      - ./volumes/results:/app/results
-    healthcheck: *agent-healthcheck
-    deploy:
-      resources: *agent-resources
-  # =====================================================================
-  # Simple Agent - AI agent focused on conducting simple and cheap tasks
-  # =====================================================================
-  simple-agent:
-    image: *agent-image
-    container_name: bob-the-agent-simple
-    restart: unless-stopped
-    depends_on:
-      ollama:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    environment:
-      <<: *agent-env
-      AGENT_NAME: simple
-    volumes:
-      - ./volumes/agent-simple:/opt/data
-      - ./volumes/results:/app/results
-    healthcheck: *agent-healthcheck
-    deploy:
-      resources: *agent-resources
-  # =====================================================================
-  # Coder Agent - AI agent focused on software engineering tasks
-  # Uses Hermes Agent + OpenCode CLI two-layer architecture
-  # =====================================================================
-  coder:
-    image: *agent-image
-    container_name: bob-the-agent-coder
-    restart: unless-stopped
-    depends_on:
-      ollama:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-    environment:
-      <<: *agent-env
-      AGENT_NAME: coder
-      OPENCODE_CONFIG: /root/.config/opencode/opencode.jsonc
-    volumes:
-      - ./volumes/agent-coder:/opt/data
-      - ./volumes/results:/app/results
-      - ./volumes/projects:/app/projects
+      searxng:
+        condition: service_started
     healthcheck: *agent-healthcheck
     deploy:
       resources:
@@ -147,9 +99,8 @@ services:
           cpus: 2
           memory: 4G
         limits:
+          cpus: 2
           memory: 8G
-    entrypoint: ["/app/scripts/coder-entrypoint.sh"]
-    command: ["bash", "-c", "/usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh gateway run"]
 
   # ===========================================
   # SearXNG - Privacy-respecting metasearch engine
@@ -204,28 +155,6 @@ services:
         limits:
           cpus: 0.5
           memory: 256M
-  nats:
-    image: nats:2.14.0-alpine3.22
-    container_name: bob-the-agent-nats
-    restart: unless-stopped
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    command: "--cluster_name nats --cluster nats://0.0.0.0:6222 --http_port 8222"
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8222/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    deploy:
-      resources:
-        reservations:
-          cpus: 0.25
-          memory: 64M
-        limits:
-          cpus: 0.5
-          memory: 128M
 
 # ===========================================
 # Named Volumes

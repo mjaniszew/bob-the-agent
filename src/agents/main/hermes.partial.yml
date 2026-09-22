@@ -1,14 +1,20 @@
 model:
-  default: kimi-k2.6:cloud
+  default: glm-5.3-flash:cloud
   provider: custom
   base_url: http://ollama:11434/v1
+  # CPU-only host: cap the per-request ollama context (GGUF advertises 256k;
+  # hermes auto-detects and would otherwise send num_ctx=262144 per request).
+  # 65536 is hermes' minimum for reliable tool use; KV cost is small (GQA).
+  ollama_num_ctx: 65536
 custom_providers:
-- name: ollama/kimi-k2.6:cloud
+- name: ollama/glm-5.3-flash:cloud
   base_url: http://ollama:11434/v1
-  model: kimi-k2.6:cloud
+  model: glm-5.3-flash:cloud
 toolsets:
 - hermes-cli
 - browser
+gateway:
+  multiplex_profiles: true
 agent:
   max_turns: 90
   gateway_timeout: 3600
@@ -23,5 +29,9 @@ agent:
   disabled_toolsets: []
   verbose: false
   reasoning_effort: medium
+  bot_mode_protocol: true
+  # CPU-only host: fresh prompts prefill at ~20 tok/s — hermes' 900s local
+  # stale-stream detector kills the connection mid-prefill on big prompts.
+  local_stream_stale_timeout: 3600
   personalities:
     default: You are automation agent. You execute given tasks without asking questions, and ask only when it's absolutely necessary.

@@ -128,7 +128,7 @@ describe('real hermes config merge', () => {
     const result = yaml.load(fs.readFileSync(output, 'utf8')) as any;
 
     // Partial overrides
-    expect(result.model.default).toBe('kimi-k2.6:cloud');
+    expect(result.model.default).toBe('qwen3.5:2b-q4_K_M');
     expect(result.model.provider).toBe('custom');
     expect(result.model.base_url).toBe('http://ollama:11434/v1');
 
@@ -138,6 +138,6 @@ describe('real hermes config merge', () => {
 
     // Arrays replaced
     expect(result.custom_providers).toHaveLength(1);
-    expect(result.custom_providers[0].name).toBe('ollama/kimi-k2.6:cloud');
+    expect(result.custom_providers[0].name).toBe('ollama/qwen3.5:2b-q4_K_M');
   });
 });

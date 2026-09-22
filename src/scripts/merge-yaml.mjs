@@ -13,8 +13,8 @@
  *   2 - YAML parsing error
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'fs';
+import { dirname, join } from 'path';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -131,7 +131,20 @@ function main() {
   });
 
   try {
-    writeFileSync(outputPath, outputYaml, 'utf8');
+    // Atomic write: same-directory temp file + rename. An in-place
+    // truncate-then-write of a large user config (input == output during
+    // bootstrap's in-place reconcile) would leave truncated YAML behind a
+    // crash mid-write — a state the next boot cannot self-heal. rename(2) on
+    // the same filesystem is atomic, so the output path always holds either
+    // the complete old file or the complete new one.
+    const tmpPath = join(dirname(outputPath), `.${Date.now()}-${process.pid}-merge-yaml.tmp`);
+    try {
+      writeFileSync(tmpPath, outputYaml, 'utf8');
+      renameSync(tmpPath, outputPath);
+    } catch (err) {
+      try { unlinkSync(tmpPath); } catch { /* temp already gone */ }
+      throw err;
+    }
   } catch (err) {
     console.error(`Error: Cannot write output file: ${outputPath}`);
     console.error(`  ${err.message}`);
