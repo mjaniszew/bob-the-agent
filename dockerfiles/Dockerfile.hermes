@@ -23,7 +23,7 @@ RUN apt-get update \
 
 # OpenCode CLI — coding engine supervised by the `coder` profile
 # (was previously installed by the coder layer's entrypoint script)
-RUN npm install -g opencode-ai@latest
+RUN npm install -g opencode-ai@1.18.32
 
 WORKDIR /app
 
