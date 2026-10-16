@@ -2,6 +2,13 @@
 
 This file contains general instructions for all AI agents. Needs to be followed strictly.
 
+## Project Overview
+
+This project builds a containerized AI agent that runs 24/7 autonomously via Docker/Docker Compose. The agent executes user-defined tasks without requiring interaction. Final artifacts are a Dockerfile and docker-compose.yml.
+
+**Mandatory reading before starting work:**
+1. `docs/OVERVIEW.md` - Project purpose and development workflow
+
 ## General
 - never read, use or modify any `.env` and `/env.*` files
 - use separate subagents when feasible eg. perform actions like reading files, web search, planning, and execution as separate subagents

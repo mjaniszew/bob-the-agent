@@ -36,7 +36,7 @@
       "maxTokens": 16000
     },
     "plan": {
-      "model": "ollama/glm-5.3-flash:cloud",
+      "model": "ollama/glm-5.3:cloud",
       "mode": "primary",
       "temperature": 0.1,
       "maxTokens": 16000
@@ -53,10 +53,16 @@
       "temperature": 0.3,
       "maxTokens": 16000
     },
+    "scout": {
+      "model": "ollama/glm-5.3-flash:cloud",
+      "mode": "subagent",
+      "temperature": 0.3,
+      "maxTokens": 16000
+    },
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
       "mode": "subagent",
-      "model": "ollama/glm-5.3-flash:cloud",
+      "model": "ollama/kimi-k2.7-code:cloud",
       "temperature": 0.7,
       "maxTokens": 16000,
       "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
