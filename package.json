@@ -8,8 +8,6 @@
     "test:watch": "jest --config tests/jest.config.js --watch",
     "test:coverage": "jest --config tests/jest.config.js --coverage",
     "test:docker": "jest --config tests/jest.config.js --testPathPattern=docker-compose --testTimeout=300000",
-    "build:api": "cd src/api && npm run build",
-    "build:frontend": "cd src/frontend && npm run build",
     "build:skills": "cd src/skills && npm run build",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' --fix"

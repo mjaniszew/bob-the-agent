@@ -4,14 +4,14 @@ This project purpose is to build containerized AI agent which can be run via Doc
 
 ## Architecture
 
-The project uses a **multi-container architecture** built on the Hermes Agent framework. Each specialized agent runs in its own container:
+The project uses a **single-container architecture** built on the Hermes Agent framework (v0.21.3, image `nousresearch/hermes-agent:v2026.9.14`). One `agent` container runs the Hermes Agent with multiple profiles:
 
-- **agent-main** — Orchestrator that delegates tasks and provides the Discord bot interface
+- **main** (default profile) — Orchestrator that delegates tasks and provides the Discord bot interface
 - **researcher** — Deep research and analysis specialist
-- **simple-agent** — Lightweight handler for simple tasks
-- **coder** — Software engineering specialist using a two-layer architecture: Hermes Agent (supervisor/bridge) orchestrating OpenCode CLI (coding engine)
+- **simple** — Lightweight handler for simple tasks
+- **coder** — Software engineering specialist using a two-layer architecture: Hermes profile (supervisor/bridge) orchestrating OpenCode CLI (coding engine)
 
-All agents share an **Ollama** instance for LLM inference and a **SearXNG** search engine. Communication between agents uses Hermes' built-in `delegate_task` system and **NATS** inter-agent messaging for cross-container delegation.
+The gateway multiplexes all profiles in the single container (`gateway.multiplex_profiles: true`). Ollama serves LLM inference and SearXNG provides search. Delegation between profiles is in-process: the main profile uses the `delegate-profile` skill, which runs `hermes -p <profile> chat --oneshot` and hands off result files via `/app/results`.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, container configuration, and data flow.
 

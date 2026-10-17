@@ -56,7 +56,7 @@ Available skills:
   - math-operations     Perform calculations and statistical analysis
   - aws-s3             Upload files to S3 and generate presigned URLs
   - grok-search        Search X.com via xAI Grok x_search tool (fallback for x-com)
-  - agent-to-agent     Communicate with other agents via NATS messaging
+  - delegate-profile   Delegate tasks to other agent profiles (simple, researcher, coder)
 
 Examples:
   # Web search
@@ -77,8 +77,8 @@ Examples:
   # Grok search (X.com fallback)
   node skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"xAI announcements"}'
 
-  # Agent-to-agent status update
-  node skill-runner.mjs --skill agent-to-agent --params '{"action":"update_status","target_agent_id":"main","original_message_id":"550e8400...","update_details":"Processing batch 3 of 10"}'
+  # Delegate a task to the researcher profile
+  node skill-runner.mjs --skill delegate-profile --params '{"action":"send_task","target_agent_id":"researcher","goal":"Research AI trends","context":"Annual report","save_results_to":"/app/results/research/"}'
 `);
       process.exit(0);
     }
@@ -101,7 +101,7 @@ const skillRegistry = {
   'math-operations': () => import(`${SKILLS_DIST}/math-operations/index.js`).then(m => m.default),
   'aws-s3': () => import(`${SKILLS_DIST}/aws-s3/index.js`).then(m => m.default),
   'grok-search': () => import(`${SKILLS_DIST}/grok-search/index.js`).then(m => m.default),
-  'agent-to-agent': () => import(`${SKILLS_DIST}/agent-to-agent/index.js`).then(m => m.default)
+  'delegate-profile': () => import(`${SKILLS_DIST}/delegate-profile/index.js`).then(m => m.default)
 };
 
 // Validate skill parameters against registry metadata

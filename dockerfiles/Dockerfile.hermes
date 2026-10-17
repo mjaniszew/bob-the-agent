@@ -1,37 +1,56 @@
-FROM nousresearch/hermes-agent:v2026.4.30
+# Bob the Agent — single-container Hermes (profiles/bots) image.
+# Base = official Hermes Agent image, v0.21.3 (tag v2026.9.14).
+# s6-overlay v3 stays PID 1 (the image entrypoint /init is never overridden).
+# The container command is /app/scripts/bootstrap.sh: it provisions profiles,
+# then execs the long-running gateway ("hermes gateway run") as its last step.
+# Under s6-overlay v3, CMD runs as a child of the already-running /init, so the
+# gateway becomes the container's long-running foreground process.
+FROM nousresearch/hermes-agent:v2026.9.14
 
 # Environment setup
 ENV NODE_COMPILE_CACHE=/var/tmp/node-compile-cache
 
-# Create node compile cache directory
-RUN mkdir -p /var/tmp/node-compile-cache
+# Create node compile cache directory (chowned: CMD runs as the hermes user)
+RUN mkdir -p /var/tmp/node-compile-cache && chown hermes:hermes /var/tmp/node-compile-cache
 
-# Install additional system dependencies eg. browser
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    systemctl ca-certificates make g++ chromium python3-pip \
+USER root
+
+# System dependencies (kept from the previous image; chromium for browser tooling)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates make g++ chromium python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install NATS Python client
-RUN pip3 install --no-cache-dir --break-system-packages nats-py==2.14.0
+# OpenCode CLI — coding engine supervised by the `coder` profile
+# (was previously installed by the coder layer's entrypoint script)
+RUN npm install -g opencode-ai@1.18.32
 
-RUN mkdir -p /app/scripts
+WORKDIR /app
+
+# Project payloads
 COPY ./src/config/ /app/config/
 COPY ./src/scripts/ /app/scripts/
 COPY ./src/agents/ /app/agents/
 COPY ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/*
 
+# YAML merge tooling used by generate-config.sh (merge-yaml.mjs)
 RUN cd /app/scripts && npm install js-yaml@4.1.1
 
-# Set working directory for skills build
+# Build the TypeScript skills (tsc -> dist/)
 WORKDIR /app/skills
-
-# Install skills dependencies and build skills
-RUN npm install 
-RUN npm run build
+RUN npm install && npm run build
 
 WORKDIR /app
 
-ENTRYPOINT ["scripts/hermes-entrypoint.sh"]
-CMD ["bash", "-c", "/usr/bin/tini -g -- /opt/hermes/docker/entrypoint.sh gateway run"]
+# Workspace dirs. Pre-created + chowned to `hermes` because the container CMD
+# (main-wrapper.sh) drops privileges to the hermes user before running our
+# bootstrap — root-owned /app subdirs would be unwritable. Compose bind-mounts
+# ./volumes/projects and ./volumes/results over these; this guarantees they
+# exist (and are hermes-writable) even when the mounts are absent.
+RUN mkdir -p /app/projects /app/results \
+    && chown hermes:hermes /app/projects /app/results
+
+# No entrypoint override: the image default (entrypoint-dispatch.sh -> /init)
+# stays PID 1.
+# docker compose sets: command: ["/app/scripts/bootstrap.sh"]

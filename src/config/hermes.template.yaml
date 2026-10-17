@@ -20,7 +20,14 @@ agent:
   image_input_mode: auto
   disabled_toolsets: []
   verbose: false
-  reasoning_effort: medium
+  # CPU-only host: qwen3.5 thinking runs ~9 min per trivial reply on the
+  # ollama container (no GPU). reasoning_effort: false makes hermes send
+  # reasoning_effort "none" + think=false (see Task 9 verification).
+  reasoning_effort: false
+  # CPU-only host: a fresh ~16k-token coder prompt prefills at ~20 tok/s
+  # (~13-15 min, no GPU) — hermes' 900s local stale-stream detector kills the
+  # connection mid-prefill ("Stream stale for 900s — no chunks received").
+  local_stream_stale_timeout: 3600
   personalities:
     default: You are automation agent. You execute given tasks without asking questions, and ask only when it's absolutely necessary.
 terminal:
@@ -305,8 +312,16 @@ slack:
 mattermost:
   channel_prompts: {}
 approvals:
-  mode: manual
+  # 'off' is the v0.21 replacement for the denylisted HERMES_YOLO_MODE env var:
+  # full approval bypass across interactive, gateway, cron and unattended
+  # contexts (required for 24/7 unattended operation). Valid modes:
+  # manual | smart | off.
+  mode: off
   timeout: 60
+  # NOTE: cron_mode/mcp_reload_confirm below are inert while mode is 'off'
+  # (the gate short-circuits before consulting them). Left as-is for parity;
+  # if mode is ever flipped back, cron_mode: deny would silently deny cron
+  # tasks on a 24/7 agent — revisit then.
   cron_mode: deny
   mcp_reload_confirm: true
 command_allowlist: []
