@@ -5,7 +5,7 @@ model:
   # CPU-only host: cap the per-request ollama context (GGUF advertises 256k;
   # hermes auto-detects and would otherwise send num_ctx=262144 per request).
   # 65536 is hermes' minimum for reliable tool use; KV cost is small (GQA).
-  ollama_num_ctx: 65536
+  ollama_num_ctx: 256000
 custom_providers:
 - name: ollama/glm-5.3-flash:cloud
   base_url: http://ollama:11434/v1

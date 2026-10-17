@@ -79,13 +79,15 @@ services:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
       HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
+      DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
     volumes:
       - ./volumes/agent:/opt/data
       - ./volumes/results:/app/results
-      - ./volumes/projects:/app/projects
+      - ${USER_PROJECTS_FOLDER:-./volumes/projects}:/app/projects
     restart: unless-stopped
     depends_on:
       ollama:

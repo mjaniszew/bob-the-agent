@@ -1,5 +1,5 @@
 model:
-  default: minimax-m2.7:cloud
+  default: glm-5.3-flash:cloud
   provider: custom
   base_url: http://ollama:11434/v1
   # CPU-only host: cap the per-request ollama context (GGUF advertises 256k;
@@ -7,9 +7,9 @@ model:
   # 65536 is hermes' minimum for reliable tool use; KV cost is small (GQA).
   ollama_num_ctx: 65536
 custom_providers:
-- name: ollama/minimax-m2.7:cloud
+- name: ollama/glm-5.3-flash:cloud
   base_url: http://ollama:11434/v1
-  model: minimax-m2.7:cloud
+  model: glm-5.3-flash:cloud
 toolsets:
 - hermes-cli
 - browser
