@@ -36,6 +36,11 @@ security:
   tirith_path: "tirith"
   tirith_timeout: 5
   tirith_fail_open: true
+approvals:
+  mode: off
+  cron_mode: approve
+  single_query_mode: approve
+  unattended_mode: approve
 terminal:
   backend: local
   cwd: .
