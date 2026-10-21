@@ -77,11 +77,11 @@
     },
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
-      "mode": "subagent",
+      "mode": "primary",
       "model": "ollama/kimi-k2.7-code:cloud",
       "temperature": 0.7,
       "maxTokens": 32000,
-      "prompt": "You are a code reviewer. Focus on security, performance, and maintainability.",
+      "prompt": "You are a code reviewer. Focus on security, performance, and maintainability. Verify claims by reading the actual code before reporting findings. Do not modify any files.",
       "tools": {
         "write": false,
         "edit": false

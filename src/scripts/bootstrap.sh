@@ -56,7 +56,7 @@ copy_skills() { # <target_profile_dir> — skip node_modules/ and dist/ (volume 
 }
 
 # ---- 1. Default profile (main orchestrator) ------------------------------
-if [ ! -f "$HERMES_HOME/config.yaml" ]; then
+if [ ! -f "$HERMES_HOME/config.yaml" ] || [ ! -f "$HERMES_HOME/.initialized" ]; then
   log "generating default (main) profile config"
   /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" main "$HERMES_HOME/config.yaml"
 else
@@ -70,7 +70,11 @@ else
     "$AGENTS_DIR/main/hermes.partial.yml" "$HERMES_HOME/config.yaml" \
     || log "WARN: main config reconciliation failed; keeping existing config"
 fi
-[ -f "$HERMES_HOME/SOUL.md" ] || cp "$AGENTS_DIR/main/SOUL.md" "$HERMES_HOME/SOUL.md"
+if [ -f "$HERMES_HOME/SOUL.md" ] && [ ! -f "$HERMES_HOME/.initialized" ]; then
+  rm "$HERMES_HOME/SOUL.md"
+  cp "$AGENTS_DIR/main/SOUL.md" "$HERMES_HOME/SOUL.md"
+fi
+
 copy_skills "$HERMES_HOME"
 
 # ---- 2. Secondary profiles ------------------------------------------------
@@ -144,6 +148,10 @@ if ! curl -fsS --connect-timeout 10 --max-time 10 "${OLLAMA_BASE_URL:-http://oll
   rm -f "$PULL_OUT" "$PULL_ERR"
 else
   log "ollama model present: $OLLAMA_MODEL"
+fi
+
+if [ ! -f "$HERMES_HOME/.initialized" ]; then
+  touch "$HERMES_HOME/.initialized"
 fi
 
 # ---- 5. Shared workspaces ---------------------------------------------------
