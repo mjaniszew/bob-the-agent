@@ -62,16 +62,16 @@ docker compose up -d
 
 ### 4. Pull Ollama Models
 
-```bash
-# Pull local model (required)
-docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
+On first boot, bootstrap runs a best-effort `ollama pull` targeting the template default model `glm-5.3-flash:cloud` (capped at 30 minutes). That model is served in the cloud, so the pull is just a short manifest pull, not a large local download. Sign into Ollama and pull the manifests for the configured cloud models:
 
-# Sign into Ollama for cloud models (optional)
+```bash
+# Sign into Ollama for cloud models
 docker exec -it bob-the-agent-ollama ollama signin
 
 # Pull cloud model manifests
-docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
-docker exec bob-the-agent-ollama ollama pull minimax-m2.7:cloud
+docker exec bob-the-agent-ollama ollama pull glm-5.3-flash:cloud
+docker exec bob-the-agent-ollama ollama pull glm-5.3:cloud
+docker exec bob-the-agent-ollama ollama pull kimi-k2.7-code:cloud
 ```
 
 ### 5. Verify Installation
@@ -81,7 +81,7 @@ docker exec bob-the-agent-ollama ollama pull minimax-m2.7:cloud
 docker compose ps
 
 # Check main agent health
-curl http://localhost:8642/healthz
+curl http://localhost:8642/health
 
 # Check Ollama
 curl http://localhost:11434/api/tags
@@ -89,7 +89,7 @@ curl http://localhost:11434/api/tags
 
 ### 6. Configure Discord Bot (Optional)
 
-Set `DISCORD_BOT_TOKEN` and `DISCORD_CLIENT_ID` in `.env`, then restart:
+Set `DISCORD_BOT_TOKEN` in `.env`, then restart:
 
 ```bash
 docker compose restart agent
@@ -172,7 +172,17 @@ Built-in skills for:
 - OpenCode CLI integration (coder profile coding engine)
 - SearXNG web search capabilities
 - x-com(Twitter) searching directly
+- grok (xAI) search as an x-com fallback
 - extracting data from URLs/documents and performing calculations.
+
+Skills are standalone directories — there is no central skill runner and no build step. The agent invokes each skill directly with the commands documented in its SKILL.md:
+
+```bash
+node /app/skills/<skill>/cli.ts '<single-quoted JSON arguments>'   # TypeScript skills — Node runs .ts natively (type stripping)
+python3 /app/skills/searxng-web-search/scripts/searxng_search.py   # Python (SearXNG) helper script
+```
+
+Each skill carries its own dependency manifest (`package.json`, or `requirements.txt` for Python) installed during the Docker build — the built container needs no skill prepare/build step.
 
 ## Development
 
@@ -190,8 +200,8 @@ bob-the-agent/
 │   │   ├── simple/           # Simple task handler
 │   │   └── coder/            # Coding specialist (Hermes + OpenCode CLI)
 │   ├── config/               # Hermes and SearXNG configuration
-│   ├── scripts/              # Container setup and skill runner
-│   └── skills/               # Skill implementations
+│   ├── scripts/              # Container setup scripts
+│   └── skills/               # Standalone skills, invoked directly per their SKILL.md
 ├── volumes/                  # Runtime data (per-agent workspaces)
 └── docs/                      # Documentation
 ```

@@ -26,7 +26,16 @@ describe('Dockerfile.hermes', () => {
   });
 
   test('installs OpenCode CLI in the shared image (coder two-layer, single container)', () => {
-    expect(dockerfileText()).toMatch(/npm install -g opencode-ai@latest/);
+    expect(dockerfileText()).toMatch(/npm install -g opencode-ai@1\.18\.32/);
+  });
+
+  test('per-skill installs replace the tsc build layer', () => {
+    expect(dockerfileText()).toMatch(/npm ci --omit=dev/);
+    expect(dockerfileText()).toMatch(/RUN --mount=type=cache,target=\/root\/\.npm/);
+    expect(dockerfileText()).not.toMatch(/WORKDIR \/app\/skills/);
+    expect(dockerfileText()).not.toMatch(/npm run build/);
+    expect(dockerfileText()).toMatch(/chmod -R \+x \/app\/skills\/\*\/scripts\//);
+    expect(dockerfileText()).not.toMatch(/\/app\/scripts\/skill-runner\.mjs/);
   });
 
   test('pre-creates workspace dirs chowned to hermes (CMD drops to hermes user)', () => {

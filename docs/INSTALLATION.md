@@ -70,7 +70,8 @@ LOG_LEVEL=info
 
 # Optional: Discord Bot
 DISCORD_BOT_TOKEN=your-token
-DISCORD_CLIENT_ID=your-client-id
+# DISCORD_CLIENT_ID: legacy name, no longer referenced by installed Hermes (unverified)
+# DISCORD_CLIENT_ID=your-client-id
 
 # Optional: External services
 SEARXNG_BASE_URL=http://searxng:8888
@@ -124,14 +125,14 @@ Expected containers:
 
 ### Step 4: Ollama Models
 
-The default local model is pulled automatically by bootstrap on first boot (~1.6GB download, can take longer than the health start_period on the very first boot). Optional, for cloud models (user choice — sign-in is not required for local inference):
+On first boot, bootstrap runs a best-effort `ollama pull` (capped at 30 minutes) targeting the template default model, `glm-5.3-flash:cloud`. This is a cloud manifest pull — a short, metadata-backed operation, not a large local model download. Cloud model access requires signing in to Ollama after startup (optional, user choice):
 
 ```bash
 # Sign into Ollama for cloud models (optional)
 docker exec -it bob-the-agent-ollama ollama signin
 
-# Pull cloud model manifests referenced in your profile partials
-docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
+# Pull the default cloud model manifest (bootstrap also does this automatically on first boot)
+docker exec bob-the-agent-ollama ollama pull glm-5.3-flash:cloud
 ```
 
 ### Step 5: Verify Installation
@@ -141,7 +142,7 @@ docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
 curl http://localhost:11434/api/tags
 
 # Check main agent gateway
-curl http://localhost:8642/healthz
+curl http://localhost:8642/health
 
 # Check SearXNG
 curl http://localhost:8888/healthz

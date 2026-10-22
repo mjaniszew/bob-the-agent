@@ -17,10 +17,10 @@ Use this skill when:
 
 ## Usage
 
-Call the skill-runner with:
+Run the skill directly with:
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill math-operations --params '{"operation":"calculate","expression":"2+2"}'
+node /app/skills/math-operations/cli.ts '{"operation":"calculate","expression":"2+2"}'
 ```
 
 ## Parameters
@@ -39,17 +39,17 @@ node /app/scripts/skill-runner.mjs --skill math-operations --params '{"operation
 
 ### Calculate Expression
 ```bash
-node /app/scripts/skill-runner.mjs --skill math-operations --params '{"operation":"calculate","expression":"sqrt(16) + sin(pi/2)"}'
+node /app/skills/math-operations/cli.ts '{"operation":"calculate","expression":"sqrt(16) + sin(pi/2)"}'
 ```
 
 ### Statistical Analysis
 ```bash
-node /app/scripts/skill-runner.mjs --skill math-operations --params '{"operation":"statistics","data":[1,2,3,4,5,6,7,8,9,10],"precision":2}'
+node /app/skills/math-operations/cli.ts '{"operation":"statistics","data":[1,2,3,4,5,6,7,8,9,10],"precision":2}'
 ```
 
 ### Unit Conversion
 ```bash
-node /app/scripts/skill-runner.mjs --skill math-operations --params '{"operation":"convert","value":100,"fromUnit":"km","toUnit":"mi"}'
+node /app/skills/math-operations/cli.ts '{"operation":"convert","value":100,"fromUnit":"km","toUnit":"mi"}'
 ```
 
 ## Supported Operations

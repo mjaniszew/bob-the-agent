@@ -1,0 +1,11 @@
+{
+  "name": "bob-skill-grok-search",
+  "version": "1.0.0",
+  "description": "Standalone skill: grok-search",
+  "type": "module",
+  "main": "index.ts",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

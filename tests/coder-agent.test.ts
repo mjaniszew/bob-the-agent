@@ -209,9 +209,9 @@ describe('Bootstrap (Coder)', () => {
     expect(content).not.toMatch(/if \[ ! -f "\$OPENCODE_TARGET"/);
   });
 
-  it('should install opencode-ai@latest in the shared Dockerfile', () => {
+  it('should install opencode-ai@1.18.32 in the shared Dockerfile', () => {
     const content = fs.readFileSync(dockerfilePath, 'utf-8');
-    expect(content).toMatch(/npm install -g opencode-ai@latest/);
+    expect(content).toMatch(/npm install -g opencode-ai@1\.18\.32/);
   });
 });
 

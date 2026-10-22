@@ -37,6 +37,8 @@ Do NOT use this skill when:
 ## Search Script
 Use the included script for reliable, formatted results:
 
+Dependencies: none (stdlib only, no packages to install).
+
 ```bash
 python3 /app/skills/searxng-web-search/scripts/searxng_search.py --help
 ```

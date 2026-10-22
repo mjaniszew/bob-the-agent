@@ -54,7 +54,7 @@ For software engineering tasks: coding (write code, implement features, refactor
 Run the target profile to completion in the foreground; the result summary is returned directly:
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill delegate-profile --params '{"action": "send_task", "target_agent_id": "researcher", "goal": "...", "context": "...", "save_results_to": "/app/results/..."}'
+node /app/skills/delegate-profile/cli.ts '{"action": "send_task", "target_agent_id": "researcher", "goal": "...", "context": "...", "save_results_to": "/app/results/..."}'
 ```
 
 Prefer foreground `send_task` for tasks expected to finish under ~10 minutes.
@@ -67,8 +67,8 @@ For longer tasks, start in the background and poll:
 2. Poll `check_task` with `action` + `task_id` ONLY — returns `status: "running"` while the task is in progress, `status: "finished"` or `status: "failed"` once done, along with the last ~4000 characters of the log (`log_tail`)
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill delegate-profile --params '{"action": "send_task_background", "target_agent_id": "coder", "goal": "...", "context": "...", "save_results_to": "/app/results/..."}'
-node /app/scripts/skill-runner.mjs --skill delegate-profile --params '{"action": "check_task", "task_id": "<task_id from send_task_background>"}'
+node /app/skills/delegate-profile/cli.ts '{"action": "send_task_background", "target_agent_id": "coder", "goal": "...", "context": "...", "save_results_to": "/app/results/..."}'
+node /app/skills/delegate-profile/cli.ts '{"action": "check_task", "task_id": "<task_id from send_task_background>"}'
 ```
 
 ### check_task result contract

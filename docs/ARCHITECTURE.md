@@ -22,7 +22,7 @@ The system runs as a single Hermes Agent container managed by Docker Compose. Al
 │  │                                                             │         │
 │  │  default profile "main"                                     │         │
 │  │  ├─ Hermes agent (main orchestrator)                        │         │
-│  │  ├─ multiplexed gateway (:8642, loopback-only)              │         │
+│  │  ├─ multiplexed gateway (:8642)                             │         │
 │  │  └─ Discord bot (outbound)                                  │         │
 │  │                                                             │         │
 │  │  secondary profiles (/opt/data/profiles/):                  │         │
@@ -71,8 +71,8 @@ Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60
 
 | Service | Description | Port |
 |---------|-------------|------|
-| `ollama` | Local LLM inference engine | 11434 |
-| `agent` | Single Hermes Agent container — default profile `main` (orchestrator + Discord) with a gateway multiplexing the researcher/simple/coder profiles | 8642 (loopback-only) |
+| `ollama` | LLM inference engine (local and cloud models) | 11434 |
+| `agent` | Single Hermes Agent container — default profile `main` (orchestrator + Discord) with a gateway multiplexing the researcher/simple/coder profiles | 8642 (gateway); 9119 (dashboard) |
 | `searxng` | Privacy-respecting metasearch engine | 8888 |
 | `valkey` | Redis-compatible cache for SearXNG | 6379 |
 
@@ -81,20 +81,24 @@ Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60
 - `agent` depends on `ollama` (LLM inference, healthy) and `searxng` (started)
 - `searxng` depends on `valkey` (caching)
 
+The compose `agent` healthcheck is a TCP check on port 8642 (`start_period: 120s`). The gateway answers 200 on `/health` and `/v1/health`; `/healthz` is not a gateway endpoint (404s). Port 9119 serves the Hermes dashboard (an s6 service), gated on the `HERMES_DASHBOARD` env var; non-loopback binds require authentication (`HERMES_DASHBOARD_BASIC_AUTH_USERNAME`/`_PASSWORD`/`_SECRET` or OAuth).
+
 ### Agent Profiles
 
 | Profile | Model (default) | Role |
 |-------|-------|------|
-| `main` | `qwen3.5:2b-q4_K_M` (local, via Ollama) | Main orchestrator — receives tasks, delegates to specialist profiles, provides Discord bot, manages results |
-| `researcher` | `qwen3.5:2b-q4_K_M` (local, via Ollama) | Research specialist — performs deep research, analysis, cross-referencing of sources |
-| `simple` | `qwen3.5:2b-q4_K_M` (local, via Ollama) | Simple task handler — web search, summaries, data extraction, S3 uploads |
-| `coder` | `qwen3.5:2b-q4_K_M` (local, via Ollama) | Coding specialist — Hermes profile orchestrating OpenCode CLI for software engineering tasks |
+| `main` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Main orchestrator — receives tasks, delegates to specialist profiles, provides Discord bot, manages results |
+| `researcher` | `glm-5.3:cloud` (cloud, via Ollama) | Research specialist — performs deep research, analysis, cross-referencing of sources |
+| `simple` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Simple task handler — web search, summaries, data extraction, S3 uploads |
+| `coder` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Coding specialist — Hermes profile orchestrating OpenCode CLI for software engineering tasks |
 
-Models are changed per profile via `src/agents/{name}/hermes.partial.yml` (see [Configuration Guide](./CONFIGURATION.md)). All profiles currently pin the local default; cloud models (e.g. `kimi-k2.6:cloud`) can be wired the same way after `ollama signin`.
+Model defaults live in `src/config/hermes.template.yaml`; per-profile overrides (e.g. the per-request `ollama_num_ctx` context pins) are set in `src/agents/{name}/hermes.partial.yml` (see [Configuration Guide](./CONFIGURATION.md)). GLM cloud limits: 512000-token context, 32000-token output.
+
+The coder profile's OpenCode layer (`src/config/opencode.template.jsonc` → `opencode.jsonc`) configures its own agent models: `build` primary = `glm-5.3-flash:cloud`, `plan` primary = `glm-5.3:cloud`, `code-reviewer` primary = `kimi-k2.7-code:cloud` (read-only: write/edit tools disabled); its subagents (`general`, `explore`, `scout`) use `glm-5.3-flash:cloud`.
 
 ### Coder Profile: Two-Layer Architecture
 
-Unlike the other profiles that use a single Hermes Agent instance, the coder profile uses a **two-layer architecture** where Hermes acts as a supervisor and communication bridge, and OpenCode CLI serves as the coding engine. Both layers live in the same container; OpenCode CLI is installed at image build time (`npm install -g opencode-ai@latest`):
+Unlike the other profiles that use a single Hermes Agent instance, the coder profile uses a **two-layer architecture** where Hermes acts as a supervisor and communication bridge, and OpenCode CLI serves as the coding engine. Both layers live in the same container; OpenCode CLI is installed at image build time (`npm install -g opencode-ai@1.18.32`, a deliberate pin — not `@latest`):
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -118,7 +122,7 @@ Unlike the other profiles that use a single Hermes Agent instance, the coder pro
 │  │                                                             ││
 │  │  - Executes coding tasks (write, refactor, debug, review)   ││
 │  │  - Operates on repos in /app/projects/                     ││
-│  │  - Uses the profile's model via Ollama                      ││
+│  │  - Uses cloud GLM models from opencode.jsonc                ││
 │  │  - Supports one-shot (opencode run) and                    ││
 │  │    interactive modes                                        ││
 │  │  - Configured via opencode.jsonc (env-substituted template) ││
@@ -133,13 +137,13 @@ Unlike the other profiles that use a single Hermes Agent instance, the coder pro
 
 ## Configuration Flow
 
-The single container uses a `bootstrap.sh` startup script that provisions the default (main) profile and the three secondary profiles, then execs the long-running gateway:
+The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the container command; the script provisions the default (main) profile and the three secondary profiles, then execs the long-running gateway:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    Container Startup Flow                      │
 │                                                               │
-│  bootstrap.sh (container command; runs as the hermes user)    │
+│  bootstrap.sh (container CMD /app/scripts/bootstrap.sh)       │
 │     │                                                         │
 │     ├── 1. Default profile (main)                             │
 │     │   ├── config.yaml missing? → generate-config.sh         │
@@ -148,22 +152,24 @@ The single container uses a `bootstrap.sh` startup script that provisions the de
 │     │   └── config.yaml exists? → reconcile with the current  │
 │     │       partial (one-time .pre-reconcile.bak snapshot;    │
 │     │       partial wins, user-only keys preserved)           │
-│     │   └── Copy SOUL.md + skills to /opt/data/               │
+│     │   └── Copy SOUL.md + skills (skips node_modules)        │
 │     │                                                         │
 │     ├── 2. Secondary profiles (researcher, simple, coder)     │
 │     │   Each under /opt/data/profiles/{name}/:                │
 │     │   ├── config.yaml (generate or reconcile, as above)     │
-│     │   ├── SOUL.md, skills/, profile.yaml (bot roster        │
-│     │   │   marker), per-profile .env (chmod 600)             │
+│     │   ├── SOUL.md, skills/, profile.yaml bot roster         │
+│     │   │   (ui_meta.hermes-bots), per-profile .env           │
+│     │   │   (umask 077 then chmod 600)                        │
 │     │   └── Bot Chat session (message_agent path; best-effort)│
 │     │                                                         │
-│     ├── 3. OpenCode CLI config                                │
+│     ├── 3. OpenCode CLI config (written unconditionally)      │
 │     │   └── env-substitute opencode.template.jsonc →          │
 │     │       /opt/data/.config/opencode/opencode.jsonc         │
 │     │                                                         │
 │     ├── 4. Default Ollama model                               │
-│     │   └── Pull the template's local default (~1.6GB) if     │
-│     │       missing (best-effort, capped at 30 minutes)       │
+│     │   └── Pull the template default glm-5.3-flash:cloud if  │
+│     │       missing (best-effort, capped at 30 minutes); a    │
+│     │       cloud manifest pull, not a large local download   │
 │     │                                                         │
 │     └── 5. exec hermes gateway run                            │
 │          (gateway fronts all profiles; container lifetime     │
@@ -177,13 +183,10 @@ Bootstrap is idempotent — a container restart re-runs provisioning safely befo
 
 | File | Purpose |
 |------|---------|
-| `src/config/hermes.template.yaml` | Shared Hermes config template (model defaults, toolsets, agent settings) |
-| `src/agents/{name}/hermes.partial.yml` | Per-profile config overrides (model, toolsets, providers) |
+| `src/config/hermes.template.yaml` | Shared Hermes config template (model defaults, toolsets, agent settings; sets `gateway.multiplex_profiles: true`, which applies globally to the single gateway) |
+| `src/agents/{name}/hermes.partial.yml` | Per-profile config overrides (e.g. per-request Ollama context via `ollama_num_ctx`) |
 | `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
 | `src/config/opencode.template.jsonc` | OpenCode CLI config template for coder profile (env-substituted at startup) |
-| `src/agents/{name}/IDENTITY.md` | Agent identity metadata |
-| `src/agents/{name}/AGENTS.md` | Agent workspace instructions |
-| `src/agents/{name}/TOOLS.md` | Agent tool-specific notes |
 | `src/scripts/bootstrap.sh` | Container command: provisions all profiles, then execs the gateway |
 | `src/scripts/generate-config.sh` | Config generation orchestrator |
 | `src/scripts/merge-yaml.mjs` | YAML deep-merge utility (partial wins on overlapping keys) |
@@ -192,36 +195,49 @@ Bootstrap is idempotent — a container restart re-runs provisioning safely befo
 
 ## Skills Architecture
 
-Skills are TypeScript implementations invoked via the `skill-runner.mjs` CLI. Each skill has a `SKILL.md` defining its interface and an `index.ts` with its implementation.
+Skills live in standalone directories under `/app/skills/<name>/`, each carrying its own `SKILL.md` (interface documentation), its implementation, and its own dependency manifest (`package.json`; TypeScript skills are invoked via a per-skill `cli.ts`). Invocation is direct, following each `SKILL.md`: `node /app/skills/<name>/cli.ts '<json>'` for TypeScript skills and `python3` for the searxng-web-search helper script. There is no central runner and no tsc build — `/app/skills` has no `dist/`; per-skill runtime dependencies are installed at image build time.
 
 ```
 src/skills/
-├── index.ts                    # Skill registry
-├── skill-runner.mjs            # CLI entry point for executing skills
-├── delegate-profile/
-│   ├── SKILL.md                # Skill documentation
-│   └── index.ts                # In-process profile delegation
-├── searxng-web-search/
-│   ├── SKILL.md                # Skill documentation
-│   └── scripts/                # Python helper scripts
+├── index.ts                    # Skill registry (tests/jest use; runtime invokes skills directly)
+├── delegate-profile/           # In-process profile delegation
+│   ├── SKILL.md
+│   ├── cli.ts                  # node /app/skills/delegate-profile/cli.ts '<json>'
+│   ├── package.json
+│   └── index.ts
+├── searxng-web-search/         # Python: stdlib-only, no dependency manifest
+│   ├── SKILL.md
+│   └── scripts/
+│       └── searxng_search.py   # python3 /app/skills/searxng-web-search/scripts/searxng_search.py
 ├── grok-search/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 ├── x-com/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 ├── aws-s3/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
+│   ├── package-lock.json       # committed; Dockerfile `npm ci` uses it
 │   └── index.ts
 ├── data-extraction/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 └── math-operations/
     ├── SKILL.md
+    ├── cli.ts
+    ├── package.json
     └── index.ts
 ```
 
-Skills are compiled during Docker build (`npm run build`) and copied to `/opt/data/skills/` (and each profile's `skills/`) at container startup. The Hermes agent accesses them via its skills system.
+Skills ship with their manifests: `src/skills/` is copied as-is to `/app/skills` during the Docker build and per-skill runtime dependencies are installed right there (aws-s3 is currently the only skill with runtime dependencies — installed via a per-skill `npm ci` with a BuildKit npm cache mount; the stdlib-only skills need nothing). There is no compilation step — the image's Node runs the skills' `.ts` files natively via type stripping. At container startup `bootstrap.sh` resets and copies each skill directory into `/opt/data/skills/` and every profile's `skills/` directory (skipping `node_modules`) so the Hermes agent's skills system lists them; runtime invocation follows each SKILL.md.
 
 ### Skill Integration Status
 
@@ -235,10 +251,11 @@ Skills are compiled during Docker build (`npm run build`) and copied to `/opt/da
 | math-operations | ✅ Implemented | Mathematical calculations and operations |
 | delegate-profile | ✅ Active | In-process task delegation to the researcher/simple/coder profiles |
 
-Skills are invoked via:
+Skills are invoked directly (see each SKILL.md for flags and parameters):
 ```bash
-node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
+node /app/skills/<skill-name>/cli.ts '<json-params>'
 ```
+(`python3` for the searxng-web-search helper script — `python3 /app/skills/searxng-web-search/scripts/searxng_search.py`.)
 
 ## Data Flow
 
@@ -246,7 +263,7 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 ┌──────────────────────────────────────────────────────────────────────┐
 │                           Data Flow                                  │
 │                                                                      │
-│  User → Discord → agent Gateway (:8642, loopback-only)               │
+│  User → Discord → agent Gateway (:8642)                              │
 │                        │                                             │
 │                        ▼                                             │
 │                  Main profile (Orchestrator)                          │
@@ -264,7 +281,7 @@ node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
 │           ▼            ▼              ▼                              │
 │    ┌─────────────────────────────────────────────────────┐          │
 │    │   /opt/data/ (main profile workspace)                │          │
-│    │   - SOUL.md, AGENTS.md, TOOLS.md                    │          │
+│    │   - SOUL.md                                         │          │
 │    │   - memories/ (daily notes)                         │          │
 │    │   - config.yaml (Hermes config)                     │          │
 │    │   - skills/, delegation/ (task logs & markers)      │          │
@@ -323,8 +340,8 @@ See `.env.template` for all configurable variables:
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
 | `USER_AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
 | `USER_AWS_S3_REGION` | For AWS S3 | S3 bucket region |
-| `OLLAMA_CONTEXT_LENGTH` | No | Ollama server context length (default: 65536; must stay >= the pinned `model.ollama_num_ctx`) |
-| `HERMES_API_TIMEOUT` | No | Hermes API read timeout in seconds (default: 3600; raised for slow CPU inference) |
+| `OLLAMA_CONTEXT_LENGTH` | No | Ollama server context length (compose default: 65536). Known tension: `hermes.partial.yml` pins `ollama_num_ctx` to 256000 for main/coder/researcher (65536 for simple), which can exceed this default |
+| `HERMES_API_TIMEOUT` | No | Hermes API read timeout in seconds (default: 3600) |
 | `HERMES_UID` / `HERMES_GID` | No | Linux hosts: run the container with these UID/GID so `./volumes/*` bind mounts are owned by your user |
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |
 

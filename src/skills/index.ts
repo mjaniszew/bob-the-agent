@@ -3,11 +3,11 @@
  * Exports all available skills for the agent
  */
 
-export { dataExtraction } from './data-extraction/index.js';
-export { mathOperations } from './math-operations/index.js';
-export { xComSearch } from './x-com/index.js';
-export { awsS3 } from './aws-s3/index.js';
-export { default as delegateProfile, targetTimeouts } from './delegate-profile/index.js';
+export { dataExtraction } from './data-extraction/index.ts';
+export { mathOperations } from './math-operations/index.ts';
+export { xComSearch } from './x-com/index.ts';
+export { awsS3 } from './aws-s3/index.ts';
+export { default as delegateProfile, targetTimeouts } from './delegate-profile/index.ts';
 
 // Skill metadata for registration
 export const skillRegistry = {
@@ -107,27 +107,27 @@ export async function executeSkill(skillName: string, params: Record<string, any
   // Execute the skill
   switch (skillName) {
     case 'data-extraction': {
-      const { dataExtraction } = await import('./data-extraction/index.js');
+      const { dataExtraction } = await import('./data-extraction/index.ts');
       return dataExtraction(params as any);
     }
     case 'math-operations': {
-      const { mathOperations } = await import('./math-operations/index.js');
+      const { mathOperations } = await import('./math-operations/index.ts');
       return mathOperations(params as any);
     }
     case 'x-com': {
-      const { xComSearch } = await import('./x-com/index.js');
+      const { xComSearch } = await import('./x-com/index.ts');
       return xComSearch(params as any);
     }
     case 'aws-s3': {
-      const { awsS3 } = await import('./aws-s3/index.js');
+      const { awsS3 } = await import('./aws-s3/index.ts');
       return awsS3(params as any);
     }
     case 'grok-search': {
-      const { grokSearch } = await import('./grok-search/index.js');
+      const { grokSearch } = await import('./grok-search/index.ts');
       return grokSearch(params as any);
     }
     case 'delegate-profile': {
-      const { delegateProfile } = await import('./delegate-profile/index.js');
+      const { delegateProfile } = await import('./delegate-profile/index.ts');
       return delegateProfile(params as any);
     }
     default:

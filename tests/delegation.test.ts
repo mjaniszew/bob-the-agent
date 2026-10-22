@@ -196,9 +196,9 @@ describe('delegate-profile skill', () => {
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/register-nats.py'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/hermes-cmd.sh'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'tests/nats-communication.test.ts'))).toBe(false);
-    expect(fs.readFileSync(path.join(ROOT, 'src/scripts/skill-runner.mjs'), 'utf8'))
-      .not.toMatch(/agent-to-agent/);
-    expect(fs.readFileSync(path.join(ROOT, 'src/scripts/skill-runner.mjs'), 'utf8'))
-      .toMatch(/delegate-profile/);
+    expect(fs.existsSync(path.join(ROOT, 'src/scripts/skill-runner.mjs'))).toBe(false);
+    const skillMd = fs.readFileSync(path.join(ROOT, 'src/skills/delegate-profile/SKILL.md'), 'utf8');
+    expect(skillMd).toContain('node /app/skills/delegate-profile/cli.ts');
+    expect(skillMd).not.toContain('skill-runner');
   });
 });
