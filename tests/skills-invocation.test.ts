@@ -7,8 +7,8 @@
  * per-skill package.json files do not exist yet, and SKILL.mds still teach
  * the runner commands.
  */
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync, readdirSync } from 'fs';
+import { join, relative } from 'path';
 
 const REPO_ROOT = join(__dirname, '..');
 const skillsDir = (...p: string[]) => join(REPO_ROOT, 'src', 'skills', ...p);
@@ -61,5 +61,88 @@ describe('SKILL.md invocation contract', () => {
     expect(md).not.toContain('skill-runner');
     // the python entrypoint exists
     expect(existsSync(skillsDir('searxng-web-search', 'scripts', 'searxng_search.py'))).toBe(true);
+  });
+});
+
+describe('runner absence contract', () => {
+  const walk = (dir: string, skipDirs: string[] = []): string[] => {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (skipDirs.includes(entry.name)) continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...walk(full, skipDirs));
+      else out.push(full);
+    }
+    return out;
+  };
+
+  it('src/scripts/skill-runner.mjs has been deleted', () => {
+    expect(existsSync(join(REPO_ROOT, 'src', 'scripts', 'skill-runner.mjs'))).toBe(false);
+  });
+
+  it('no "skill-runner" string under src/, the root md docs, or docs/ (except plans/tasks)', () => {
+    // src/ recursive walk, skipping any node_modules
+    const srcFiles = walk(join(REPO_ROOT, 'src'), ['node_modules']);
+    expect(srcFiles.length).toBeGreaterThan(0);
+    for (const f of srcFiles) {
+      expect(readFileSync(f, 'utf8')).not.toMatch(/skill-runner/);
+    }
+    // root md docs
+    for (const md of ['README.md', 'CLAUDE.md', 'AGENTS.md']) {
+      const p = join(REPO_ROOT, md);
+      expect(existsSync(p)).toBe(true);
+      expect(readFileSync(p, 'utf8')).not.toMatch(/skill-runner/);
+    }
+    // every file under docs/, except docs/plans/** and docs/tasks/**
+    const docsFiles = walk(join(REPO_ROOT, 'docs'))
+      .map((f) => relative(REPO_ROOT, f))
+      .filter((rel) => !/^docs[/\\](plans|tasks)[/\\]/.test(rel));
+    expect(docsFiles.length).toBeGreaterThan(0);
+    for (const rel of docsFiles) {
+      expect(readFileSync(join(REPO_ROOT, rel), 'utf8')).not.toMatch(/skill-runner/);
+    }
+  });
+
+  it('root package.json has no build:skills script key', () => {
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
+    expect(Object.keys(pkg.scripts)).not.toContain('build:skills');
+  });
+
+  it('Dockerfile.hermes runs no npm build under /app/skills', () => {
+    const df = readFileSync(join(REPO_ROOT, 'dockerfiles', 'Dockerfile.hermes'), 'utf8');
+    expect(df).not.toContain('WORKDIR /app/skills');
+    expect(df).not.toContain('npm run build');
+  });
+});
+
+describe('Dockerfile per-skill install contract', () => {
+  const dockerfile = () => readFileSync(join(REPO_ROOT, 'dockerfiles', 'Dockerfile.hermes'), 'utf8');
+
+  it('installs aws-s3 runtime deps with a pruned npm ci', () => {
+    expect(dockerfile()).toMatch(/\/app\/skills\/aws-s3[^\n]*npm ci --omit=dev/);
+  });
+
+  it('uses a BuildKit npm cache mount for fast rebuilds', () => {
+    expect(dockerfile()).toContain('--mount=type=cache,target=/root/.npm');
+  });
+
+  it('has no tsc build layer for skills (no WORKDIR/npm build/dist refs)', () => {
+    const df = dockerfile();
+    expect(df).not.toContain('WORKDIR /app/skills');
+    expect(df).not.toContain('npm run build');
+    expect(df).not.toContain('/app/skills/dist');
+  });
+
+  it('makes per-skill scripts executable, keeping script perms and the js-yaml layer', () => {
+    const df = dockerfile();
+    expect(df).toContain('chmod +x /app/scripts/*');
+    expect(df).toContain('chmod -R +x /app/skills/*/scripts/');
+    expect(df).toContain('npm install js-yaml@4.1.1');
+  });
+
+  it('reverts to /app as the final WORKDIR', () => {
+    const works = dockerfile().match(/^\s*WORKDIR\s+(.+)$/gm) ?? [];
+    expect(works.length).toBeGreaterThan(0);
+    expect(works[works.length - 1].trim()).toBe('WORKDIR /app');
   });
 });

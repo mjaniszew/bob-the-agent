@@ -161,9 +161,10 @@ export async function delegateProfile(params: Record<string, unknown>) {
     const out = fs.openSync(logFile, 'a');
     const err = fs.openSync(logFile, 'a');
     const child = spawn('bash', ['-c', wrapped], { detached: true, stdio: ['ignore', out, err] });
-    // Spawn failures (bash missing, EMFILE, ...) are async and must not orphan
-    // the marker or crash skill-runner (issue 6) — clean up best-effort and
-    // append an exit sentinel so check_task reports the task as failed.
+    // Spawn failures (bash missing, EMFILE, ...) are async and must not
+    // orphan the marker or crash the delegating agent (issue 6) — clean up
+    // best-effort and append an exit sentinel so check_task reports the task
+    // as failed.
     child.on('error', (e) => {
       try { fs.rmSync(runningMarker, { force: true }); } catch { /* best-effort */ }
       try { fs.appendFileSync(logFile, `SPAWN-ERROR:${e.message}\nEXIT:127\n`); } catch { /* best-effort */ }

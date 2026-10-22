@@ -195,12 +195,11 @@ Bootstrap is idempotent — a container restart re-runs provisioning safely befo
 
 ## Skills Architecture
 
-Skills are TypeScript implementations invoked via the `skill-runner.mjs` CLI. Each skill has a `SKILL.md` defining its interface and an `index.ts` with its implementation.
+Skills live in standalone directories under `/app/skills/<name>/`, each carrying its own `SKILL.md` (interface documentation), its implementation, and its own dependency manifest (`package.json`; TypeScript skills are invoked via a per-skill `cli.ts`). Invocation is direct, following each `SKILL.md`: `node /app/skills/<name>/cli.ts '<json>'` for TypeScript skills and `python3` for the searxng-web-search helper script. There is no central runner and no tsc build — `/app/skills` has no `dist/`; per-skill runtime dependencies are installed at image build time.
 
 ```
 src/skills/
 ├── index.ts                    # Skill registry
-├── skill-runner.mjs            # CLI entry point for executing skills
 ├── delegate-profile/
 │   ├── SKILL.md                # Skill documentation
 │   └── index.ts                # In-process profile delegation
@@ -238,10 +237,11 @@ Skills are compiled during Docker build (`npm run build`) and copied to `/opt/da
 | math-operations | ✅ Implemented | Mathematical calculations and operations |
 | delegate-profile | ✅ Active | In-process task delegation to the researcher/simple/coder profiles |
 
-Skills are invoked via:
+Skills are invoked directly (see each SKILL.md for flags and parameters):
 ```bash
-node /app/scripts/skill-runner.mjs --skill <skill-name> --params '<json-params>'
+node /app/skills/<skill-name>/cli.ts '<json-params>'
 ```
+(`python3` for the searxng-web-search helper script — `python3 /app/skills/searxng-web-search/scripts/searxng_search.py`.)
 
 ## Data Flow
 
