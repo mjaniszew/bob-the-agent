@@ -14,29 +14,20 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 | x-com | ✅ Implemented | Direct X.com API search for posts, users, timelines |
 | grok-search | ✅ Implemented | X.com search via xAI Grok x_search tool (fallback for x-com) |
 | aws-s3 | ✅ Implemented | S3 upload and URL generation |
-| agent-to-agent | ✅ Implemented | Inter-agent messaging via NATS |
-| searxng-search | ✅ Implemented | Web search via SearXNG (free, no tokens) |
-
-**Implemented Skills (Python):**
-| Skill | Status | Description |
-|-------|--------|-------------|
-| agent-to-agent | ✅ Implemented | Agent to agent communication using NATS |
+| searxng-web-search | ✅ Implemented | Web search via SearXNG (free, no tokens) |
 
 **Environment Variables Required:**
 - `USER_X_COM_API_TOKEN` - For X.com API access (x-com skill)
-- `XAI_API_KEY` - Fallback for X.com search if USER_X_COM_API_TOKEN not set
+- `XAI_API_KEY` - Legacy fallback consumed inside the x-com and grok-search skills only (not exposed via compose)
 - `USER_XAI_SEARCH_API_KEY` - For Grok search API access (grok-search skill, separate from XAI_API_KEY)
-- `SEARXNG_SECRET_KEY` - For SearXNG configuration
 - `USER_AWS_S3_ACCESS_KEY_ID`, `USER_AWS_S3_SECRET_ACCESS_KEY`, `USER_AWS_S3_BUCKET`, `USER_AWS_S3_REGION` - For AWS S3
-- `PLAYWRIGHT_CLI` - Installed in PATH for Playwright skill
-- `NATS_URL` - NATS server URL for inter-agent messaging (default: nats://nats:4222)
 
 ---
 
 ## SearXNG Web Search
 
 1. SearXNG is the primary web search engine - free, no tokens consumed
-2. Available via OpenClaw's built-in `searxng-search` tool
+2. Implemented as the `searxng-web-search` skill (`src/skills/searxng-web-search/`)
 3. Runs as a Docker container alongside the agent
 4. No API key required - privacy-respecting metasearch
 
@@ -82,16 +73,3 @@ The skills in `src/skills/` are TypeScript implementations for the agent's capab
 3. Should generate public URLs for objects in public buckets (no credentials required)
 4. Should support both direct content upload and file path upload
 5. Requires AWS credentials and bucket configuration via environment variables
-
-## Agent-to-Agent (NATS Inter-Agent Messaging)
-1. Agents communicate across containers via NATS messaging using the `agent-to-agent` skill
-2. Enables cross-container task delegation between specialized agents
-3. Each agent runs a `register-nats.py` background listener that subscribes to NATS subjects
-4. Message routing uses subjects: `agent.{target_id}.tasks` and `agent.{target_id}.results`
-5. Actions:
-   - `send_task` — Send a task to a target agent with goal, context, and toolsets
-   - `check_messages` — Check for incoming task/result messages for the current agent
-   - `send_result` — Send a task result back to the originating agent
-6. Available target agents: `researcher` (deep research), `simple` (lightweight tasks)
-7. Uses `nats-py` v2.14.0 Python library for NATS communication
-8. Requires NATS server running (configured in Docker Compose)

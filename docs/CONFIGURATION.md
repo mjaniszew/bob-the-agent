@@ -30,7 +30,7 @@ The template uses Hermes Agent's native YAML format. It contains defaults for mo
 
 ```yaml
 model:
-  default: qwen3.5:2b-q4_K_M
+  default: glm-5.3-flash:cloud
   provider: custom
   base_url: http://ollama:11434/v1
 providers: {}
@@ -47,6 +47,8 @@ terminal:
   lifetime_seconds: 300
 approvals:
   mode: off
+gateway:
+  multiplex_profiles: true
 ```
 
 ### Profile Partials (hermes.partial.yml)
@@ -56,53 +58,51 @@ Each profile overrides specific parts of the shared template via a partial YAML 
 **Main profile** (`src/agents/main/hermes.partial.yml`):
 ```yaml
 model:
-  default: qwen3.5:2b-q4_K_M
+  default: glm-5.3-flash:cloud
   provider: custom
   base_url: http://ollama:11434/v1
-  # Cap the per-request ollama context (Hermes otherwise auto-detects the
-  # GGUF's advertised 256k and sends num_ctx=262144 per request).
-  ollama_num_ctx: 65536
+  # Per-request ollama context (see the known-tension note under Runtime knobs).
+  ollama_num_ctx: 256000
 custom_providers:
-  - name: ollama/qwen3.5:2b-q4_K_M
+  - name: ollama/glm-5.3-flash:cloud
     base_url: http://ollama:11434/v1
-    model: qwen3.5:2b-q4_K_M
+    model: glm-5.3-flash:cloud
 toolsets:
   - hermes-cli
   - browser
-# Multiplex the researcher/simple/coder profiles behind this gateway.
-gateway:
-  multiplex_profiles: true
 agent:
-  reasoning_effort: false      # disable model thinking on CPU-only hosts
+  reasoning_effort: medium
   bot_mode_protocol: true
   local_stream_stale_timeout: 3600
 ```
 
-**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same model wiring and the same CPU-host runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) as main (without `gateway.multiplex_profiles`, which only the default profile sets). Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5, main 3600/6.
+(`gateway.multiplex_profiles: true` is not set here — it lives in `src/config/hermes.template.yaml` and applies globally to the single gateway.)
+
+**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same wiring pattern and runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) as main — researcher uses `glm-5.3:cloud` with `ollama_num_ctx: 256000`; simple uses `glm-5.3-flash:cloud` with `ollama_num_ctx: 65536`. Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5, main 3600/6.
 
 **Coder profile** (`src/agents/coder/hermes.partial.yml`):
 ```yaml
 model:
-  default: qwen3.5:2b-q4_K_M
+  default: glm-5.3-flash:cloud
   provider: custom
   base_url: http://ollama:11434/v1
-  ollama_num_ctx: 65536
+  ollama_num_ctx: 256000
 custom_providers:
-  - name: ollama/qwen3.5:2b-q4_K_M
+  - name: ollama/glm-5.3-flash:cloud
     base_url: http://ollama:11434/v1
-    model: qwen3.5:2b-q4_K_M
+    model: glm-5.3-flash:cloud
 toolsets:
   - hermes-cli
   - browser
 agent:
   max_turns: 120
   gateway_timeout: 7200
-  reasoning_effort: false
+  reasoning_effort: medium
   local_stream_stale_timeout: 3600
 terminal:
   backend: local
   cwd: /app/projects
-  timeout: 3600   # OpenCode runs take minutes per LLM call on CPU-only hosts
+  timeout: 3600   # OpenCode runs can take minutes per LLM call
 ```
 
 The coder profile uses higher limits (120 max_turns, 7200s gateway timeout, 3600s terminal timeout) than other profiles because coding tasks typically take longer to complete.
@@ -111,11 +111,11 @@ The coder profile uses higher limits (120 max_turns, 7200s gateway timeout, 3600
 
 | Key | Default here | Purpose |
 |-----|--------------|---------|
-| `model.ollama_num_ctx` | `65536` | Per-request ollama context window. Hermes otherwise auto-detects the model's advertised context (e.g. 262144 for qwen3.5) and sends it per request; 65536 is the minimum Hermes considers reliable for its tool-use prompts. Must stay <= `OLLAMA_CONTEXT_LENGTH` on the ollama container. |
-| `agent.reasoning_effort` | `false` | Sends `reasoning_effort "none"` + `think=false` so local models do not spend ~9 minutes thinking per trivial reply on CPU-only hosts. |
+| `model.ollama_num_ctx` | `256000` (main/coder/researcher), `65536` (simple) | Per-request ollama context window for the GLM cloud models (GLM context limit 512000). Known tension: these pins exceed the ollama container's `OLLAMA_CONTEXT_LENGTH` compose default (`65536`) — both are the real values as shown here; keep the relation in mind when tuning. |
+| `agent.reasoning_effort` | `medium` (template default (src/config/hermes.template.yaml:29); partials pin `medium` for `main`/`researcher`/`coder` and `low` for `simple`) | Reasoning effort passed to the model provider. |
 | `agent.local_stream_stale_timeout` | `3600` | Hermes kills model connections that receive no chunks for 900s by default; on slow CPU inference a long prefill looks exactly like a stalled stream. Raised to 3600s so big-prompt turns survive prefill. |
 | `approvals.mode` | `off` | Full approval bypass across interactive, gateway, cron and unattended contexts — required for 24/7 unattended operation. Replaces the old auto-approve env var, denylisted upstream in Hermes v0.21. Valid modes: `manual | smart | off`. |
-| `gateway.multiplex_profiles` | `true` (main only) | Makes the single gateway serve all profiles. |
+| `gateway.multiplex_profiles` | `true` (set in `src/config/hermes.template.yaml`) | Makes the single gateway serve all profiles. Set once in the shared template, so it applies globally to the one gateway — not per-profile in a partial. |
 
 **Merge behavior:**
 - Objects are deep-merged (nested keys override individually)
@@ -129,18 +129,16 @@ Bootstrap writes a `.env` (chmod 600) into each secondary profile directory (`/o
 
 ### Agent Identity Files
 
-Each profile also has identity and behavioral files that are copied to its workspace at startup:
+Each profile directory carries exactly two files under `src/agents/{name}/`. `SOUL.md` is copied into the profile's workspace at startup; the partial is merged into the profile's `config.yaml` by `generate-config.sh` (see [Configuration Files](#configuration-files)):
 
 | File | Purpose |
 |------|---------|
-| `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
-| `src/agents/{name}/IDENTITY.md` | Agent identity metadata (name, role, emoji) |
-| `src/agents/{name}/AGENTS.md` | Agent workspace instructions and conventions |
-| `src/agents/{name}/TOOLS.md` | Agent-specific tool notes and tips |
+| `src/agents/{name}/SOUL.md` | Agent soul/persona markdown (personality and behavioral instructions) |
+| `src/agents/{name}/hermes.partial.yml` | Profile config partial overlay, deep-merged over `src/config/hermes.template.yaml` |
 
 ### OpenCode Configuration (Coder Profile Only)
 
-The coder profile uses OpenCode CLI as its coding engine, configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time (`opencode-ai@latest`, unpinned — rebuilds may pick up new versions).
+The coder profile uses OpenCode CLI as its coding engine, configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time with the deliberate pin `opencode-ai@1.18.32`.
 
 **Template file:** `src/config/opencode.template.jsonc`
 
@@ -153,9 +151,9 @@ At startup, `bootstrap.sh` generates the OpenCode config by substituting the tem
 **Generated config location:** `/opt/data/.config/opencode/opencode.jsonc` (pinned by the `OPENCODE_CONFIG` compose env var)
 
 The OpenCode config defines (see `src/config/opencode.template.jsonc` for the full template):
-- **Provider**: Ollama via the OpenAI-compatible endpoint, model `qwen3.5:2b-q4_K_M` (context limit 65536, output limit 8192)
-- **Agents**: `build` and `plan` (primary mode), `general`, `explore`, and `code-reviewer` (subagent mode) — all with an 8192-token output limit
-- **code-reviewer**: read-only subagent (`write`/`edit` tools disabled), tuned for security/performance/maintainability review
+- **Provider**: Ollama via the OpenAI-compatible endpoint, using GLM cloud models (GLM limits: context 512000, output 32000)
+- **Agents**: `build` (primary: `glm-5.3-flash:cloud`) and `plan` (primary: `glm-5.3:cloud`); subagents `general`, `explore`, and `scout` (`glm-5.3-flash:cloud`)
+- **code-reviewer**: subagent with primary `kimi-k2.7-code:cloud`, read-only (`write`/`edit` tools disabled), tuned for security/performance/maintainability review
 
 ## Environment Variables
 
@@ -165,9 +163,12 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 |----------|------|---------|-------------|
 | `LOG_LEVEL` | string | `info` | Logging level (debug, info, warn, error) |
 | `NODE_ENV` | string | `production` | Node environment |
-| `OLLAMA_CONTEXT_LENGTH` | number | `65536` | Ollama server-side context length. Must stay >= the `ollama_num_ctx` (65536) pinned in the profile partials — without it the ollama container defaults to 4096 and truncates real agent prompts. |
-| `HERMES_API_TIMEOUT` | number | `3600` | Hermes API read timeout in seconds. Raised for CPU-only hosts where a fresh ~16k-token prompt prefills at ~20 tok/s (~13-15 min), beyond Hermes' 900s default. |
+| `OLLAMA_CONTEXT_LENGTH` | number | `65536` | Ollama server-side context length (compose default `65536`). Known tension: the main/coder/researcher profile partials pin `ollama_num_ctx: 256000` (simple pins `65536`) — above this compose default. Both values are real; consider both when tuning. |
+| `HERMES_API_TIMEOUT` | number | `3600` | Hermes API read timeout in seconds, raised above Hermes' 900s default so long-running turns survive. |
 | `HERMES_UID` / `HERMES_GID` | number | - | Linux hosts: run the container with these UID/GID so the `./volumes/*` bind mounts are owned by your user |
+| `OPENCODE_CONFIG` | path | `/opt/data/.config/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
+| `HERMES_DASHBOARD` | - | - | Enables the Hermes dashboard (s6 service on port 9119); non-loopback binds require auth via `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` / `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` / `HERMES_DASHBOARD_BASIC_AUTH_SECRET` (or OAuth) |
+| `USER_PROJECTS_FOLDER` | string | - | Host-side source override for the `/app/projects` bind mount |
 
 ### Model Providers
 
@@ -188,6 +189,8 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 | Variable | Type | Description |
 |----------|------|-------------|
 | `DISCORD_BOT_TOKEN` | string | Discord bot token |
+| `DISCORD_ALLOWED_USERS` | string | User IDs allowed to use the bot; pairing approve writes approved IDs into this list |
+| `DISCORD_ALLOWED_ROLES` | string | Role-ID allowlist for guild messages; DMs require user IDs in `DISCORD_ALLOWED_USERS` |
 
 ### AWS S3
 
@@ -211,6 +214,8 @@ services:
   searxng:         # Privacy-respecting metasearch engine
   valkey:          # Redis-compatible cache for SearXNG
 ```
+
+**Sidecar image pins:** `searxng/searxng` is pinned via its `SEARXNG_VERSION` env var (`2026.4.29-cba0cffa8`); valkey runs the `valkey:9-alpine` image.
 
 ### Resource Limits
 
@@ -244,9 +249,12 @@ agent:
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
-| `127.0.0.1:8642` | `8642` | agent Gateway (loopback-only; use an SSH tunnel for remote access: `ssh -L 8642:localhost:8642 <host>`) |
+| `8642` | `8642` | agent Gateway (published without a loopback prefix) |
+| `9119` | `9119` | agent Hermes dashboard (s6 service; gated on `HERMES_DASHBOARD`, non-loopback binds require auth) |
 | `11434` | `11434` | Ollama API |
 | `8888` | `8888` | SearXNG |
+
+The agent healthcheck probes TCP `8642` (compose `start_period: 120s`). The gateway serves `/health` and `/v1/health`; there is no `/healthz` endpoint.
 
 ## Model Configuration
 
@@ -293,10 +301,10 @@ The system uses Ollama as a proxy for both local and cloud models. Cloud models 
 
 2. Pull cloud model manifests:
    ```bash
-   docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
+   docker exec bob-the-agent-ollama ollama pull kimi-k2.7-code:cloud
    ```
 
-3. Reference in profile partials as shown above. Note the local ollama container cannot serve `:cloud` models until it is signed in — until then profiles resolve the local default model.
+3. Reference in profile partials as shown above. Note the local ollama container cannot serve `:cloud` models until it is signed in.
 
 ## Security Considerations
 
@@ -307,7 +315,7 @@ The system uses Ollama as a proxy for both local and cloud models. Cloud models 
 
 ### Network Security
 
-- The agent gateway port (8642) is bound to `127.0.0.1` only — it fronts all profiles behind `approvals.mode: off` and its auth is unverified, so do not expose it. Use an SSH tunnel (`ssh -L 8642:localhost:8642 <host>`) for remote access
+- The agent gateway (8642) and Hermes dashboard (9119) are published without a loopback prefix. The gateway fronts all profiles behind `approvals.mode: off` and its auth is unverified; the dashboard requires auth for non-loopback binds (basic-auth vars above, or OAuth). Keep both off untrusted networks
 - Use Docker network isolation (services communicate on the internal `bob-the-agent-network`)
 
 ### API Keys
@@ -334,10 +342,10 @@ Profiles are multiplexed in the one container, so there is no per-agent containe
 
 ### Model Selection
 
-- Use cloud models (e.g., `kimi-k2.6:cloud`) for best quality (requires `ollama signin` in the ollama container)
-- Use local models (e.g., the default `qwen3.5:2b-q4_K_M`) for offline operation or CPU-only hosts
-- All profiles currently pin the local default model, overridden per profile via each partial
+- Use cloud models (the current defaults: `glm-5.3-flash:cloud` for main/simple/coder, `glm-5.3:cloud` for researcher) for best quality (requires `ollama signin` in the ollama container)
+- Local models remain usable for offline operation — pull one with `ollama pull` and reference it in a profile partial; the current template defines no local default
+- Profiles override models via each partial (see [Changing Profile Models](#changing-profile-models))
 
 ### Profile Count
 
-All four profiles run inside the single container. To reduce load, set `gateway.multiplex_profiles: false` in the main partial so only the `main` profile is served (or remove the profile partials entirely — profiles are only provisioned from `src/agents/`).
+All four profiles run inside the single container. To reduce load, set `gateway.multiplex_profiles: false` in `src/config/hermes.template.yaml` (it applies globally to the single gateway, not per-partial) so only the `main` profile is served (or remove the profile partials entirely — profiles are only provisioned from `src/agents/`).
