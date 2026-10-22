@@ -118,6 +118,10 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/\[ "\$name" = "dist" \] && continue/);
   });
 
+  test('skill copies skip .venv (python skills may carry per-skill venvs)', () => {
+    expect(script()).toMatch(/\[ "\$name" = "\.venv" \] && continue/);
+  });
+
   test('old entrypoints are gone', () => {
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/hermes-entrypoint.sh'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/coder-entrypoint.sh'))).toBe(false);
