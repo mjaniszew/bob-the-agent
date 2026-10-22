@@ -152,7 +152,7 @@ The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the conta
 │     │   └── config.yaml exists? → reconcile with the current  │
 │     │       partial (one-time .pre-reconcile.bak snapshot;    │
 │     │       partial wins, user-only keys preserved)           │
-│     │   └── Copy SOUL.md + skills (skips node_modules/dist)   │
+│     │   └── Copy SOUL.md + skills (skips node_modules)        │
 │     │                                                         │
 │     ├── 2. Secondary profiles (researcher, simple, coder)     │
 │     │   Each under /opt/data/profiles/{name}/:                │
@@ -199,31 +199,45 @@ Skills live in standalone directories under `/app/skills/<name>/`, each carrying
 
 ```
 src/skills/
-├── index.ts                    # Skill registry
-├── delegate-profile/
-│   ├── SKILL.md                # Skill documentation
-│   └── index.ts                # In-process profile delegation
-├── searxng-web-search/
-│   ├── SKILL.md                # Skill documentation
-│   └── scripts/                # Python helper scripts
+├── index.ts                    # Skill registry (tests/jest use; runtime invokes skills directly)
+├── delegate-profile/           # In-process profile delegation
+│   ├── SKILL.md
+│   ├── cli.ts                  # node /app/skills/delegate-profile/cli.ts '<json>'
+│   ├── package.json
+│   └── index.ts
+├── searxng-web-search/         # Python: stdlib-only, no dependency manifest
+│   ├── SKILL.md
+│   └── scripts/
+│       └── searxng_search.py   # python3 /app/skills/searxng-web-search/scripts/searxng_search.py
 ├── grok-search/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 ├── x-com/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 ├── aws-s3/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
+│   ├── package-lock.json       # committed; Dockerfile `npm ci` uses it
 │   └── index.ts
 ├── data-extraction/
 │   ├── SKILL.md
+│   ├── cli.ts
+│   ├── package.json
 │   └── index.ts
 └── math-operations/
     ├── SKILL.md
+    ├── cli.ts
+    ├── package.json
     └── index.ts
 ```
 
-Skills are compiled during Docker build (`npm run build`) and copied to `/opt/data/skills/` (and each profile's `skills/`) at container startup. The Hermes agent accesses them via its skills system.
+Skills ship with their manifests: `src/skills/` is copied as-is to `/app/skills` during the Docker build and per-skill runtime dependencies are installed right there (aws-s3 is currently the only skill with runtime dependencies — installed via a per-skill `npm ci` with a BuildKit npm cache mount; the stdlib-only skills need nothing). There is no compilation step — the image's Node runs the skills' `.ts` files natively via type stripping. At container startup `bootstrap.sh` resets and copies each skill directory into `/opt/data/skills/` and every profile's `skills/` directory (skipping `node_modules`) so the Hermes agent's skills system lists them; runtime invocation follows each SKILL.md.
 
 ### Skill Integration Status
 

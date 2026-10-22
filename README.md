@@ -172,7 +172,17 @@ Built-in skills for:
 - OpenCode CLI integration (coder profile coding engine)
 - SearXNG web search capabilities
 - x-com(Twitter) searching directly
+- grok (xAI) search as an x-com fallback
 - extracting data from URLs/documents and performing calculations.
+
+Skills are standalone directories — there is no central skill runner and no build step. The agent invokes each skill directly with the commands documented in its SKILL.md:
+
+```bash
+node /app/skills/<skill>/cli.ts '<single-quoted JSON arguments>'   # TypeScript skills — Node runs .ts natively (type stripping)
+python3 /app/skills/searxng-web-search/scripts/searxng_search.py   # Python (SearXNG) helper script
+```
+
+Each skill carries its own dependency manifest (`package.json`, or `requirements.txt` for Python) installed during the Docker build — the built container needs no skill prepare/build step.
 
 ## Development
 
@@ -190,8 +200,8 @@ bob-the-agent/
 │   │   ├── simple/           # Simple task handler
 │   │   └── coder/            # Coding specialist (Hermes + OpenCode CLI)
 │   ├── config/               # Hermes and SearXNG configuration
-│   ├── scripts/              # Container setup and skill runner
-│   └── skills/               # Skill implementations
+│   ├── scripts/              # Container setup scripts
+│   └── skills/               # Standalone skills, invoked directly per their SKILL.md
 ├── volumes/                  # Runtime data (per-agent workspaces)
 └── docs/                      # Documentation
 ```

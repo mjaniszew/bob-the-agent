@@ -184,6 +184,8 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 | `USER_X_COM_API_TOKEN` | string | X.com API token for x-com skill |
 | `USER_XAI_SEARCH_API_KEY` | string | xAI API key for grok-search skill |
 
+Note: the skills that consume these variables are standalone — each carries its own dependency manifest (`package.json` / `requirements.txt`) inside `src/skills/<skill>/`, installed at Docker-build time; no runtime or configuration step prepares dependencies for skills.
+
 ### Discord Bot
 
 | Variable | Type | Description |

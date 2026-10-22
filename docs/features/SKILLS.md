@@ -4,7 +4,7 @@ This file describes which skills should be used by agent to perform various task
 
 ## Current Implementation Status
 
-The skills in `src/skills/` are TypeScript implementations for the agent's capability layer.
+The skills in `src/skills/` are standalone, directly invoked implementations of the agent's capability layer. Every TypeScript skill carries its own `cli.ts` argv entry plus `package.json` and runs natively under the image's Node via type stripping (no tsc build, no dist) — the agent invokes each skill exactly as documented in its SKILL.md: `node /app/skills/<skill>/cli.ts '<json>'`; the Python searxng-web-search skill is invoked as `python3 /app/skills/searxng-web-search/scripts/searxng_search.py`. There is no central skill runner and no build step — per-skill dependencies are installed during the Docker build from each manifest (package.json / requirements.txt; searxng-web-search is stdlib-only).
 
 **Implemented Skills (TypeScript):**
 | Skill | Status | Description |
