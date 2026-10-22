@@ -9,6 +9,7 @@
  */
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
+import { execFileSync } from 'child_process';
 
 const REPO_ROOT = join(__dirname, '..');
 const skillsDir = (...p: string[]) => join(REPO_ROOT, 'src', 'skills', ...p);
@@ -144,5 +145,70 @@ describe('Dockerfile per-skill install contract', () => {
     const works = dockerfile().match(/^\s*WORKDIR\s+(.+)$/gm) ?? [];
     expect(works.length).toBeGreaterThan(0);
     expect(works[works.length - 1].trim()).toBe('WORKDIR /app');
+  });
+});
+
+describe('runtime smoke (executed skills)', () => {
+  const dockerAvailable = process.env.DOCKER_TESTS === '1';
+  const maybe = dockerAvailable ? describe : describe.skip;
+
+  const lastJson = (stdout: string): any => {
+    const lines = stdout.trim().length === 0 ? [] : stdout.trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        return JSON.parse(lines[i]);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error(`no JSON object found in stdout: ${stdout}`);
+  };
+
+  it('math cli.ts calculates 2+2 via node type stripping', () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [skillsDir('math-operations', 'cli.ts'), JSON.stringify({ operation: 'calculate', expression: '2+2' })],
+      { encoding: 'utf8', timeout: 15_000 }
+    );
+    const parsed = lastJson(stdout);
+    expect(parsed).toBeTruthy();
+    expect(parsed.success).toBe(true);
+    expect(parsed.skill).toBe('math-operations');
+    expect(parsed.result.result).toBe(4);
+  }, 15_000);
+
+  it('searxng python script --help exits 0', () => {
+    expect(() =>
+      execFileSync(
+        'python3',
+        [join(REPO_ROOT, 'src', 'skills', 'searxng-web-search', 'scripts', 'searxng_search.py'), '--help'],
+        { stdio: 'pipe', timeout: 15_000 }
+      )
+    ).not.toThrow();
+  }, 15_000);
+
+  maybe('container smoke (DOCKER_TESTS=1 only)', () => {
+    it('container: math cli.ts returns success:true result:4', () => {
+      const stdout = execFileSync(
+        'docker',
+        ['exec', 'bob-the-agent', 'node', '/app/skills/math-operations/cli.ts', '{"operation":"calculate","expression":"2+2"}'],
+        { encoding: 'utf8', timeout: 15_000 }
+      );
+      const parsed = lastJson(stdout);
+      expect(parsed).toBeTruthy();
+      expect(parsed.success).toBe(true);
+      expect(parsed.skill).toBe('math-operations');
+      expect(parsed.result.result).toBe(4);
+    });
+
+    it('container: searxng script --help exits 0', () => {
+      expect(() =>
+        execFileSync(
+          'docker',
+          ['exec', 'bob-the-agent', 'python3', '/app/skills/searxng-web-search/scripts/searxng_search.py', '--help'],
+          { stdio: 'pipe', timeout: 15_000 }
+        )
+      ).not.toThrow();
+    });
   });
 });

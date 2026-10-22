@@ -122,6 +122,15 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/\[ "\$name" = "\.venv" \] && continue/);
   });
 
+  test('copy_skills wipes the target per-skill dir before copying (fresh copy each boot)', () => {
+    const src = script();
+    expect(src).toMatch(/rm -rf "\$1\/skills\/\$name"/);
+    const rmAt = src.indexOf('rm -rf "$1/skills/$name"');
+    const cpAt = src.indexOf('cp -r "$d" "$1/skills/"');
+    expect(rmAt).toBeGreaterThanOrEqual(0);
+    expect(cpAt).toBeGreaterThan(rmAt);
+  });
+
   test('old entrypoints are gone', () => {
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/hermes-entrypoint.sh'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'src/scripts/coder-entrypoint.sh'))).toBe(false);
