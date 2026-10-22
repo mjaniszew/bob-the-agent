@@ -43,7 +43,7 @@ EOF
   chmod 600 "$1/.env"
 }
 
-copy_skills() { # <target_profile_dir> — skip node_modules/ and dist/ (volume bloat)
+copy_skills() { # <target_profile_dir> — skip node_modules/ dist/ .venv/ (volume bloat)
   mkdir -p "$1/skills"
   local d name
   for d in "$SKILLS_SRC"/*/; do
@@ -51,6 +51,7 @@ copy_skills() { # <target_profile_dir> — skip node_modules/ and dist/ (volume 
     name="$(basename "$d")"
     [ "$name" = "node_modules" ] && continue
     [ "$name" = "dist" ] && continue
+    [ "$name" = ".venv" ] && continue
     cp -r "$d" "$1/skills/"
   done
 }
