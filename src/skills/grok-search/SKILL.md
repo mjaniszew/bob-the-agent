@@ -27,10 +27,10 @@ Do NOT use this skill when:
 
 ## Usage
 
-Call the skill-runner with:
+Run the skill directly with:
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"searchPosts","query":"your search term"}'
+node /app/skills/grok-search/cli.ts '{"action":"searchPosts","query":"your search term"}'
 ```
 
 ## Actions
@@ -61,7 +61,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{"action":"sear
 
 ### Search Recent Posts
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "searchPosts",
   "query": "breaking news"
 }'
@@ -69,7 +69,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{
 
 ### Search with Handle Filters
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "searchPosts",
   "query": "AI developments",
   "allowedHandles": ["elonmusk", "sama"],
@@ -79,7 +79,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{
 
 ### Search All Time Periods
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "searchPostsAll",
   "query": "historical events on X"
 }'
@@ -87,7 +87,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{
 
 ### Search Users
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "searchUsers",
   "query": "developer"
 }'
@@ -95,7 +95,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{
 
 ### Get User Timeline
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "getUserTimeline",
   "query": "",
   "username": "elonmusk"
@@ -104,7 +104,7 @@ node /app/scripts/skill-runner.mjs --skill grok-search --params '{
 
 ### Search with Image Understanding
 ```bash
-node /app/scripts/skill-runner.mjs --skill grok-search --params '{
+node /app/skills/grok-search/cli.ts '{
   "action": "searchPosts",
   "query": "photos from the event",
   "enableImageUnderstanding": true
