@@ -27,8 +27,8 @@ const LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const TASK_ID_RE = /^[a-z]+-\d+-[a-f0-9]{6}$/;
 
 // Resolved at CALL time, not module scope — so tests can inject
-// DELEGATION_LOG_DIR via process.env after import (jest imports this module
-// eagerly via src/skills/index.ts before beforeEach runs).
+// DELEGATION_LOG_DIR via process.env after import (tests import this module
+// directly, then set the env in beforeEach).
 const logDir = () => process.env.DELEGATION_LOG_DIR || '/opt/data/delegation';
 
 function buildPrompt(goal: string, context?: string, saveResultsTo?: string): string {
