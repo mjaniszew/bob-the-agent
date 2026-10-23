@@ -26,7 +26,7 @@ Common delegation triggers:
 - Any web search → `simple` agent
 - Files upload using skills → `simple` agent
 - Keywords: "research", "analyze", "synthesize", "compare", "find sources" → `researcher` agent
-- Keywords: "code", "implement", "refactor", "debug", "review code", "architecture", "fix bug" → `coder` agent
+- Keywords: "code", "implement", "refactor", "debug", "review code", "architecture", "fix bug", "engineering" → `coder` agent
 - Data extraction from web pages → `simple` agent
 - Summaries, document creation → `simple` agent
 
