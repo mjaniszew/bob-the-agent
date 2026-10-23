@@ -1,31 +1,25 @@
-import * as registry from '../src/skills/index';
-
-const SKILL = 'delegateProfile';
+import delegateProfile, { targetTimeouts } from '../src/skills/delegate-profile/index';
 
 describe('delegate-profile skill', () => {
-  test('is registered', () => {
-    expect(registry).toHaveProperty(SKILL);
-  });
-
   test('rejects unknown actions', async () => {
-    await expect(registry[SKILL]({ action: 'bogus' })).rejects.toThrow(/action/i);
+    await expect(delegateProfile({ action: 'bogus' })).rejects.toThrow(/action/i);
   });
 
   test('rejects send_task without target/goal', async () => {
-    await expect(registry[SKILL]({ action: 'send_task' })).rejects.toThrow(/target/i);
+    await expect(delegateProfile({ action: 'send_task' })).rejects.toThrow(/target/i);
     await expect(
-      registry[SKILL]({ action: 'send_task', target_agent_id: 'simple' })
+      delegateProfile({ action: 'send_task', target_agent_id: 'simple' })
     ).rejects.toThrow(/goal/i);
   });
 
   test('rejects unknown delegation target', async () => {
     await expect(
-      registry[SKILL]({ action: 'send_task', target_agent_id: 'unknown', goal: 'x' })
+      delegateProfile({ action: 'send_task', target_agent_id: 'unknown', goal: 'x' })
     ).rejects.toThrow(/unknown target/i);
   });
 
   test('enforces per-target timeout table (simple 15m, researcher 60m, coder 120m)', () => {
-    const timeouts = (registry[SKILL] as any).targetTimeouts;
+    const timeouts = targetTimeouts;
     expect(timeouts.simple).toBe(15 * 60 * 1000);
     expect(timeouts.researcher).toBe(60 * 60 * 1000);
     expect(timeouts.coder).toBe(120 * 60 * 1000);
@@ -50,7 +44,7 @@ describe('delegate-profile skill', () => {
       const childProcess = require('child_process');
       const spawnSpy = jest.spyOn(childProcess, 'spawn')
         .mockReturnValue({ unref: jest.fn(), on: jest.fn(), pid: 4242 } as any);
-      const res = await registry[SKILL]({
+      const res = await delegateProfile({
         action: 'send_task_background', target_agent_id: 'simple', goal: 'do it',
       });
       expect(res.status).toBe('started');
@@ -70,7 +64,7 @@ describe('delegate-profile skill', () => {
 
     test('send_task_background rejects unknown target like the foreground path', async () => {
       await expect(
-        registry[SKILL]({ action: 'send_task_background', target_agent_id: 'nope', goal: 'x' })
+        delegateProfile({ action: 'send_task_background', target_agent_id: 'nope', goal: 'x' })
       ).rejects.toThrow(/unknown target/);
     });
 
@@ -79,14 +73,14 @@ describe('delegate-profile skill', () => {
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'partial output\n');
       fs.writeFileSync(path.join(tmp, `${id}.running`),
         JSON.stringify({ target: 'simple', startedAt: Date.now() }));
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('running');
     });
 
     test('check_task reports failed with exit code from the sentinel', async () => {
       const id = 'simple-456-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'boom\nEXIT:5\n');
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('failed');
       expect(res.exit_code).toBe(5);
     });
@@ -94,7 +88,7 @@ describe('delegate-profile skill', () => {
     test('check_task reports finished with exit_code 0 on success sentinel', async () => {
       const id = 'simple-789-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'all done\nEXIT:0\n');
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('finished');
       expect(res.exit_code).toBe(0);
     });
@@ -102,7 +96,7 @@ describe('delegate-profile skill', () => {
     test('check_task reports finished with unknown outcome when the marker is gone without a sentinel', async () => {
       const id = 'simple-111-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'partial output\n');
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('finished');
     });
 
@@ -111,7 +105,7 @@ describe('delegate-profile skill', () => {
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'partial output\n');
       fs.writeFileSync(path.join(tmp, `${id}.running`),
         JSON.stringify({ target: 'simple', startedAt: Date.now() - 30 * 60 * 1000 }));
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('failed');
       expect(res.stale).toBe(true);
     });
@@ -120,23 +114,23 @@ describe('delegate-profile skill', () => {
       const id = 'simple-333-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'partial output\n');
       fs.writeFileSync(path.join(tmp, `${id}.running`), 'running');
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('running');
     });
 
     test('check_task rejects malformed task_id (path traversal) and missing logs', async () => {
       await expect(
-        registry[SKILL]({ action: 'check_task', task_id: '../../etc/passwd' })
+        delegateProfile({ action: 'check_task', task_id: '../../etc/passwd' })
       ).rejects.toThrow(/invalid task_id/);
       await expect(
-        registry[SKILL]({ action: 'check_task', task_id: 'simple-444-abcdef' })
+        delegateProfile({ action: 'check_task', task_id: 'simple-444-abcdef' })
       ).rejects.toThrow(/no log/);
     });
 
     test('check_task truncates the log tail to ~4000 chars without loading the whole file', async () => {
       const id = 'simple-555-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'x'.repeat(20 * 1024));
-      const res = await registry[SKILL]({ action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.log_tail.length).toBeLessThanOrEqual(4000);
     });
 
@@ -148,21 +142,19 @@ describe('delegate-profile skill', () => {
       fs.writeFileSync(old, 'old');
       const oneWeekAgo = (Date.now() - 8 * 24 * 60 * 60 * 1000) / 1000;
       fs.utimesSync(old, oneWeekAgo, oneWeekAgo);
-      await registry[SKILL]({ action: 'send_task_background', target_agent_id: 'simple', goal: 'do it' });
+      await delegateProfile({ action: 'send_task_background', target_agent_id: 'simple', goal: 'do it' });
       expect(fs.existsSync(old)).toBe(false);
       spawnSpy.mockRestore();
     });
   });
 
-  // Regression for Task 5 quality review issue 1: check_task must pass the
-  // skillRegistry metadata validation (skill-runner.mjs validateParams and
-  // executeSkill) with ONLY task_id — the old metadata marked target_agent_id
-  // as required, breaking the documented polling flow on every invocation.
-  describe('executeSkill integration (validation layer)', () => {
+  // Regression for Task 5 quality review issue 1: check_task must pass
+  // validation with ONLY task_id — validation is done by the skill itself
+  // when invoked directly, keeping the documented polling flow working.
+  describe('direct invocation (validation layer)', () => {
     const fs = require('fs');
     const path = require('path');
     const os = require('os');
-    const { executeSkill } = require('../src/skills/index');
     let tmp: string;
 
     beforeEach(() => {
@@ -174,16 +166,16 @@ describe('delegate-profile skill', () => {
       delete process.env.DELEGATION_LOG_DIR;
     });
 
-    test('check_task passes the metadata validation layer with only task_id', async () => {
+    test('check_task passes validation with only task_id', async () => {
       const id = 'simple-666-abcdef';
       fs.writeFileSync(path.join(tmp, `${id}.log`), 'partial\n');
-      const res = await executeSkill('delegate-profile', { action: 'check_task', task_id: id });
+      const res = await delegateProfile({ action: 'check_task', task_id: id });
       expect(res.status).toBe('finished');
     });
 
-    test('send_task unknown target still rejects through the validation layer', async () => {
+    test('send_task unknown target still rejects when invoked directly', async () => {
       await expect(
-        executeSkill('delegate-profile', { action: 'send_task', target_agent_id: 'nope', goal: 'x' })
+        delegateProfile({ action: 'send_task', target_agent_id: 'nope', goal: 'x' })
       ).rejects.toThrow(/unknown target/);
     });
   });
