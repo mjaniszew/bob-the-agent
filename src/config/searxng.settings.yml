@@ -178,7 +178,7 @@ ui:
 #
 outgoing:
   # default timeout in seconds, can be override by engine
-  request_timeout: 3.0
+  request_timeout: 6.0
   # the maximum timeout in seconds
   # max_request_timeout: 10.0
   # suffix of searxng_useragent, could contain information like an email address
@@ -1054,6 +1054,7 @@ engines:
 
   - name: google
     engine: google
+    timeout: 6.0
     shortcut: go
 
   - name: google images
@@ -1224,6 +1225,7 @@ engines:
     categories: [general, web]
     search_type: web
     shortcut: ka
+    disabled: true
 
   - name: karmasearch images
     engine: karmasearch
@@ -1231,18 +1233,21 @@ engines:
     search_type: images
     shortcut: kai
     paging: false
+    disabled: true
 
   - name: karmasearch videos
     engine: karmasearch
     categories: [general, web]
     search_type: videos
     shortcut: kav
+    disabled: true
 
   - name: karmasearch news
     engine: karmasearch
     categories: [news, web]
     search_type: news
     shortcut: kan
+    disabled: true
 
   - name: kickass
     engine: kickass
@@ -2618,6 +2623,7 @@ engines:
     paging: true
     categories: [general, web]
     brave_category: search
+    disabled: true
     # brave_spellcheck: true
 
   - name: brave.images
