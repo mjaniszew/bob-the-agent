@@ -1,0 +1,18 @@
+Query: Continue: say CONT_OK
+Initializing agent...
+↻ Resumed session 20261112_223916_4f2531 (1 user message, 2 total messages)
+────────────────────────────────────────
+
+
+╭─ ☤ Hermes ───────────────────────────────────────────────────────────────────╮
+CONT_OK
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Resume this session with:
+  hermes --resume 20261112_223916_4f2531 -p simple
+  hermes -c "Continue and say CONT_OK" -p simple
+
+Session:        20261112_223916_4f2531
+Title:          Continue and say CONT_OK
+Duration:       8s
+Messages:       4 (2 user, 0 tool calls)
