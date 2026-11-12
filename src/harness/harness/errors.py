@@ -17,7 +17,12 @@ resolve failures: the fail-fast ``${VAR}`` check for unset environment
 variables and the belt-and-braces empty-``api_key`` guard.
 """
 
-__all__ = ["ConfigError", "ConfigLoadError", "ConfigValidationError"]
+__all__ = [
+    "ConfigError",
+    "ConfigLoadError",
+    "ConfigValidationError",
+    "SessionFSMError",
+]
 
 
 class ConfigError(Exception):
@@ -50,3 +55,28 @@ class ConfigValidationError(ConfigError, ValueError):
     ``pytest.raises(ValueError)`` works for harness config validation
     failures (ARCHITECTURE.md section 4 contract).
     """
+
+
+class SessionFSMError(ConfigError):
+    """Illegal session state-machine transition.
+
+    Raised by :class:`harness.session.Session.transition` and
+    :meth:`harness.session.Session.archive` when the requested move is not in
+    the FSM table; the session state and files are left untouched. Subclasses
+    :class:`ConfigError` (not ``ValueError``) to keep the harness single
+    catch-family convention.
+
+    Attributes:
+        session_id: id of the session whose transition was rejected (also the
+            inherited :class:`ConfigError` ``key`` attribute).
+        old: state the session was in before the rejected move.
+        new: state the rejected move tried to reach.
+    """
+
+    def __init__(self, session_id: str, old: str, new: str) -> None:
+        self.session_id = session_id
+        self.old = old
+        self.new = new
+        super().__init__(
+            session_id, f"session {session_id}: illegal transition {old} -> {new}"
+        )

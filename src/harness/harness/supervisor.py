@@ -21,14 +21,17 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import pathlib
 import sys
 from typing import Any
 
 import harness.persist
+from harness.bus import Bus
 from harness.config import HarnessConfig, load_config
 from harness.errors import ConfigError, ConfigLoadError
+from harness.session_manager import SessionManager
 
 __all__ = ["load_config", "ensure_data_tree", "build_app", "main"]
 
@@ -86,8 +89,16 @@ def _print_tree(cfg: HarnessConfig) -> None:
 
 
 async def _serve(cfg: HarnessConfig) -> int:
-    """Serve the gateway app until uvicorn's own signal handling stops it."""
+    """Serve the gateway app until uvicorn's own signal handling stops it.
+
+    Boot order per ARCHITECTURE.md section 3.4: replay session state from
+    disk (before the gateway serves), log the ready line, close the bus on
+    shutdown."""
     app = build_app()
+    bus = Bus()
+    manager = SessionManager(cfg, bus=bus)
+    counts = manager.replay()
+    logging.getLogger("harness.supervisor").info(SessionManager.ready_line(counts))
     import uvicorn
 
     config = uvicorn.Config(
@@ -97,7 +108,7 @@ async def _serve(cfg: HarnessConfig) -> int:
     try:
         await server.serve()
     finally:
-        pass
+        await bus.aclose()
     return 0
 
 
