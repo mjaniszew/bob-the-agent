@@ -41,7 +41,10 @@ Design contract / live facts (probes recorded 2026-11-12; see
   stream tail; a ``failed`` event, when present, is terminal (F1/F2).
 - Session id: extracted from stdout (``Session:`` line first, then the
   ``hermes --resume`` help line), falling back to a read-only sqlite peek at
-  the profile store (``tests/fixtures/hermes-sqlite-store-NOTE.md``).
+  the profile store (``tests/fixtures/hermes-sqlite-store-NOTE.md``). The
+  fallback is skipped when the profile name is not a plain
+  ``^[A-Za-z0-9_-]+$`` token — the store path is never built from an
+  unsanitized name (traversal like ``../etc`` yields no profile dir).
 - ctor: either the full :class:`~harness.config.HarnessConfig` (ledger path
   defaults to ``cfg.storage.data_dir``) or just the
   :class:`~harness.config.HermesAgentsConfig` sub-config plus a required
@@ -51,6 +54,7 @@ Design contract / live facts (probes recorded 2026-11-12; see
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
 import sqlite3
@@ -101,6 +105,12 @@ LINE_FILTERS: tuple[re.Pattern[str], ...] = (
 #    fallback for runs whose footer never got printed.
 _SESSION_LINE_RE = re.compile(r"^\s*Session:\s+(\S+)", re.MULTILINE)
 _RESUME_HELP_RE = re.compile(r"hermes --resume (\S+)")
+
+# Profile-name allowlist for the sqlite store path: ONLY plain tokens (real
+# profile names are simple/researcher/coder) may be joined under
+# $HERMES_HOME/profiles — anything carrying traversal or separators returns
+# no profile dir at all.
+_PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 _STDERR_TAIL_CHARS = 500
 
@@ -275,6 +285,8 @@ class HermesAdapter:
             # generator close).
             if stderr_task is not None and not stderr_task.done():
                 stderr_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, OSError):
+                    await stderr_task
             raise
         except TimeoutError:
             timed_out = True
@@ -284,6 +296,8 @@ class HermesAdapter:
                 exit_code = proc.returncode
             if stderr_task is not None and not stderr_task.done():
                 stderr_task.cancel()  # absorb the cancel: buffer read stays clean
+                with contextlib.suppress(asyncio.CancelledError, OSError):
+                    await stderr_task
         except OSError as exc:
             # F12: config-pinned bin missing/garbage -> honest spawn failure.
             error = f"failed to spawn hermes {self._bin!r}: {exc}"
@@ -337,8 +351,15 @@ class HermesAdapter:
         return argv
 
     def _profile_dir(self, profile: str | None) -> Path | None:
-        """``$HERMES_HOME/profiles/<profile>`` — the state.db store root."""
-        if not profile:
+        """``$HERMES_HOME/profiles/<profile>`` — the state.db store root.
+
+        The profile name is sanitized first: ONLY ``^[A-Za-z0-9_-]+$`` tokens
+        (the real profile names simple/researcher/coder match) may build a
+        store path; traversal (``../etc``), path separators (``a/b``), and
+        empty names return ``None`` (the sqlite fallback is skipped, it never
+        opens a path outside ``$HERMES_HOME/profiles``).
+        """
+        if not profile or _PROFILE_NAME_RE.fullmatch(profile) is None:
             return None
         return Path(self._hermes_home) / "profiles" / profile
 

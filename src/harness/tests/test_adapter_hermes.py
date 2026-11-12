@@ -304,6 +304,19 @@ def test_newest_session_id_from_store(tmp_path: Path) -> None:
     assert newest_session_id_from_store(tmp_path / "profiles" / "missing") is None
 
 
+def test_profile_dir_rejects_unsafe_profile_names(tmp_path: Path) -> None:
+    """The sqlite store path is built ONLY from ``^[A-Za-z0-9_-]+$`` names:
+    traversal (``../etc``) and path separators (``a/b``) return None — the
+    sqlite fallback is skipped rather than escaping $HERMES_HOME/profiles —
+    while real names like 'simple' resolve normally."""
+    adapter = HermesAdapter(
+        _sub_config(tmp_path), persist_dir=tmp_path, hermes_home=str(tmp_path)
+    )
+    assert adapter._profile_dir("../etc") is None
+    assert adapter._profile_dir("a/b") is None
+    assert adapter._profile_dir("simple") == tmp_path / "profiles" / "simple"
+
+
 async def test_session_store_fallback_when_stdout_has_no_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -329,6 +342,40 @@ async def test_session_store_fallback_when_stdout_has_no_session(
     assert extract_session_id("RESULT line with no session footer") is None
     assert row["session_ref"] == "store-session-id"  # sqlite fallback answered
     assert row["argv_redacted"] == calls[0]["argv"]
+
+
+async def test_session_id_resume_composition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session-id -> resume composition across TWO adapter.run calls: run 1's
+    fake stdout carries the ``Session:        20261112_223916_4f2531`` footer
+    -> ledger ``session_ref``; run 2 fed that ``resume_ref`` lands the
+    ``--resume 20261112_223916_4f2531`` argv slot."""
+    adapter = _adapter(tmp_path)
+    from harness.adapters import base as base_module
+
+    calls: list[dict[str, object]] = []
+    stdout_lines = [b"PROBE_OK\r\n", b"Session:        20261112_223916_4f2531\r\n"]
+
+    async def fake_start_process(argv, cwd, env):  # fresh proc per run
+        calls.append({"argv": list(argv), "cwd": cwd, "env": dict(env or {})})
+        return FakeProc(list(stdout_lines), b"", 0), True
+
+    monkeypatch.setattr(base_module, "start_process", fake_start_process)
+    _ = [event async for event in adapter.run(RunSpec(prompt="go"))]
+    row1 = read_jsonl(tmp_path / "runs_ledger.jsonl")[-1]
+    assert row1["session_ref"] == "20261112_223916_4f2531"
+    session_ref = str(row1["session_ref"])
+    _ = [
+        event
+        async for event in adapter.run(RunSpec(prompt="go", resume_ref=session_ref))
+    ]
+    argv2 = list(calls[1]["argv"])
+    assert argv2[argv2.index("--resume") : argv2.index("--resume") + 2] == [
+        "--resume",
+        "20261112_223916_4f2531",
+    ]
 
 
 # --- relay filtering (LINE_FILTERS; faithful relay otherwise) ---------------

@@ -20,10 +20,13 @@ Design contract / live facts (probes recorded 2026-11-12, see
   ``--auto`` included when ``agents.opencode.auto_approve`` is true (verified
   present in opencode 1.18.32: "auto-approve permissions that are not
   explicitly denied (dangerous!)").
-- workdir validation (m3): the workdir MUST live under the configured
-  ``workdir_root`` — regex ``re.escape(workdir_root) + "/"``, fullmatch — and
-  is mandatory because cwd AND ``--dir`` are both set to it. Everything else
-  raises ``ValueError`` before any spawn.
+- workdir validation (m3): the workdir is mandatory (cwd AND ``--dir`` are
+  both set to it), traversal-resolved via ``os.path.normpath`` BEFORE the
+  root-prefix check (``re.escape(workdir_root) + "/"``, anchored match on the
+  normalized path), so ``/app/projects/../../etc/passwd`` (→ ``/etc/passwd``)
+  is rejected while ``/app/projects/a/../b`` is accepted as
+  ``/app/projects/b``. The exact configured root itself is rejected (a
+  separator is required); workdirs are always nested under it.
 - opencode.json pre-seed (F11): when `<workdir>/opencode.json` is missing it is
   created with ``{"permission": {"edit": "allow", "bash": "allow", "webfetch":
   "allow"}, "external_directory": "allow"}``; an existing file is never
@@ -36,7 +39,10 @@ Design contract / live facts (probes recorded 2026-11-12, see
   become ``tool`` events with the state title or an ≤80-char input preview;
   unknown ``type`` values are relayed as ``system(raw=<line>)``; a
   ``type=error`` event becomes a terminal ``failed`` event (error text from
-  ``error.data.message`` when present) and stops the stream immediately.
+  ``error.data.message`` when present) and stops the stream immediately; the
+  failed error appends the full child stderr when the child also exited
+  nonzero (the error-event message alone can be generic — "Unexpected server
+  error" — while the CLI's stderr log names the real cause).
 - final text: one ``final`` event is emitted at stream end (normal EOF path,
   before the exit-code check) with ``final_text`` = ALL text-part strings
   joined (they are full text parts; verified live: the final text of a
@@ -60,6 +66,7 @@ Design contract / live facts (probes recorded 2026-11-12, see
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -91,7 +98,9 @@ def _workdir_regex(workdir_root: str) -> re.Pattern[str]:
     """``^<escaped workdir_root>/<nesting>`` — nested paths under the root.
 
     The pattern is ``re.escape(workdir_root) + "/"`` used with an anchored
-    ``.match`` (start-anchored only, so nested paths under the root pass).
+    ``.match`` (start-anchored only, so nested paths under the root pass);
+    the caller matches it against the NORMALIZED path (traversal resolved
+    first), never the raw ``spec.workdir`` string.
     """
     return re.compile(re.escape(workdir_root) + "/")
 
@@ -267,8 +276,11 @@ class OpencodeAdapter:
                     try:
                         # EOF normally exits within an instant; a mid-stream
                         # stop (error event) can leave the child blocked on an
-                        # unread pipe — cap the wait, then killpg.
-                        exit_code = await asyncio.wait_for(proc.wait(), timeout=2.0)
+                        # unread pipe — cap the wait, then killpg. Once the
+                        # failure event was parsed the child is done producing
+                        # output, so the reaping window shrinks to 0.5s.
+                        reap_s = 0.5 if failure_event is not None else 2.0
+                        exit_code = await asyncio.wait_for(proc.wait(), timeout=reap_s)
                     except TimeoutError:
                         await base.kill_process_group(proc, grace_s=1.0)
                         exit_code = proc.returncode
@@ -299,12 +311,21 @@ class OpencodeAdapter:
                         )
                         error_is_exit = True
                 if failure_event is not None:
+                    # One terminal failed event (the error event wins); when
+                    # the child also exited nonzero, its stderr is the honest
+                    # fragment source — the error-event message alone can be
+                    # generic while the CLI's stderr log names the real cause.
+                    # (The exit-path failure already carries the tail.)
                     error = failure_event.error
+                    if not error_is_exit and exit_code not in (None, 0):
+                        error = f"{error}: {stderr_text}"
         except GeneratorExit:
             # Consumer abandoned the stream: cleanup already ran; the ledger
             # write below happens on the unwind and yields are forbidden.
             if stderr_task is not None and not stderr_task.done():
                 stderr_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, OSError):
+                    await stderr_task
             raise
         except TimeoutError:
             if proc is not None:
@@ -313,6 +334,8 @@ class OpencodeAdapter:
             error = f"timeout after {timeout}s"
             if stderr_task is not None and not stderr_task.done():
                 stderr_task.cancel()  # absorb the cancel: no pending-reader leak
+                with contextlib.suppress(asyncio.CancelledError, OSError):
+                    await stderr_task
         except OSError as exc:
             # F12: config-pinned bin missing/garbage -> honest spawn failure.
             error = f"failed to spawn opencode {self._bin!r}: {exc}"
@@ -341,17 +364,27 @@ class OpencodeAdapter:
         return spec.timeout_s if spec.timeout_s is not None else self._cfg.timeout_s
 
     def _validate_workdir(self, spec: RunSpec) -> str:
-        """m3: workdir required and must be under the configured root."""
+        """m3: workdir required, traversal-normalized, and nested under the root.
+
+        The path is normalized (``os.path.normpath``) BEFORE the root-prefix
+        regex match, so ``/app/projects/../../etc/passwd`` (which normalizes to
+        ``/etc/passwd``) is rejected with ``ValueError`` while a path
+        containing ``..`` that stays under the root (``/app/projects/a/../b``)
+        is accepted as ``/app/projects/b``. The exact configured root itself is
+        rejected (a separator is required); workdirs are always nested under
+        it.
+        """
         workdir = spec.workdir
         if not workdir:
             raise ValueError(
                 "opencode run requires a workdir (cwd AND --dir are set to it)"
             )
-        if self._workdir_re.match(workdir) is None:
+        normalized = os.path.normpath(workdir)
+        if self._workdir_re.match(normalized) is None:
             raise ValueError(
                 f"workdir {workdir!r} is not under opencode workdir_root {self._workdir_root!r}"
             )
-        return workdir
+        return normalized
 
     def _build_argv(self, spec: RunSpec, workdir: str) -> list[str]:
         """Exact snapshot argv (task contract; order is part of the contract)."""
@@ -391,7 +424,9 @@ def _error_text(event_obj: Mapping[str, object]) -> str:
 
     Prefers ``error.data.message`` (failure-probe shape:
     ``{"type":"error","error":{"name":...,"data":{"message":...}}}``), falling
-    back to any ``error.message``, then the stringified error mapping.
+    back to any ``error.message``, then the stringified error mapping; a
+    malformed event with no error text yields the ``"unknown opencode error"``
+    placeholder instead of an empty string.
     """
     error_field = event_obj.get("error")
     if isinstance(error_field, Mapping):
@@ -400,4 +435,5 @@ def _error_text(event_obj: Mapping[str, object]) -> str:
             return str(data["message"])
         if error_field.get("message"):
             return str(error_field["message"])
-    return "" if error_field is None else str(error_field)
+    fallback = "" if error_field is None else str(error_field)
+    return fallback or "unknown opencode error"

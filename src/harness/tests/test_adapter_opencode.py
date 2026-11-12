@@ -21,6 +21,7 @@ from harness.config import OpencodeAgentsConfig, load_config
 from harness.persist import read_jsonl
 from tests.adapters_conftest import (
     FakeProc,
+    fixture_bytes,
     fixture_lines,
     install_fake_start_process,
 )
@@ -118,6 +119,48 @@ async def test_argv_snapshot_session_resume_continue_matrix(
     assert "--session" not in calls[2]["argv"]
 
 
+async def test_session_id_resume_composition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session-id -> resume composition across TWO adapter.run calls: run 1's
+    last event carries ``sessionID: ses_compose123`` -> the final event's
+    ``session_ref`` (and the ledger row) feeds run 2's ``--session`` slot."""
+    adapter = _adapter(tmp_path)
+    workdir = _workdir(tmp_path, "compose")
+    from harness.adapters import base as base_module
+
+    calls: list[dict[str, object]] = []
+    stream_lines = [
+        b'{"type":"text","sessionID":"ses_compose123","part":{"type":"text","text":"COMPOSE_OK"}}\n',
+    ]
+
+    async def fake_start_process(argv, cwd, env):  # fresh proc per run
+        calls.append({"argv": list(argv), "cwd": cwd, "env": dict(env or {})})
+        return _event_stream(list(stream_lines)), True
+
+    monkeypatch.setattr(base_module, "start_process", fake_start_process)
+    run1 = [event async for event in adapter.run(RunSpec(prompt="go", workdir=workdir))]
+    assert [event.kind for event in run1] == ["chunk", "final"]
+    assert run1[-1].session_ref == "ses_compose123"
+    row1 = read_jsonl(tmp_path / "runs_ledger.jsonl")[-1]
+    assert row1["session_ref"] == "ses_compose123"
+    session_ref = run1[-1].session_ref
+    assert session_ref is not None
+    run2 = [
+        event
+        async for event in adapter.run(
+            RunSpec(prompt="go", workdir=workdir, resume_ref=session_ref)
+        )
+    ]
+    assert [event.kind for event in run2] == ["chunk", "final"]
+    argv2 = list(calls[1]["argv"])
+    assert argv2[argv2.index("--session") : argv2.index("--session") + 2] == [
+        "--session",
+        "ses_compose123",
+    ]
+
+
 async def test_argv_snapshot_model_and_agent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -183,6 +226,33 @@ def test_workdir_must_live_under_configured_root(
     )
     with pytest.raises(ValueError, match="not under opencode workdir_root"):
         adapter._validate_workdir(RunSpec(prompt="x", workdir="/tmp/elsewhere"))
+
+
+def test_workdir_traversal_normalized_before_root_match(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Traversal is resolved BEFORE the root-prefix match (m3 hardening):
+    ``/app/projects/../../etc/passwd`` (== /etc/passwd) is REJECTED; a ``..``
+    that stays under the root is normalized and accepted as the resolved
+    path; the exact configured root itself is rejected too."""
+    monkeypatch.setenv("HARNESS_API_KEY", "test-key")
+    default_adapter = OpencodeAdapter(load_config())
+    with pytest.raises(ValueError, match="not under opencode workdir_root"):
+        default_adapter._validate_workdir(
+            RunSpec(prompt="x", workdir="/app/projects/../../etc/passwd")
+        )
+    with pytest.raises(ValueError, match="not under opencode workdir_root"):
+        default_adapter._validate_workdir(RunSpec(prompt="x", workdir="/app/projects"))
+
+    adapter = _adapter(tmp_path)
+    escape = str(tmp_path / "projects" / ".." / "outside")
+    with pytest.raises(ValueError, match="not under opencode workdir_root"):
+        adapter._validate_workdir(RunSpec(prompt="x", workdir=escape))
+    updown = str(tmp_path / "projects" / "a" / ".." / "b")
+    assert adapter._validate_workdir(RunSpec(prompt="x", workdir=updown)) == str(
+        tmp_path / "projects" / "b"
+    )
 
 
 # --- opencode.json pre-seed (F11) ------------------------------------------
@@ -356,6 +426,58 @@ async def test_error_event_maps_to_failed_and_stops(
     assert row["argv_redacted"] == calls[0]["argv"]
     assert row["error"] == events[0].error
     assert "duration_s" in row and "ts" in row
+
+
+async def test_failure_probe_real_stderr_reaches_failed_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Committed failure-probe fixtures end-to-end: the .out stdout (with its
+    type=error event), the .err logfmt stderr (real bytes of the failing
+    run) and exit_code=1. The failed event error keeps the error-event
+    message AND appends the real stderr, which names the actual cause the
+    event message hides (``ProviderModelNotFoundError: Model not found:
+    totally/bogus-model-xyz.``)."""
+    adapter = _adapter(tmp_path)
+    workdir = _workdir(tmp_path, "stderrprobe")
+    install_fake_start_process(
+        monkeypatch,
+        _event_stream(
+            fixture_lines("opencode-failure-probe.out"),
+            stderr=fixture_bytes("opencode-failure-probe.err"),
+            exit_code=1,
+        ),
+    )
+    events = [event async for event in adapter.run(RunSpec(prompt="go", workdir=workdir))]
+    assert [event.kind for event in events] == ["failed"]
+    failed = events[0]
+    assert failed.error is not None
+    assert failed.error.startswith(
+        "Unexpected server error. Check server logs for details.: "
+    )
+    assert (
+        "ProviderModelNotFoundError: Model not found: totally/bogus-model-xyz."
+        in failed.error
+    )
+    assert failed.exit_code is None  # error-event failure carries no exit code
+    row = read_jsonl(tmp_path / "runs_ledger.jsonl")[-1]
+    assert row["error"] == failed.error
+
+
+async def test_malformed_error_event_falls_back_to_placeholder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A malformed ``type=error`` event with no error payload still produces
+    the placeholder text (empty error strings are never emitted)."""
+    adapter = _adapter(tmp_path)
+    workdir = _workdir(tmp_path, "noerror")
+    install_fake_start_process(
+        monkeypatch, _event_stream([b'{"type":"error","sessionID":"ses_z"}\n'])
+    )
+    events = [event async for event in adapter.run(RunSpec(prompt="go", workdir=workdir))]
+    assert [event.kind for event in events] == ["failed"]
+    assert events[0].error == "unknown opencode error"
 
 
 async def test_f1_nonzero_exit_maps_to_failed_with_stderr_tail(

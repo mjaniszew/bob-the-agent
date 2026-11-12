@@ -165,9 +165,9 @@ async def kill_process_group(proc: asyncio.subprocess.Process, grace_s: float = 
     SIGTERM is delivered to the process group (the child is a session leader
     via :func:`start_process`, so ``proc.pid`` is the pgid); if the group has
     not exited within ``grace_s`` seconds, SIGKILL is delivered to the group
-    and we wait unconditionally. Already-dead processes and vanished process
-    groups are no-ops. This helper is shared by the timeout watchdog paths of
-    the hermes and opencode adapters (plan F2).
+    and we wait unconditionally. Already-dead processes, vanished process
+    groups, and unsignalable groups (EPERM) are no-ops. This helper is shared
+    by the timeout watchdog paths of the hermes and opencode adapters (plan F2).
     """
     if proc.returncode is not None:
         return
@@ -182,7 +182,7 @@ async def kill_process_group(proc: asyncio.subprocess.Process, grace_s: float = 
         pass
     try:
         os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):
         return
     try:
         await proc.wait()
