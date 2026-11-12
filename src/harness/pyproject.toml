@@ -1,0 +1,16 @@
+[project]
+name = "harness"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "smoke: requires real CLI/network; skipped unless HARNESS_SMOKE_* set",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

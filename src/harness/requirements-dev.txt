@@ -1,0 +1,5 @@
+# Dev tools (unpinned; NEVER part of requirements.lock so the image does not bloat).
+pytest
+pytest-asyncio
+pytest-cov
+ruff
