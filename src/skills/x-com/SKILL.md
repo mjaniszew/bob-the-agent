@@ -27,10 +27,10 @@ Do NOT use this skill when:
 
 ## Usage
 
-Call the skill-runner with:
+Run the skill directly with:
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{"action":"searchPosts","query":"your search term"}'
+node /app/skills/x-com/cli.ts '{"action":"searchPosts","query":"your search term"}'
 ```
 
 ## Actions
@@ -108,7 +108,7 @@ Use these operators in your search query for more precise results:
 
 ### Search Recent Posts
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPosts",
   "query": "breaking news",
   "maxResults": 20
@@ -117,7 +117,7 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 
 ### Search with Date Filter
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPosts",
   "query": "technology trends",
   "startTime": "2026-01-01T00:00:00Z",
@@ -128,7 +128,7 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 
 ### Search Posts from Specific User
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPosts",
   "query": "from:elonmusk AI",
   "maxResults": 10
@@ -137,7 +137,7 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 
 ### Search Full Archive
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPostsAll",
   "query": "historical events",
   "maxResults": 100
@@ -146,7 +146,7 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 
 ### Search Users
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchUsers",
   "query": "developer",
   "maxResults": 50
@@ -155,7 +155,7 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 
 ### Get User Timeline by Username
 ```bash
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "getUserTimeline",
   "query": "",
   "username": "elonmusk",
@@ -166,14 +166,14 @@ node /app/scripts/skill-runner.mjs --skill x-com --params '{
 ### Pagination
 ```bash
 # First request returns nextToken in meta
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPosts",
   "query": "test",
   "maxResults": 10
 }'
 
 # Use nextToken for next page
-node /app/scripts/skill-runner.mjs --skill x-com --params '{
+node /app/skills/x-com/cli.ts '{
   "action": "searchPosts",
   "query": "test",
   "maxResults": 10,

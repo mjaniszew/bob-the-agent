@@ -17,42 +17,6 @@ afterAll(() => {
 });
 
 describe('X.com Search Skill', () => {
-  describe('Skill Registration', () => {
-    // Registration metadata lives in src/skills/index.ts (skillRegistry).
-
-    it('should be registered in skillRegistry', async () => {
-      const skillsIndex = await import('../src/skills/index');
-      expect(skillsIndex.skillRegistry).toHaveProperty('x-com');
-      expect(skillsIndex.skillRegistry['x-com'].name).toBe('X.com Search');
-      expect(skillsIndex.skillRegistry['x-com'].version).toBe('1.0.0');
-    });
-
-    it('should have required action parameter', async () => {
-      const skillsIndex = await import('../src/skills/index');
-      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('action');
-      expect(skillsIndex.skillRegistry['x-com'].params.action.required).toBe(true);
-      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPosts');
-      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchPostsAll');
-      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('searchUsers');
-      expect(skillsIndex.skillRegistry['x-com'].params.action.enum).toContain('getUserTimeline');
-    });
-
-    it('should have required query parameter', async () => {
-      const skillsIndex = await import('../src/skills/index');
-      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('query');
-      expect(skillsIndex.skillRegistry['x-com'].params.query.required).toBe(true);
-    });
-
-    it('should have optional pagination parameters', async () => {
-      const skillsIndex = await import('../src/skills/index');
-      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('maxResults');
-      expect(skillsIndex.skillRegistry['x-com'].params.maxResults.default).toBe(10);
-      expect(skillsIndex.skillRegistry['x-com'].params).toHaveProperty('nextToken');
-      // nextToken is optional (no required property means optional)
-      expect(skillsIndex.skillRegistry['x-com'].params.nextToken).not.toHaveProperty('required');
-    });
-  });
-
   describe('Posts Search - Recent', () => {
     it('should search recent posts with query', async () => {
       const { xComSearch } = await import('../src/skills/x-com/index');
@@ -586,9 +550,9 @@ describe('X.com Search Skill', () => {
     });
   });
 
-  describe('Integration with executeSkill', () => {
-    it('should be executable via executeSkill()', async () => {
-      const { executeSkill } = await import('../src/skills/index');
+  describe('Direct invocation (standalone skill)', () => {
+    it('should execute a search when invoked directly', async () => {
+      const { xComSearch } = await import('../src/skills/x-com/index');
 
       process.env.USER_X_COM_API_TOKEN = 'test-api-key';
 
@@ -602,7 +566,7 @@ describe('X.com Search Skill', () => {
         } as Response)
       );
 
-      const result = await executeSkill('x-com', {
+      const result = await xComSearch({
         action: 'searchPosts',
         query: 'test query'
       });
@@ -611,17 +575,16 @@ describe('X.com Search Skill', () => {
       expect(result).toHaveProperty('data');
     });
 
-    it('should throw error for missing required parameters', async () => {
-      const { executeSkill } = await import('../src/skills/index');
+    it('should return a structured error result for missing required parameters', async () => {
+      const { xComSearch } = await import('../src/skills/x-com/index');
 
-      await expect(executeSkill('x-com', {})).rejects.toThrow('Missing required parameter');
+      const result = await xComSearch({});
+
+      expect(result).toHaveProperty('success', false);
+      expect(result.error).toMatch(/Unknown action/);
     });
 
-    it('should throw error for unknown skill', async () => {
-      const { executeSkill } = await import('../src/skills/index');
-
-      await expect(executeSkill('unknown-skill', {})).rejects.toThrow('Unknown skill');
-    });
+    // Registry-level dispatch (executeSkill / unknown-skill lookup) no longer exists.
   });
 
   describe('Execution Time Tracking', () => {

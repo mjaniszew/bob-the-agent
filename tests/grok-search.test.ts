@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import { execFileSync } from 'child_process';
 
 // Mock environment variables
 const originalEnv = process.env;
@@ -629,4 +630,31 @@ describe('Grok Search Skill', () => {
       expect(headers?.Authorization).toBe('Bearer test-key');
     });
   });
+});
+
+const dockerAvailable = process.env.DOCKER_TESTS === '1';
+const maybe = dockerAvailable ? describe : describe.skip;
+
+maybe('grok-search inside the container (DOCKER_TESTS=1 only)', () => {
+  it('direct cli.ts invocation returns a search result set', () => {
+    const stdout = execFileSync(
+      'docker',
+      ['exec', 'bob-the-agent', 'node', '/app/skills/grok-search/cli.ts', '{"action":"searchPosts","query":"hermes agent"}'],
+      { encoding: 'utf8', timeout: 60_000 }
+    );
+    const lines = stdout.trim().length === 0 ? [] : stdout.trim().split('\n');
+    let parsed: any;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        parsed = JSON.parse(lines[i]);
+        break;
+      } catch {
+        continue;
+      }
+    }
+    expect(parsed).toBeTruthy();
+    expect(parsed.success).toBe(true);
+    expect(parsed.result).toBeTruthy();
+    expect(Object.keys(parsed.result).length).toBeGreaterThan(0);
+  }, 60_000);
 });

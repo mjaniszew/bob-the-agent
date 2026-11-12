@@ -47,9 +47,9 @@
    ```bash
    curl http://localhost:11434/api/tags
    ```
-3. Pull a model:
+3. Pull the default model (a cloud manifest pull; run the sign-in step below first):
    ```bash
-   docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
+   docker exec bob-the-agent-ollama ollama pull glm-5.3-flash:cloud
    ```
 4. Sign into Ollama for cloud models:
    ```bash
@@ -65,13 +65,9 @@
    ```bash
    docker exec bob-the-agent-ollama ollama list
    ```
-2. Pull the model referenced in the profile's `hermes.partial.yml` (the pinned default is local):
+2. Pull the model referenced in the profile's `hermes.partial.yml` (the pinned defaults are cloud models — run `ollama signin` first):
    ```bash
-   docker exec bob-the-agent-ollama ollama pull qwen3.5:2b-q4_K_M
-   ```
-   For a cloud model (after `ollama signin`):
-   ```bash
-   docker exec bob-the-agent-ollama ollama pull kimi-k2.6:cloud
+   docker exec bob-the-agent-ollama ollama pull glm-5.3-flash:cloud
    ```
 3. Check model name spelling matches the partial config
 
@@ -80,10 +76,9 @@
 **Symptoms**: Responses take too long
 
 **Solutions**:
-1. Use cloud models for better performance (e.g., `kimi-k2.6:cloud`)
-2. Use smaller local models for simple tasks (e.g., `qwen3.5:2b-q4_K_M`)
-3. Enable GPU if available
-4. Increase `agent.max_turns` or `agent.gateway_timeout` in the profile's `hermes.partial.yml`
+1. Use cloud models for better performance (e.g., `glm-5.3-flash:cloud` main/simple/coder default, or `glm-5.3:cloud` researcher default)
+2. Enable GPU if available
+3. Increase `agent.max_turns` or `agent.gateway_timeout` in the profile's `hermes.partial.yml`
 
 #### Stream Stale — Connection Killed Mid-Prefill
 
@@ -102,14 +97,14 @@
 **Cause**: The ollama container defaults to a 4096-token context; Hermes' agent prompts (~16k tokens) are truncated to destruction. Hermes' minimum for reliable tool use is 65536.
 
 **Solutions**:
-1. Set `OLLAMA_CONTEXT_LENGTH=65536` (compose default) for the ollama container — it must stay >= the `model.ollama_num_ctx` (65536) pinned in `src/agents/*/hermes.partial.yml`
+1. Set `OLLAMA_CONTEXT_LENGTH=65536` (compose default) for the ollama container — `src/agents/*/hermes.partial.yml` pins `model.ollama_num_ctx` to 256000 for main/coder/researcher and 65536 for simple; `OLLAMA_CONTEXT_LENGTH=65536` (compose default) satisfies only the simple partial — raise it (e.g. 256000) to match the other profiles' pins
 2. Restart the stack: `docker compose up -d --force-recreate ollama agent`
 
 #### First Boot Takes Very Long
 
 **Symptoms**: `agent` container stays "starting" (health) beyond the 120s `start_period`
 
-**Cause**: On a first boot with an empty ollama volume, bootstrap auto-pulls the default local model (~1.6GB download, capped at 30 minutes) before the gateway starts listening.
+**Cause**: On a first boot with an empty ollama volume, bootstrap auto-pulls the template default model (`glm-5.3-flash:cloud`, a cloud manifest pull rather than a large local download, capped at 30 minutes) before the gateway starts listening.
 
 **Solutions**:
 1. This is expected on the very first boot — watch progress with `docker compose logs -f agent`
@@ -147,7 +142,7 @@
    ```bash
    docker exec bob-the-agent ping ollama
    ```
-4. Verify gateway port is available (8642, loopback-only binding)
+4. Verify gateway port is available (8642)
 5. Check volume mounts exist:
    ```bash
    ls -la volumes/agent/
@@ -214,14 +209,14 @@ ls -la volumes/agent/profiles/<name>/
 **Symptoms**: Coder profile tasks fail with "opencode: command not found"
 
 **Solutions**:
-1. OpenCode CLI is installed at image build (`npm install -g opencode-ai@latest`). Rebuild the image if it is missing:
+1. OpenCode CLI is installed at image build (`npm install -g opencode-ai@1.18.32`, a deliberate version pin). Rebuild the image if it is missing:
    ```bash
    docker build -t bob-the-agent:latest -f dockerfiles/Dockerfile.hermes .
    docker compose up -d --force-recreate agent
    ```
 2. Manually install OpenCode CLI in the container:
    ```bash
-   docker exec bob-the-agent npm install -g opencode-ai@latest
+   docker exec bob-the-agent npm install -g opencode-ai@1.18.32
    ```
 3. Verify installation:
    ```bash
@@ -330,7 +325,7 @@ ls -la volumes/agent/profiles/<name>/
 **Solutions**:
 1. Check that Discord toolset is enabled in the agent's config
 2. Re-invite bot with correct permissions
-3. Verify `DISCORD_CLIENT_ID` in `.env`
+3. Verify `DISCORD_BOT_TOKEN` in `.env`
 4. Check Discord Developer Portal for errors
 
 ### Network Issues
@@ -383,7 +378,7 @@ docker stats
 docker exec -it bob-the-agent bash
 
 # Test main agent health
-curl http://localhost:8642/healthz
+curl http://localhost:8642/health
 
 # Check Ollama
 docker exec bob-the-agent-ollama ollama list

@@ -1,0 +1,11 @@
+{
+  "name": "bob-skill-x-com",
+  "version": "1.0.0",
+  "description": "Standalone skill: x-com",
+  "type": "module",
+  "main": "index.ts",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

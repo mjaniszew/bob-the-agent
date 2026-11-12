@@ -8,6 +8,7 @@ Connect the existing TypeScript skill implementations in `src/skills/` with the 
 
 - Skills exist: web-search, data-extraction, math-operations, document-creation, notifications, scheduling
 - `src/skills/index.ts` exports `executeSkill()` function and skill registry
+  - (2026-10-23) Superseded: the barrel and executeSkill were removed; skills are standalone (see task 21).
 - Skills are NOT loaded by OpenClaw agent
 - OpenClaw uses its own internal skill system
 - The scheduling skill imports from `../api/src/database` but API runs in separate web container

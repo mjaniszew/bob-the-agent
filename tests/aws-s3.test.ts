@@ -17,34 +17,6 @@ afterAll(() => {
 });
 
 describe('AWS S3 Skill', () => {
-  describe('Skill Registration', () => {
-    // Registration metadata lives in src/skills/index.ts (skillRegistry),
-    // not in the skill module itself.
-
-    it('should export skillRegistry metadata', async () => {
-      const skillsIndex = await import('../src/skills/index');
-
-      expect(skillsIndex.skillRegistry).toHaveProperty('aws-s3');
-      expect(skillsIndex.skillRegistry['aws-s3'].name).toBe('AWS S3');
-      expect(skillsIndex.skillRegistry['aws-s3'].version).toBe('1.0.0');
-    });
-
-    it('should have required parameters defined', async () => {
-      const skillsIndex = await import('../src/skills/index');
-
-      expect(skillsIndex.skillRegistry['aws-s3'].params).toHaveProperty('action');
-      expect(skillsIndex.skillRegistry['aws-s3'].params.action.required).toBe(true);
-    });
-
-    it('should have action enum with upload and getUrl options', async () => {
-      const skillsIndex = await import('../src/skills/index');
-
-      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('upload');
-      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('getUrl');
-      expect(skillsIndex.skillRegistry['aws-s3'].params.action.enum).toContain('getPublicUrl');
-    });
-  });
-
   describe('Upload File', () => {
     it('should return proper response structure for upload', async () => {
       const { awsS3 } = await import('../src/skills/aws-s3/index');
@@ -524,9 +496,9 @@ describe('AWS S3 Skill', () => {
     });
   });
 
-  describe('Integration with executeSkill', () => {
-    it('should be executable via executeSkill()', async () => {
-      const { executeSkill } = await import('../src/skills/index');
+  describe('Direct invocation (standalone skill)', () => {
+    it('should execute getPublicUrl when invoked directly', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
 
       // Deterministic offline action: getPublicUrl only constructs a URL
       // (no credentials, no network). The upload path would hit live AWS
@@ -534,7 +506,7 @@ describe('AWS S3 Skill', () => {
       process.env.USER_AWS_S3_BUCKET = 'test-bucket';
       process.env.USER_AWS_S3_REGION = 'eu-central-1';
 
-      const result = await executeSkill('aws-s3', {
+      const result = await awsS3({
         action: 'getPublicUrl',
         key: 'test/file.txt'
       });
@@ -543,10 +515,13 @@ describe('AWS S3 Skill', () => {
       expect(result).toHaveProperty('url');
     });
 
-    it('should throw error for missing required parameters', async () => {
-      const { executeSkill } = await import('../src/skills/index');
+    it('should return a structured error result for missing required parameters', async () => {
+      const { awsS3 } = await import('../src/skills/aws-s3/index');
 
-      await expect(executeSkill('aws-s3', {})).rejects.toThrow('Missing required parameter');
+      const result = await awsS3({});
+
+      expect(result).toHaveProperty('success', false);
+      expect(result.error).toContain('Missing required parameter');
     });
   });
 });

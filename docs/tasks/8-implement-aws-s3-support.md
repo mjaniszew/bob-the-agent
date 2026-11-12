@@ -15,6 +15,7 @@ Research and implement handlig AWS S3 buckets via AWS SKD.
  - generate authorized url for uploaded file
 4. `aws-s3` skill along any archidecture doc files in `docs` and agent files in `src/agents` are updated and reflect new implementation. Only these agents should be able to use that skill: `main`, `data-extractor`, `document-creator`, `web-searcher`
 5. `src/skills/index.ts` is up to date with new implementation
+  - (2026-10-23) Superseded: src/skills/index.ts was removed; skills are standalone (see task 21).
 
 ## Development rules and context
 1. Use subagents to execute every step. Agents need to save their ouptut results in `/app/data` and report output files back to main agent

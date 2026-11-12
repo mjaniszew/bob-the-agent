@@ -121,7 +121,8 @@ services:
       - SEARXNG_VALKEY_URL=valkey://valkey:6379/0
     volumes:
       - searxng_config:/etc/searxng/
-      - ./src/config/searxng.settings.yml:/etc/searxng/settings.yml:ro
+      - ./src/config/searxng.limiter.toml:/etc/searxng/limiter.toml:ro
+      - ./src/config/searxng.settings.yml:/etc/searxng/settings.yml:rw
       - searxng_data:/var/cache/searxng/
     ports:
       - "8888:8888"

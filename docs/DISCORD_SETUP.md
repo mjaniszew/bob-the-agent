@@ -15,7 +15,7 @@ Bob The Agent includes a Discord bot powered by the Hermes Agent framework for m
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 2. Click "New Application"
 3. Name it (e.g., "Bob The Agent")
-4. Copy the **Application ID** (this is your `DISCORD_CLIENT_ID`)
+4. Copy the **Application ID** (`DISCORD_CLIENT_ID` is a legacy name, no longer referenced by installed Hermes (unverified))
 
 ## Step 2: Create Bot User
 
@@ -38,7 +38,8 @@ Add to your `.env` file:
 
 ```env
 DISCORD_BOT_TOKEN=your-bot-token-here
-DISCORD_CLIENT_ID=your-application-id-here
+# DISCORD_CLIENT_ID: legacy name, no longer referenced by installed Hermes (unverified)
+# DISCORD_CLIENT_ID=your-application-id-here
 ```
 
 ## Step 4: Invite Bot to Server

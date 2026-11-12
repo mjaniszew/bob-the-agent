@@ -42,4 +42,10 @@ describe('SOUL.md single-container wording', () => {
     expect(s).toMatch(/terminal/);
     expect(s).toMatch(/\/app\/projects/);
   });
+
+  test('main dispatches delegation via the standalone cli.ts, not the runner', () => {
+    const s = soul('main');
+    expect(s).not.toContain('skill-runner');
+    expect(s).toContain('node /app/skills/delegate-profile/cli.ts');
+  });
 });

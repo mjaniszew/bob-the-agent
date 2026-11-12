@@ -1,0 +1,11 @@
+{
+  "name": "bob-skill-delegate-profile",
+  "version": "1.0.0",
+  "description": "Standalone skill: delegate-profile",
+  "type": "module",
+  "main": "index.ts",
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

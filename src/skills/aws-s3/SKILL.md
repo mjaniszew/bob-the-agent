@@ -22,10 +22,10 @@ Do NOT use this skill when:
 
 ## Usage
 
-Call the skill-runner with:
+Run the skill directly with:
 
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{"action":"upload","key":"path/to/file.txt","content":"File content here","contentType":"text/plain"}'
+node /app/skills/aws-s3/cli.ts '{"action":"upload","key":"path/to/file.txt","content":"File content here","contentType":"text/plain"}'
 ```
 
 ## Parameters
@@ -57,7 +57,7 @@ Uploads a file to the configured S3 bucket.
 
 Upload with direct content:
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "reports/2024-04-02/report.pdf",
   "content": "Report content here...",
@@ -67,7 +67,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 Upload from file path:
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "reports/2024-04-02/report.pdf",
   "filePath": "/data/reports/report.pdf"
@@ -84,7 +84,7 @@ Generates a presigned URL for accessing an object in S3.
 
 **Example:**
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "getUrl",
   "key": "reports/2024-04-02/report.pdf",
   "expiresIn": 7200
@@ -105,7 +105,7 @@ Generates a permanent public URL for an object in a publicly accessible S3 bucke
 
 **Example:**
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "getPublicUrl",
   "key": "public-images/logo.png"
 }'
@@ -181,7 +181,7 @@ Optional:
 
 ### Upload Text File (Direct Content)
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "data/output.txt",
   "content": "Lorem ipsum dolor sit amet...",
@@ -191,7 +191,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ### Upload File from Disk (Auto Content-Type)
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "reports/monthly.pdf",
   "filePath": "/data/reports/monthly-report.pdf"
@@ -200,7 +200,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ### Upload File with Custom Content-Type
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "data/custom.bin",
   "filePath": "/data/binary-file.bin",
@@ -210,7 +210,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ### Upload JSON Data
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "upload",
   "key": "data/results.json",
   "content": "{\"status\": \"complete\", \"count\": 42}",
@@ -220,7 +220,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ### Generate Shareable Link
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "getUrl",
   "key": "reports/2024-04-02/report.pdf",
   "expiresIn": 86400
@@ -229,7 +229,7 @@ node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
 
 ### Get Public URL (No Credentials Required)
 ```bash
-node /app/scripts/skill-runner.mjs --skill aws-s3 --params '{
+node /app/skills/aws-s3/cli.ts '{
   "action": "getPublicUrl",
   "key": "public-images/logo.png"
 }'

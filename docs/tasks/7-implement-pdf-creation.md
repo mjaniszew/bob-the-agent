@@ -14,6 +14,7 @@ Research and implement working logic for `document-creation` skill. It should be
 5. Verification tests are passing and verifying that pdf is properly displayed without any text overflowing outside of table cells
 6. `document-creation` skill along any archidecture doc files in `docs` and agent files in `src/agents` are updated and reflect new implementation
 7. `src/skills/index.ts` is up to date with new implementation
+  - (2026-10-23) Superseded: src/skills/index.ts was removed; skills are standalone (see task 21).
 
 ## Development rules and context
 1. Use subagents to execute every step. Should agents should save their results in `/app/data` and report files back to main agent
