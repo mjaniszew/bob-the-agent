@@ -32,6 +32,7 @@ from harness.bus import Bus
 from harness.config import HarnessConfig, load_config
 from harness.errors import ConfigError, ConfigLoadError
 from harness.session_manager import SessionManager
+from harness.skills import SkillsEngine
 
 __all__ = ["load_config", "ensure_data_tree", "build_app", "main"]
 
@@ -88,6 +89,18 @@ def _print_tree(cfg: HarnessConfig) -> None:
             print(f"check: {file_rel} ok")
 
 
+def _boot_skills_index(cfg: HarnessConfig) -> None:
+    """Best-effort boot-time skills INDEX.md rebuild; never raises (boot
+    must not crash): an index failure degrades to a warning log only."""
+    try:
+        index_text = SkillsEngine(cfg).build_index()
+        logging.getLogger("harness.supervisor").info(
+            "skills index rebuilt: %d chars", len(index_text)
+        )
+    except (OSError, ValueError) as exc:
+        logging.getLogger("harness.supervisor").warning("skills index rebuild failed: %s", exc)
+
+
 async def _serve(cfg: HarnessConfig) -> int:
     """Serve the gateway app until uvicorn's own signal handling stops it.
 
@@ -99,6 +112,7 @@ async def _serve(cfg: HarnessConfig) -> int:
     manager = SessionManager(cfg, bus=bus)
     counts = manager.replay()
     logging.getLogger("harness.supervisor").info(SessionManager.ready_line(counts))
+    _boot_skills_index(cfg)
     import uvicorn
 
     config = uvicorn.Config(

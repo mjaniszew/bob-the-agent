@@ -21,6 +21,7 @@ __all__ = [
     "ConfigError",
     "ConfigLoadError",
     "ConfigValidationError",
+    "MemoryBudgetError",
     "SessionFSMError",
 ]
 
@@ -79,4 +80,30 @@ class SessionFSMError(ConfigError):
         self.new = new
         super().__init__(
             session_id, f"session {session_id}: illegal transition {old} -> {new}"
+        )
+
+
+class MemoryBudgetError(ConfigError):
+    """A MEMORY_EDIT would push a memory file past its char budget.
+
+    Raised by :class:`harness.memory.MemoryEngine` after the audit line is
+    written: the memory file is left UNTOUCHED — no silent truncation, no
+    auto-compaction (D4) — and consolidation is forced. Subclasses
+    :class:`ConfigError` to keep the harness single catch-family convention;
+    the message carries the filename, the budget and the post-edit size.
+
+    Attributes:
+        filename: on-disk memory file name the edit targeted (e.g.
+            ``"MEMORY.md"``; also the inherited :class:`ConfigError` ``key``
+            attribute).
+        budget: the file's char budget from config.
+        post_len: the post-edit text length that would have overflowed.
+    """
+
+    def __init__(self, filename: str, budget: int, post_len: int) -> None:
+        self.filename = filename
+        self.budget = budget
+        self.post_len = post_len
+        super().__init__(
+            filename, f"{filename} budget {budget} exceeded: {post_len} chars post-edit"
         )
