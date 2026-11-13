@@ -150,6 +150,27 @@ def _storage_failure() -> HTTPException:
     return HTTPException(status_code=503, detail="storage failure")
 
 
+_GATE_EVENT_PREFIX = "gate_"
+
+
+def _sanitize_event(event: dict) -> dict:
+    """ARCH 5.3: gate question/answer text never leaves the process over the
+    API. Keep kind+ts (the timeline stays visible); gate_* event data is
+    dropped — gate_opened keeps only a size hint. events.jsonl on disk keeps
+    full payloads (taskloop resume/recovery read them there)."""
+    kind = event.get("kind")
+    if not isinstance(kind, str) or not kind.startswith(_GATE_EVENT_PREFIX):
+        return event
+    sanitized = dict(event)
+    if kind == "gate_opened":
+        question = sanitized.get("data")
+        q_len = len(question.get("question", "")) if isinstance(question, dict) else 0
+        sanitized["data"] = {"question_len": q_len}
+    else:
+        sanitized["data"] = None
+    return sanitized
+
+
 class ChatIn(BaseModel):
     """JSON body of ``POST /api/chat`` (the HTMX form path is parsed manually)."""
 
@@ -775,9 +796,9 @@ def create_app(
     async def task_detail(task_id: str) -> Response:
         """One task's meta detail (2.9/7.2): the SAFE task.yaml fields
         (description/origin/parent/depends_on/oneway + state.json depth), the
-        last 100 events.jsonl lines, and result.md PRESENCE + size only.
-        NEVER file contents beyond the task.yaml fields, NEVER gate payloads
-        or raw ledger rows."""
+        last 100 events.jsonl lines (gate_* event data is sanitized: question
+        length only), and result.md PRESENCE + size only. NEVER file contents
+        beyond the task.yaml fields, NEVER gate payloads or raw ledger rows."""
         if _ID_GUARD.fullmatch(task_id) is None:
             raise _not_found()
         state_data = _task_state(task_id)
@@ -817,7 +838,7 @@ def create_app(
                     ] if isinstance(depends_on, list) else [],
                     "oneway": oneway if isinstance(oneway, bool) else False,
                 },
-                "events": events,
+                "events": [_sanitize_event(event) for event in events],
                 "result_md": result_present,
                 "result_md_bytes": result_bytes,
             }

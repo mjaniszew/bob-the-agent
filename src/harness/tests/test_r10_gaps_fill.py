@@ -306,7 +306,25 @@ async def test_bus_gate_answered_resumes_task(tmp_volume: Any, cfg: HarnessConfi
         assert detail.status_code == 200
         body = detail.json()
         assert body["state"] == "DONE"  # the state left WAITING_INPUT
-        assert any(event["kind"] == "gate_answered" for event in body["events"])
+        # R12c gate-payload sanitizer (ARCH 5.3): the timeline stays visible,
+        # but the answer/question text never leaves the process.
+        answered = [event for event in body["events"] if event["kind"] == "gate_answered"]
+        assert answered
+        assert all(
+            event["data"] is None
+            or (isinstance(event["data"], dict) and "answer" not in event["data"])
+            for event in answered
+        )
+        opened = [event for event in body["events"] if event["kind"] == "gate_opened"]
+        assert opened
+        assert all(event["data"] == {"question_len": len("which env?")} for event in opened)
+        assert "staging" not in detail.text
+        assert "which env?" not in detail.text
+        # non-gate events pass through untouched (state_change keeps its data)
+        assert any(
+            event["kind"] == "state_change" and isinstance(event["data"], dict)
+            for event in body["events"]
+        )
         assert body["result_md"] is True
     finally:
         await loop.stop()

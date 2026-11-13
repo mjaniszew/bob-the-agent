@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the Hermes gateway with the default profile (`main`) plus the multiplexed `researcher`, `simple`, and `coder` profiles, each with its own configuration.
+Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the two surviving Hermes profiles (`researcher`, `simple`) behind the Hermes gateway, plus the harness long-runner (the FastAPI harness gateway on 127.0.0.1:8181) managed by supervisord, with OpenCode CLI as the direct coding engine (no coder profile).
 
 ## Configuration Files
 
@@ -17,7 +17,7 @@ Main configuration file for environment variables.
 Shared Hermes Agent behavior configuration template located at `src/config/hermes.template.yaml`.
 
 **How it works** (at container startup, in `bootstrap.sh`):
-1. For the default profile (`main`, at `/opt/data/config.yaml`) and each secondary profile (`/opt/data/profiles/{name}/config.yaml`):
+1. For each secondary profile (`researcher`, `simple`) at `/opt/data/profiles/{name}/config.yaml`:
    - If the config does not exist, `generate-config.sh` reads the YAML template and the profile's partial
    - If a partial exists for the profile, `merge-yaml.mjs` deep-merges them (arrays replaced, objects merged, partial wins)
    - If no partial exists, the template is used as-is
@@ -55,30 +55,31 @@ gateway:
 
 Each profile overrides specific parts of the shared template via a partial YAML file in `src/agents/{name}/hermes.partial.yml`:
 
-**Main profile** (`src/agents/main/hermes.partial.yml`):
+**Researcher profile** (`src/agents/researcher/hermes.partial.yml`):
 ```yaml
 model:
-  default: glm-5.3-flash:cloud
+  default: glm-5.3:cloud
   provider: custom
   base_url: http://ollama:11434/v1
   # Per-request ollama context (see the known-tension note under Runtime knobs).
   ollama_num_ctx: 256000
 custom_providers:
-  - name: ollama/glm-5.3-flash:cloud
+  - name: ollama/glm-5.3:cloud
     base_url: http://ollama:11434/v1
-    model: glm-5.3-flash:cloud
+    model: glm-5.3:cloud
 toolsets:
   - hermes-cli
   - browser
 agent:
+  gateway_timeout: 2700
+  api_max_retries: 5
   reasoning_effort: medium
-  bot_mode_protocol: true
   local_stream_stale_timeout: 3600
 ```
 
-(`gateway.multiplex_profiles: true` is not set here — it lives in `src/config/hermes.template.yaml` and applies globally to the single gateway.)
+(`gateway.multiplex_profiles: true` is not set here — it lives in `src/config/hermes.template.yaml`, lines 134-135, and applies globally to the single gateway.)
 
-**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same wiring pattern and runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) as main — researcher uses `glm-5.3:cloud` with `ollama_num_ctx: 256000`; simple uses `glm-5.3-flash:cloud` with `ollama_num_ctx: 65536`. Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5, main 3600/6.
+**Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same wiring pattern and runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) — researcher uses `glm-5.3:cloud` with `ollama_num_ctx: 256000`; simple uses `glm-5.3-flash:cloud` with `ollama_num_ctx: 65536`. Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5.
 
 **Coder profile removed:** The coder Hermes profile was removed in the harness PoC final phase. The harness invokes OpenCode directly; the researcher and simple profiles remain. See `tests/coder-agent.test.ts`, which now asserts the deletion (`src/agents/coder` must not reappear).
 
@@ -86,8 +87,8 @@ agent:
 
 | Key | Default here | Purpose |
 |-----|--------------|---------|
-| `model.ollama_num_ctx` | `256000` (main/coder/researcher), `65536` (simple) | Per-request ollama context window for the GLM cloud models (GLM context limit 512000). Known tension: these pins exceed the ollama container's `OLLAMA_CONTEXT_LENGTH` compose default (`65536`) — both are the real values as shown here; keep the relation in mind when tuning. |
-| `agent.reasoning_effort` | `medium` (template default (src/config/hermes.template.yaml:29); partials pin `medium` for `main`/`researcher`/`coder` and `low` for `simple`) | Reasoning effort passed to the model provider. |
+| `model.ollama_num_ctx` | `256000` (researcher), `65536` (simple) | Per-request ollama context window for the GLM cloud models (GLM context limit 512000). Known tension: these pins exceed the ollama container's `OLLAMA_CONTEXT_LENGTH` compose default (`65536`) — both are the real values as shown here; keep the relation in mind when tuning. |
+| `agent.reasoning_effort` | `medium` (template default (src/config/hermes.template.yaml:29); partials pin `medium` for `researcher` and `low` for `simple`) | Reasoning effort passed to the model provider. |
 | `agent.local_stream_stale_timeout` | `3600` | Hermes kills model connections that receive no chunks for 900s by default; on slow CPU inference a long prefill looks exactly like a stalled stream. Raised to 3600s so big-prompt turns survive prefill. |
 | `approvals.mode` | `off` | Full approval bypass across interactive, gateway, cron and unattended contexts — required for 24/7 unattended operation. Replaces the old auto-approve env var, denylisted upstream in Hermes v0.21. Valid modes: `manual | smart | off`. |
 | `gateway.multiplex_profiles` | `true` (set in `src/config/hermes.template.yaml`) | Makes the single gateway serve all profiles. Set once in the shared template, so it applies globally to the one gateway — not per-profile in a partial. |
@@ -111,9 +112,9 @@ Each profile directory carries exactly two files under `src/agents/{name}/`. `SO
 | `src/agents/{name}/SOUL.md` | Agent soul/persona markdown (personality and behavioral instructions) |
 | `src/agents/{name}/hermes.partial.yml` | Profile config partial overlay, deep-merged over `src/config/hermes.template.yaml` |
 
-### OpenCode Configuration (Coder Profile Only)
+### OpenCode Configuration (Coding Layer)
 
-The coder profile uses OpenCode CLI as its coding engine, configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time with the deliberate pin `opencode-ai@1.18.32`.
+OpenCode CLI is the coding engine invoked directly by the harness (it is not a Hermes profile), configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time with the deliberate pin `opencode-ai@1.18.32`.
 
 **Template file:** `src/config/opencode.template.jsonc`
 
@@ -138,11 +139,10 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 |----------|------|---------|-------------|
 | `LOG_LEVEL` | string | `info` | Logging level (debug, info, warn, error) |
 | `NODE_ENV` | string | `production` | Node environment |
-| `OLLAMA_CONTEXT_LENGTH` | number | `65536` | Ollama server-side context length (compose default `65536`). Known tension: the main/coder/researcher profile partials pin `ollama_num_ctx: 256000` (simple pins `65536`) — above this compose default. Both values are real; consider both when tuning. |
+| `OLLAMA_CONTEXT_LENGTH` | number | `65536` | Ollama server-side context length (compose default `65536`). Known tension: the researcher profile partial pins `ollama_num_ctx: 256000` (simple pins `65536`) — above this compose default. Both values are real; consider both when tuning. |
 | `HERMES_API_TIMEOUT` | number | `3600` | Hermes API read timeout in seconds, raised above Hermes' 900s default so long-running turns survive. |
 | `HERMES_UID` / `HERMES_GID` | number | - | Linux hosts: run the container with these UID/GID so the `./volumes/*` bind mounts are owned by your user |
 | `OPENCODE_CONFIG` | path | `/opt/data/.config/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
-| `HERMES_DASHBOARD` | - | - | Enables the Hermes dashboard (s6 service on port 9119); non-loopback binds require auth via `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` / `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` / `HERMES_DASHBOARD_BASIC_AUTH_SECRET` (or OAuth) |
 | `USER_PROJECTS_FOLDER` | string | - | Host-side source override for the `/app/projects` bind mount |
 
 ### Model Providers
@@ -182,12 +182,12 @@ Note: the skills that consume these variables are standalone — each carries it
 
 ### Service Architecture
 
-The compose file defines 4 services. All profiles live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions the profiles and execs the gateway:
+The compose file defines 4 services. The two surviving Hermes profiles (`researcher`, `simple`) live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions those two profiles, seeds the harness state root, and execs `/opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf`, which runs `[program:harness]` (the harness gateway, API-key secured, listening on 127.0.0.1:8181) and `[program:opencode-serve]` (`autostart=false`):
 
 ```yaml
 services:
   ollama:          # LLM inference engine
-  agent:           # Single Hermes Agent container (profiles: main, researcher, simple, coder)
+  agent:           # Single container: Hermes profiles researcher+simple + harness gateway (:8181) + OpenCode CLI
   searxng:         # Privacy-respecting metasearch engine
   valkey:          # Redis-compatible cache for SearXNG
 ```
@@ -214,7 +214,7 @@ agent:
 
 | Host Path | Container Path | Service | Purpose |
 |-----------|---------------|---------|---------|
-| `./volumes/agent` | `/opt/data` | agent | Single agent workspace: main profile at the root, researcher/simple/coder under `profiles/` |
+| `./volumes/agent` | `/opt/data` | agent | Single agent workspace: the two surviving profiles under `profiles/` plus the harness state root under `harness/` |
 | `./volumes/results` | `/app/results` | agent | Final task output files |
 | `./volumes/projects` | `/app/projects` | agent | Shared project workspace (git repos, code) |
 | `ollama_data` | `/root/.ollama` | ollama | Downloaded models |
@@ -226,12 +226,11 @@ agent:
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
-| `8642` | `8642` | agent Gateway (published without a loopback prefix) |
-| `9119` | `9119` | agent Hermes dashboard (s6 service; gated on `HERMES_DASHBOARD`, non-loopback binds require auth) |
+| `8181` (loopback) | `8181` | agent — harness gateway (published as 127.0.0.1:8181:8181 only) |
 | `11434` | `11434` | Ollama API |
 | `8888` | `8888` | SearXNG |
 
-The agent healthcheck probes TCP `8642` (compose `start_period: 120s`). The gateway serves `/health` and `/v1/health`; there is no `/healthz` endpoint.
+The agent healthcheck probes TCP 8181 via the shared `x-agent-healthcheck` anchor (compose.yaml lines 10-19; `start_period: 120s`), and the harness gateway exposes an unauthenticated `GET /healthz` returning exactly `{"ok": true}` (all other routes are API-key secured).
 
 ## Model Configuration
 
@@ -239,7 +238,7 @@ The agent healthcheck probes TCP `8642` (compose `start_period: 120s`). The gate
 
 Each profile's model is configured via its `hermes.partial.yml` file:
 
-1. Edit the partial for the profile you want to change, e.g. `src/agents/main/hermes.partial.yml`:
+1. Edit the partial for the profile you want to change, e.g. `src/agents/researcher/hermes.partial.yml`:
 
 ```yaml
 model:
@@ -292,7 +291,7 @@ The system uses Ollama as a proxy for both local and cloud models. Cloud models 
 
 ### Network Security
 
-- The agent gateway (8642) and Hermes dashboard (9119) are published without a loopback prefix. The gateway fronts all profiles behind `approvals.mode: off` and its auth is unverified; the dashboard requires auth for non-loopback binds (basic-auth vars above, or OAuth). Keep both off untrusted networks
+- The harness gateway is published on loopback only (127.0.0.1:8181). Its API-key auth secures every route except the minimal unauthenticated `GET /healthz`; widen the publish only in front of a reverse proxy, and keep it off untrusted networks
 - Use Docker network isolation (services communicate on the internal `bob-the-agent-network`)
 
 ### API Keys
@@ -319,10 +318,10 @@ Profiles are multiplexed in the one container, so there is no per-agent containe
 
 ### Model Selection
 
-- Use cloud models (the current defaults: `glm-5.3-flash:cloud` for main/simple/coder, `glm-5.3:cloud` for researcher) for best quality (requires `ollama signin` in the ollama container)
+- Use cloud models (the current defaults: `glm-5.3-flash:cloud` for simple, `glm-5.3:cloud` for researcher) for best quality (requires `ollama signin` in the ollama container)
 - Local models remain usable for offline operation — pull one with `ollama pull` and reference it in a profile partial; the current template defines no local default
 - Profiles override models via each partial (see [Changing Profile Models](#changing-profile-models))
 
 ### Profile Count
 
-All four profiles run inside the single container. To reduce load, set `gateway.multiplex_profiles: false` in `src/config/hermes.template.yaml` (it applies globally to the single gateway, not per-partial) so only the `main` profile is served (or remove the profile partials entirely — profiles are only provisioned from `src/agents/`).
+Two profiles (`researcher`, `simple`) run inside the single container. To reduce load, remove a profile partial from `src/agents/` — profiles are provisioned only from that directory, so a profile without a partial there is not provisioned at the next boot.
