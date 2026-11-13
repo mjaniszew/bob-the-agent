@@ -145,6 +145,11 @@ def _not_found(detail: str = "not found") -> HTTPException:
     return HTTPException(status_code=404, detail=detail)
 
 
+def _storage_failure() -> HTTPException:
+    # F7: an OSError (disk full/ENOSPC) at a persistence write is an honest 503.
+    return HTTPException(status_code=503, detail="storage failure")
+
+
 class ChatIn(BaseModel):
     """JSON body of ``POST /api/chat`` (the HTMX form path is parsed manually)."""
 
@@ -452,15 +457,23 @@ def create_app(
             session = await manager.get_or_create(raw_session_id, channel_handle=None)
         except ValueError as exc:
             raise _not_found("unknown session id") from exc
+        except OSError as exc:
+            raise _storage_failure() from exc
         created_new = raw_session_id is None
-        await session.append_event("user", {"text": text})
+        try:
+            await session.append_event("user", {"text": text})
+        except OSError as exc:
+            raise _storage_failure() from exc
 
         if session.state not in ("created", "idle", "failed", "routing"):
             raise HTTPException(status_code=409, detail=f"session busy: {session.state}")
         pre_len = _transcript_length(session)
         try:
             if session.state != "routing":
-                await manager.move(session, "routing")
+                try:
+                    await manager.move(session, "routing")
+                except OSError as exc:
+                    raise _storage_failure() from exc
             route = await brain.route_async(text, session=session, session_manager=manager)
         except SessionFSMError as exc:
             raise HTTPException(status_code=409, detail=f"illegal session transition: {exc}") from exc
@@ -472,7 +485,12 @@ def create_app(
             "reply.chunk",
             {"session_id": session.id, "seq": 0, "text": route_line, "source": "router"},
         )
-        await session.append_event("router", {"agent": route.agent, "task_title": route.task_title})
+        try:
+            await session.append_event(
+                "router", {"agent": route.agent, "task_title": route.task_title}
+            )
+        except OSError as exc:
+            raise _storage_failure() from exc
         if fallback_engaged:
             await bus.publish(
                 "reply.chunk",
@@ -484,8 +502,14 @@ def create_app(
                 },
             )
         if created_new and route.task_title:
-            session.rename(route.task_title[:_TITLE_MAX])
-        await manager.move(session, "agent_running")
+            try:
+                session.rename(route.task_title[:_TITLE_MAX])
+            except OSError as exc:
+                raise _storage_failure() from exc
+        try:
+            await manager.move(session, "agent_running")
+        except OSError as exc:
+            raise _storage_failure() from exc
 
         spec = RunSpec(
             prompt=_assemble_prompt(session, route, text),
