@@ -216,7 +216,7 @@ def _drive_serve(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, str]]:
             record(self, "bus.aclose")
             await super().aclose()
 
-    def _fake_create_app(cfg_arg, bus, manager):
+    def _fake_create_app(cfg_arg, bus, manager, *, taskloop_=None):
         record(cfg_arg, "create_app")
         return object()
 

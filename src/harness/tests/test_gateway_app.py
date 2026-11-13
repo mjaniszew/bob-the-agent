@@ -478,7 +478,7 @@ def test_materials_shape(tmp_volume: Path, cfg: HarnessConfig) -> None:
         for heading in ("sessions:", "memory:", "skills:", "tasks:"):
             assert heading in text
         assert f"MEMORY.md: {len(mem_content)} chars" in text
-        assert "tasks: (none yet)" in text
+        assert "tasks: 0" in text  # live render: the fixture creates no tasks
         assert "runs:" not in text  # the runs ledger lands with R9/R10
         payload = client.get("/materials?format=json", headers=HEADERS).json()
         assert payload["memory"][0]["chars"] == len(mem_content)

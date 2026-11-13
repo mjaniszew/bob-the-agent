@@ -172,7 +172,9 @@ rate limits see the real client; left untouched when False."""
     bot = await _start_bot(cfg, bus, manager)
     from harness.gateway.app import create_app
 
-    app = create_app(cfg, bus, manager)
+    # R10/D18: the task loop instance is wired so the POST /api/tasks/answer
+    # gate route reaches TaskLoop.answer (the same resume path as Discord).
+    app = create_app(cfg, bus, manager, taskloop_=taskloop)
     import uvicorn
 
     if cfg.server.behind_proxy:

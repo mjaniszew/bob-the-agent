@@ -2,7 +2,7 @@
 2.7, 5.2, 5.3 and 7.2; DECISIONS.md D6/D8; plan phase R6).
 
 :func:`create_app(cfg, bus, manager, *, router_brain=None, adapters=None,
-test_limiter=None)` wires:
+test_limiter=None, taskloop_=None)` wires:
 
 - **Auth (D6/5.2)** — ``X-API-Key`` (``hmac.compare_digest`` against
   ``cfg.api_key``; ``401`` + ``WWW-Authenticate: APIKey``) AND a signed
@@ -21,7 +21,9 @@ test_limiter=None)` wires:
 - **Routes** — see the section 2.7 table (repo-adjusted names): healthz, page,
   vendored htmx asset, chat turn, SSE stream, session meta list, transcript
   tail, materials report (7.2: sizes/counts/names only — NEVER file contents,
-  env values, or raw ledger rows) and the internal handoff proxy.
+  env values, or raw ledger rows), task list/detail meta routes + the
+  WAITING_INPUT gate answer write (2.11/D18; repo-adjusted answer path) and
+  the internal handoff proxy.
 - **Streaming contract** — the bus is NOT replayable: an SSE connection
   receives only events published while subscribed (``?seq=`` resume drops
   already-seen ``reply.chunk`` events received on that same connection). Agent
@@ -34,7 +36,10 @@ test_limiter=None)` wires:
   ``RouterBrain(cfg, bus=bus)`` is constructed (outside tests); with no
   ``adapters`` mapping the ``harness.adapters`` registry lazily constructs the
   real hermes/opencode adapter per agent name on first use — the PoC gateway
-  only GUARANTEES the injected fake path end-to-end.
+  only GUARANTEES the injected fake path end-to-end. ``taskloop_`` is the
+  task-loop instance behind ``POST /api/tasks/answer`` (supervisor wiring);
+  when ``None`` that write route answers ``503 task loop not wired`` while
+  the read-only task routes still serve from the TaskStore.
 """
 
 from __future__ import annotations
@@ -51,6 +56,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, Security
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
@@ -60,6 +66,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
+from yaml import safe_load as yaml_safe_load
 
 from harness.adapters import get as registry_get
 from harness.adapters.base import AgentRun, RunSpec
@@ -73,6 +80,7 @@ from harness.router import Route, RouterBrain, validate_handoff_block
 from harness.session import Session
 from harness.session_manager import SessionManager
 from harness.skills import SkillsEngine
+from harness.tasks import TaskSchemaError, TaskStore
 
 __all__ = ["create_app"]
 
@@ -130,6 +138,12 @@ class HandoffIn(BaseModel):
     text: str
 
 
+class AnswerIn(BaseModel):
+    """JSON body of ``POST /api/tasks/answer/{task_id}`` (2.11/D18)."""
+
+    text: str
+
+
 def create_app(
     cfg: HarnessConfig,
     bus: Bus,
@@ -142,6 +156,7 @@ def create_app(
         | None
     ) = None,
     test_limiter: Limiter | None = None,
+    taskloop_: object | None = None,
 ) -> FastAPI:
     """Build the full R6 gateway over the shared ``cfg``/``bus``/``manager``.
 
@@ -151,12 +166,16 @@ def create_app(
     name) or a single factory callable; ``None`` lazily resolves through the
     :mod:`harness.adapters` registry with the full config. ``test_limiter``
     swaps the in-memory slowapi limiter (tests injecting one otherwise build
-    their own app).
+    their own app). ``taskloop_`` (R10/D18) wires ``POST /api/tasks/answer``;
+    with ``None`` the gate answer write answers 503 ``task loop not wired``
+    (the task LIST/DETAIL read routes still work through a local
+    :class:`~harness.tasks.TaskStore`).
     """
     limiter = test_limiter if test_limiter is not None else Limiter(key_func=get_remote_address)
     brain = router_brain if router_brain is not None else RouterBrain(cfg, bus=bus)
     api_key = cfg.api_key
     cookie_value = _session_cookie_value(api_key)
+    task_store = TaskStore(cfg)
 
     app = FastAPI(title="harness-gateway")
     app.state.limiter = limiter
@@ -607,6 +626,147 @@ def create_app(
         )
 
     # ------------------------------------------------------------------
+    # Tasks: meta list/detail (2.9) + WAITING_INPUT gate answer (2.11/D18)
+    # ------------------------------------------------------------------
+    def _task_state(task_id: str) -> dict | None:
+        """state.json of a picked-up task via the app-local TaskStore
+        (corrupt/missing -> None). Ids beyond the guard stay 404."""
+        try:
+            return task_store.read_state(task_id)
+        except (OSError, TypeError, ValueError):
+            return None
+
+    def _task_yaml_raw(task_id: str) -> dict:
+        """Best-effort task.yaml mapping (skip-on-unreadable contract)."""
+        try:
+            raw = yaml_safe_load(
+                (task_store.root / task_id / "task.yaml").read_text(encoding="utf-8")
+            )
+        except (OSError, yaml.YAMLError):
+            raw = None
+        return raw if isinstance(raw, dict) else {}
+
+    @app.get("/api/tasks", dependencies=[Depends(require_auth)])
+    async def list_tasks() -> Response:
+        """Meta-only task listing (2.9/7.2): ``{id, state, title, depth,
+        parent, updated}`` — title = task.yaml ``description[:80]``. No
+        events, no result contents, no gate payloads, no raw ledger rows.
+        Unreadable tasks are skipped; capped at 200 rows sorted by id."""
+        rows: list[dict] = []
+        try:
+            ids = sorted(task_store.list_tasks())
+        except OSError:
+            ids = []
+        for task_id in ids[:200]:
+            state_data = _task_state(task_id)
+            if state_data is None:
+                continue  # unreadable/missing state: skipped per the 7.2 contract
+            raw = _task_yaml_raw(task_id)
+            if not raw:
+                continue  # unreadable task.yaml: skipped
+            description = raw.get("description")
+            rows.append(
+                {
+                    "id": task_id,
+                    "state": state_data.get("state"),
+                    "title": description[:_TITLE_MAX]
+                    if isinstance(description, str)
+                    else "",
+                    "depth": state_data.get("depth"),
+                    "parent": state_data.get("parent"),
+                    "updated": state_data.get("updated"),
+                }
+            )
+        return JSONResponse(rows)
+
+    @app.get("/api/task/{task_id}", dependencies=[Depends(require_auth)])
+    async def task_detail(task_id: str) -> Response:
+        """One task's meta detail (2.9/7.2): the SAFE task.yaml fields
+        (description/origin/parent/depends_on/oneway + state.json depth), the
+        last 100 events.jsonl lines, and result.md PRESENCE + size only.
+        NEVER file contents beyond the task.yaml fields, NEVER gate payloads
+        or raw ledger rows."""
+        if _ID_GUARD.fullmatch(task_id) is None:
+            raise _not_found()
+        state_data = _task_state(task_id)
+        if state_data is None:
+            raise _not_found("unknown task id")
+        raw = _task_yaml_raw(task_id)
+        description = raw.get("description")
+        depends_on = raw.get("depends_on")
+        oneway = raw.get("oneway")
+        parent = state_data.get("parent")
+        if not isinstance(parent, str) or not parent:
+            parent = raw.get("parent") if isinstance(raw.get("parent"), str) else None
+        origin = state_data.get("origin")
+        if not isinstance(origin, str) or not origin:
+            origin = raw.get("origin") if isinstance(raw.get("origin"), str) else None
+        try:
+            events = read_jsonl(task_store.root / task_id / "events.jsonl")[-100:]
+        except (OSError, ValueError):
+            events = []
+        result_path = task_store.root / task_id / "result.md"
+        result_present = result_path.is_file()
+        try:
+            result_bytes = result_path.stat().st_size if result_present else None
+        except OSError:  # pragma: no cover — race between is_file and stat
+            result_present, result_bytes = False, None
+        return JSONResponse(
+            {
+                "task_id": task_id,
+                "state": state_data.get("state"),
+                "task": {
+                    "description": description if isinstance(description, str) else None,
+                    "origin": origin,
+                    "parent": parent,
+                    "depth": state_data.get("depth"),
+                    "depends_on": [
+                        dep for dep in depends_on if isinstance(dep, str)
+                    ] if isinstance(depends_on, list) else [],
+                    "oneway": oneway if isinstance(oneway, bool) else False,
+                },
+                "events": events,
+                "result_md": result_present,
+                "result_md_bytes": result_bytes,
+            }
+        )
+
+    @app.post("/api/tasks/answer/{task_id}", dependencies=[Depends(require_auth)])
+    @limiter.limit(lambda: f"{cfg.rate_limit.per_minute}/minute")
+    async def answer_task(request: Request, task_id: str) -> Response:
+        """2.11/D18 gate answer: hand the text to ``taskloop.answer`` (the
+        SAME resume path the Discord ``gate.answered`` event uses). Id guard
+        + unknown task are 404 (never 403); a non-WAITING_INPUT task or a
+        gate that is not live in this process (restart) is 409; no wired task
+        loop is 503 ``task loop not wired``. Success: ``{ok, task_id,
+        state}``."""
+        if taskloop_ is None:
+            raise HTTPException(status_code=503, detail="task loop not wired")
+        if _ID_GUARD.fullmatch(task_id) is None:
+            raise _not_found()
+        state_data = _task_state(task_id)
+        if state_data is None:
+            raise _not_found("unknown task id")
+        if state_data.get("state") != "WAITING_INPUT":
+            raise HTTPException(
+                status_code=409,
+                detail=f"task {task_id}: not WAITING_INPUT "
+                f"(state {state_data.get('state')}); cannot answer",
+            )
+        try:
+            answer_in = AnswerIn.model_validate_json(await request.body())
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail="invalid answer body") from exc
+        if not answer_in.text or not answer_in.text.strip():
+            raise HTTPException(status_code=422, detail="text must be non-empty")
+        try:
+            await taskloop_.answer(task_id, answer_in.text)
+        except TaskSchemaError as exc:  # gate died in the meantime (restart)
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        fresh = _task_state(task_id) or {}
+        return JSONResponse({"ok": True, "task_id": task_id, "state": fresh.get("state")})
+
+    # ------------------------------------------------------------------
     # Handoff proxy
     # ------------------------------------------------------------------
     @app.post("/api/handoff", dependencies=[Depends(require_auth)])
@@ -774,7 +934,25 @@ def create_app(
                 f"  - {row['ts']} {row['session_id'] or '?'} {row['state'] or ''}"
                 for row in runs_rows
             )
-        report_lines.append("tasks: (none yet)")
+        # Tasks section (R10): live per-state counts from the TaskStore (the
+        # app-local store is used even when no task loop is wired — same
+        # data_dir). Counts only: no event/result contents, no gate payloads,
+        # no raw gates.jsonl rows (gates NEVER touch /materials). The runs
+        # ledger listing above is populated by the taskloop runner rows.
+        task_counts: dict[str, int] = {}
+        try:
+            task_states = task_store.list_tasks()
+        except OSError:
+            task_states = {}
+        for state in task_states.values():
+            if isinstance(state, str):
+                task_counts[state] = task_counts.get(state, 0) + 1
+        tasks_total = sum(task_counts.values())
+        if tasks_total:
+            by_state = ", ".join(f"{state} {count}" for state, count in sorted(task_counts.items()))
+            report_lines.append(f"tasks: {tasks_total} ({by_state})")
+        else:
+            report_lines.append("tasks: 0")
 
         payload = {
             "generated": today,
@@ -783,6 +961,7 @@ def create_app(
             "skills": {"index_chars": index_chars, "names": skill_names},
             "router": {"calls": ledger_calls, "fallback": ledger_fallbacks},
             "runs": runs_rows if runs_path.is_file() else None,
+            "tasks": {"total": tasks_total, "by_state": dict(sorted(task_counts.items()))},
         }
         return "\n".join(report_lines), payload
 

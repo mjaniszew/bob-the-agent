@@ -29,12 +29,22 @@ Structure:
   ``attempt <= tasks.retries``, non-agent and agent errors alike) then a
   FAILED with the honest reason. A gate question (``analysis.mode == gate``
   and not task-oneway) parks the task in WAITING_INPUT — persistence here,
-  answer()/resume with the SAME session (R10 wires the UI/timers).
+  answer()/resume with the SAME session + refs. Gate engine (R10, D18/F15):
+  one persisted row per gate event in ``state/gates.jsonl``, ONE 24 h
+  ``tasks.gate_timeout_s`` asyncio timer per gate (parked task, in-process),
+  exactly one ``gate.notify`` re-notify on expiry then FAILED(gate_timeout);
+  ``answer()`` raises :class:`~harness.tasks.TaskSchemaError` (never
+  ``ValueError``) and the loop's own bus sink consumes ``gate.answered``
+  (the Discord path) the same way the HTTP path does; ``replay()`` restores
+  live gates and ``start()`` re-arms their timers with a fresh full timeout.
 - **replay()** (F17, §3.4) — sync boot walk over ``tasks/*/state.json``:
   live-session tasks (session transcript still ``agent_running``/``relaying``)
   are ``FAILED(restarted)``, never double-run; others are interrupted ->
   re-queued EXACTLY ONCE per process (in-memory guard; done-markers and
-  terminal states are honored idempotently). Counters:
+  terminal states are honored idempotently). WAITING_INPUT tasks get a live
+  in-memory gate record restored (R10; timers are armed by ``start()`` with
+  the FULL ``tasks.gate_timeout_s`` since the old asyncio timer is gone).
+  Counters:
   ``{"tasks", "requeued", "failed_restarted", "gate_restored", "deps_waiting"}``.
 
 Blocking note (PoC): ``RouterBrain.analyze`` is synchronous and is called
@@ -49,8 +59,9 @@ import inspect
 import json
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import yaml
@@ -83,6 +94,14 @@ _LOG = logging.getLogger("harness.taskloop")
 
 _STATE_FILENAME = "state.json"
 _TASK_YAML_FILENAME = "task.yaml"
+
+# The global runs ledger the gateway /materials report summarizes (5.3/7.2):
+# one row per runner adapter run, {ts, task_id, agent, attempt, state}.
+_RUNS_LEDGER_FILENAME = "runs.jsonl"
+
+# The persisted gate audit trail (R10/D18): one row per gate event, NEVER read
+# back for runtime logic (boot re-arm restores from state.json + events.jsonl).
+_GATES_LEDGER_FILENAME = "gates.jsonl"
 
 # The harness-owned workdir root for drop-block workdir fields (task.yaml rule).
 _WORKDIR_PREFIX = "/app/projects/"
@@ -141,7 +160,9 @@ class TaskLoop:
         self._runner_task: asyncio.Task | None = None
         self._subscriber_task: asyncio.Task | None = None
         self._boot_task: asyncio.Task | None = None
+        self._gate_rearm_task: asyncio.Task | None = None
         self._sink_name: str | None = None
+        self._sink_queue: asyncio.Queue | None = None
         self._running = False
         # F13 dedupe: ids whose task.appeared was published once (first sighting)
         # and ids ever picked up (never re-fired, even if re-dropped into the
@@ -152,8 +173,15 @@ class TaskLoop:
         self._boot_queued: set[str] = set()
         self._boot_gates: set[str] = set()
         self._boot_pending: list[str] = []
-        # Gate park (WAITING_INPUT) in-process bookkeeping for answer()/resume.
+        # Gate park (WAITING_INPUT) in-process bookkeeping for answer()/resume
+        # + the 24 h F15 timers: each record is
+        # {prompt, analysis, session?, session_id?, agent?, task_oneway,
+        #  question, attempt, deadline_ts, renotified, timer}.
         self._gates: dict[str, dict] = {}
+        # Per-gate asyncio locks (created with the gate/lazily): serialize
+        # answer() against _gate_timeout() so an answer that popped the record
+        # can never be followed by a spurious timeout re-notify/publish.
+        self._gate_locks: dict[str, asyncio.Lock] = {}
 
     # ------------------------------------------------------------------
     # Public control surface
@@ -169,21 +197,34 @@ class TaskLoop:
         self._runner_task = loop.create_task(self._runner(), name="taskloop-runner")
         if self._bus is not None and callable(getattr(self._bus, "subscribe", None)):
             try:
-                self._bus.subscribe("taskloop")
+                self._sink_queue = self._bus.subscribe("taskloop")
                 self._sink_name = "taskloop"
             except ValueError:
                 self._sink_name = None
+                self._sink_queue = None
         if self._sink_name is not None:
             self._subscriber_task = loop.create_task(
                 self._subscriber_loop(), name="taskloop-subscriber"
             )
         if self._boot_pending:
             self._boot_task = loop.create_task(self._boot_drain(), name="taskloop-boot-drain")
+        if self._gates:
+            # R10 boot re-arm: restored WAITING_INPUT gates get their F15
+            # timers armed here (async context), with a FRESH full timeout.
+            self._gate_rearm_task = loop.create_task(
+                self._arm_restored_gates(), name="taskloop-gate-rearm"
+            )
 
     async def stop(self) -> None:
-        """Cancel watcher/runner/subscriber/boot + in-flight workers cleanly
-        (all awaited, no pending-task warnings). Idempotent."""
+        """Cancel watcher/runner/subscriber/boot (+ in-flight workers and ALL
+        pending gate timers) cleanly: every cancelled task is awaited, no
+        pending-task warnings. Idempotent."""
         self._running = False
+        gate_timers = [
+            record.get("timer")
+            for record in self._gates.values()
+            if isinstance(record.get("timer"), asyncio.Task)
+        ]
         tasks = [
             task
             for task in (
@@ -191,6 +232,8 @@ class TaskLoop:
                 self._runner_task,
                 self._subscriber_task,
                 self._boot_task,
+                self._gate_rearm_task,
+                *gate_timers,
             )
             if task is not None
         ]
@@ -205,34 +248,213 @@ class TaskLoop:
             except Exception as exc:  # noqa: BLE001 — stop must always finish
                 _LOG.warning("unsubscribe during stop failed: %s", exc)
         self._sink_name = None
+        self._sink_queue = None
         self._watcher_task = self._runner_task = self._subscriber_task = None
-        self._boot_task = None
+        self._boot_task = self._gate_rearm_task = None
+        for record in self._gates.values():
+            record["timer"] = None
 
     async def answer(self, task_id: str, text: str) -> None:
-        """Answer a parked WAITING_INPUT gate (R10 calls this; the resume path
-        exists here): RUNNING again, adapter resumed with the answer appended
-        to the stored prompt, SAME session + refs. Honest ValueError when the
-        task is not in a live (in-process) gate."""
+        """Answer a parked WAITING_INPUT gate (R10): RUNNING again, adapter
+        resumed with the answer appended to the stored prompt, SAME session +
+        refs. Raises :class:`~harness.tasks.TaskSchemaError` (mapped to
+        409/404 by the gateway) when the task is not WAITING_INPUT or no live
+        gate exists in this process (restart?).
+
+        Restored gates (boot re-arm): the ORIGINAL agent prompt cannot be
+        rebuilt verbatim after a restart — the stored prompt of the fresh-gate
+        path dies with the process. The resume prompt is instead assembled in
+        ``replay()`` from the persisted question + the session transcript's
+        last user / agent-final messages, so the answering path code is
+        IDENTICAL for fresh and restored gates (documented simplification:
+        the exact pre-restart prompt context is approximated).
+        """
         task = self._store.open_task(task_id)
         if task.state != "WAITING_INPUT":
-            raise ValueError(
-                f"task {task_id}: not WAITING_INPUT (state {task.state}); cannot answer"
+            raise TaskSchemaError(
+                task_id, f"task {task_id}: not WAITING_INPUT (state {task.state}); cannot answer"
             )
-        live = self._gates.pop(task_id, None)
+        async with self._gate_locks.setdefault(task_id, asyncio.Lock()):
+            # Serialize vs _gate_timeout(): whoever gets the lock first wins
+            # (answer resumes; timeout re-notifies + fails). The lock entry is
+            # popped with the record — the gate is gone either way.
+            live = self._gates.pop(task_id, None)
+            self._gate_locks.pop(task_id, None)
         if live is None:
-            raise ValueError(
+            raise TaskSchemaError(
+                task_id,
                 f"task {task_id}: gate state not live in this process "
-                "(restart? re-arm is R10/§3.4)"
+                "(restart? gate timers + records re-arm at boot, R10)",
             )
-        session: Session = live["session"]
+        self._cancel_gate_timer(live)
+        session: Session | None = live.get("session")
+        if session is None:
+            # Restored gate: re-open the persisted session (transcript intact).
+            session_id = live.get("session_id")
+            session = await self._manager.get_or_create(
+                session_id if isinstance(session_id, str) and session_id.strip() else None,
+                channel_handle=None,
+            )
+        agent = live.get("agent")
+        if not isinstance(agent, str) or not agent.strip():
+            agent = self._transcript_agent(session) or "hermes"
         await session.append_event("user", {"text": text})
         await task.append_event("gate_answered", {"answer": text})
         await task.transition("RUNNING")
-        gate_record = live.get("task_oneway", False)
+        self._gate_row(task_id, "answered")
         prompt = f"{live['prompt']}\n\n## User answer\n{text}"
         await self._attempts_loop(
-            task, session, live["analysis"], live["agent"], prompt, task_oneway=gate_record
+            task, session, live["analysis"], agent, prompt,
+            task_oneway=bool(live.get("task_oneway")),
         )
+
+    # ------------------------------------------------------------------
+    # Gate engine (R10/D18/F15): rows, timers, re-notify, timeout fail
+    # ------------------------------------------------------------------
+    def _gate_row(
+        self,
+        task_id: str,
+        event: str,
+        *,
+        deadline_ts: str | None = None,
+        data: dict | None = None,
+    ) -> None:
+        """One gate event row in ``state/gates.jsonl`` (R10, like
+        ``_ledger_row``): ``{ts, task_id, event, deadline_ts?, data?}``.
+        The file is an audit trail — it is NEVER read back for runtime logic
+        (boot re-arm restores from state.json + the task events.jsonl).
+        Never blocks a park/answer/timeout on a ledger failure."""
+        row: dict = {"ts": _utc_now(), "task_id": task_id, "event": event}
+        if deadline_ts is not None:
+            row["deadline_ts"] = deadline_ts
+        if data is not None:
+            row["data"] = dict(data)
+        try:
+            JsonlWriter(
+                Path(self._cfg.storage.data_dir) / "state" / _GATES_LEDGER_FILENAME
+            ).append(row)
+        except (OSError, TypeError, ValueError) as exc:
+            _LOG.warning("gates ledger append for task %s failed: %s", task_id, exc)
+
+    def _gate_timeout_s(self) -> float:
+        """The F15 timeout: ``tasks.gate_timeout_s`` (default 24 h = 86400)."""
+        return max(0.0, float(getattr(self._cfg.tasks, "gate_timeout_s", 86400)))
+
+    def _deadline_ts(self, timeout_s: float) -> str:
+        return (
+            datetime.now(UTC) + timedelta(seconds=timeout_s)
+        ).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    def _arm_gate_timer(self, task_id: str, timeout_s: float) -> None:
+        """Arm ONE background asyncio timer for this parked gate (no
+        apscheduler): on expiry it fires :meth:`_gate_timeout` once. The task
+        handle rides the gate record; ``stop()`` cancels every pending timer."""
+        record = self._gates.get(task_id)
+        if record is None or record.get("timer") is not None:
+            return  # already armed
+        self._gate_locks.setdefault(task_id, asyncio.Lock())
+        record["renotified"] = False
+        record["deadline_ts"] = self._deadline_ts(timeout_s)
+        record["timer"] = asyncio.create_task(
+            self._gate_after(task_id, timeout_s), name=f"taskloop-gate-{task_id}"
+        )
+
+    async def _gate_after(self, task_id: str, timeout_s: float) -> None:
+        """Timer body: sleep the F15 window, then run the timeout sequence
+        (cancellation during stop() is the normal exit)."""
+        await asyncio.sleep(timeout_s)
+        await self._gate_timeout(task_id)
+
+    async def _gate_timeout(self, task_id: str) -> None:
+        """F15: the gate expired unanswered. Exactly ONE re-notify (guarded by
+        the in-memory ``renotified`` flag): publish ``gate.notify`` with
+        ``kind: "timeout"`` so the/UI Discord re-ping, append a task note
+        event, then the honest terminal — WAITING_INPUT -> FAILED
+        (reason=gate_timeout) with a FAILED ledger row, and the ``timeout``
+        row in gates.jsonl. A task that moved on in the meantime is left
+        untouched (the stale gate record is dropped). The whole sequence is
+        serialized against ``answer()`` with the per-gate lock, and the record
+        is re-checked live right before the publish — an answer that popped
+        the record can never be followed by a publish. On bookkeeping failure
+        the terminal is still attempted best-effort (FAILED transition, gate
+        drop, ``timeout`` row with the error): the task must never survive as
+        an unwatched WAITING_INPUT."""
+        # The per-gate lock exists whenever the gate record is live (created
+        # lazily in _arm_gate_timer); a missing entry means the gate record is
+        # already gone — the timeout is a no-op and must not resurrect a lock.
+        async with (self._gate_locks.get(task_id) or asyncio.Lock()):
+            record = self._gates.get(task_id)
+            if record is None or record.get("renotified"):
+                if record is not None:  # already handled: drop the stale record
+                    self._drop_gate(task_id)
+                return
+            record["renotified"] = True
+            try:
+                task = self._store.open_task(task_id)
+                if task.state != "WAITING_INPUT" or self._gates.get(task_id) is not record:
+                    self._drop_gate(task_id)
+                    return
+                await self._publish(
+                    "gate.notify",
+                    {
+                        "task_id": task_id,
+                        "question": record.get("question"),
+                        "kind": "timeout",
+                    },
+                )
+                await task.append_event(
+                    "note", {"note": "gate timeout: re-notify sent once (F15); failing task"}
+                )
+                self._ledger_row(
+                    task_id, str(record.get("agent") or "?"), int(record.get("attempt", 0)),
+                    "FAILED",
+                )
+                await task.transition("FAILED", reason="gate_timeout")
+                self._gate_row(task_id, "timeout", deadline_ts=record.get("deadline_ts"))
+                self._drop_gate(task_id)
+            except Exception as exc:  # noqa: BLE001 — timeout bookkeeping must not crash the timer
+                _LOG.warning("gate timeout handling for task %s failed: %s", task_id, exc)
+                try:  # honest failure: still try the terminal, best-effort
+                    task = self._store.open_task(task_id)
+                    await task.transition("FAILED", reason="gate_timeout")
+                except Exception as trans_exc:  # noqa: BLE001 — best-effort
+                    _LOG.warning(
+                        "gate timeout FAILED transition for task %s failed: %s",
+                        task_id, trans_exc,
+                    )
+                self._gate_row(
+                    task_id, "timeout", deadline_ts=record.get("deadline_ts"),
+                    data={"error": str(exc)},
+                )
+                self._drop_gate(task_id)
+
+    def _cancel_gate_timer(self, record: dict) -> None:
+        timer = record.get("timer")
+        record["timer"] = None
+        if isinstance(timer, asyncio.Task) and not timer.done():
+            timer.cancel()
+
+    def _drop_gate(self, task_id: str) -> None:
+        """Pop the gate record and cancel its (pending) timer."""
+        record = self._gates.pop(task_id, None)
+        if record is not None:
+            self._cancel_gate_timer(record)
+        self._gate_locks.pop(task_id, None)
+
+    def _transcript_agent(self, session: Session) -> str | None:
+        """The agent of the session's last ``agent_final`` record (the
+        restored-gate agent recovery: state.json + task.yaml do not carry the
+        runner agent). Best-effort: ``None`` on any read problem."""
+        try:
+            records = read_jsonl(session.transcript_path)
+        except (OSError, ValueError):
+            return None
+        for record in reversed(records):
+            if record.get("kind") == "agent_final":
+                meta = record.get("meta")
+                if isinstance(meta, dict) and isinstance(meta.get("agent"), str):
+                    return str(meta["agent"])
+        return None
 
     # ------------------------------------------------------------------
     # Boot replay (F17, §3.4) — sync, once at boot
@@ -240,9 +462,13 @@ class TaskLoop:
     def replay(self) -> dict[str, int]:
         """Recover the task world at boot: FAILED(restarted) for live-session
         tasks, INTERRUPTED -> READY re-queue once per process for the rest,
-        WAITING_INPUT restored (timer re-arm is R10), WAITING_DEPS re-checked.
-        Idempotent: a second call observes only DONE/FAILED/already-queued
-        states and produces NO new re-queues."""
+        WAITING_INPUT restored into a live in-memory gate record (R10 —
+        question from the task ``gate_opened`` event, resume prompt + agent
+        from the session transcript, session re-opened lazily by ``answer()``;
+        the F15 timers arm in ``start()`` with a FRESH full timeout since the
+        old asyncio timers are gone). Interrupted others are re-queued
+        EXACTLY ONCE per process. Idempotent: a second call observes only
+        DONE/FAILED/already-queued states and produces NO new re-queues."""
         counts: dict[str, int] = {
             "tasks": 0,
             "requeued": 0,
@@ -254,6 +480,17 @@ class TaskLoop:
             counts["tasks"] += 1
             if state in ("DONE", "FAILED"):
                 continue
+            if state == "WAITING_INPUT":
+                # Checked BEFORE the live-session F6 branch: a gate park
+                # deliberately leaves the session ``agent_running`` (stream
+                # suspended in _stream_once) — that IS the parked gate, not
+                # an interruptible child. Restore it (D18/F15: gates re-arm
+                # at boot; the answer resumes the SAME session via --resume).
+                if task_id not in self._boot_gates:
+                    self._boot_gates.add(task_id)
+                    self._restore_gate(task_id)
+                    counts["gate_restored"] += 1
+                continue
             state_data = self._store.read_state(task_id) or {}
             if self._agent_session_live(state_data.get("agent_session")):
                 counts["failed_restarted"] += self._replay_failed_restarted(task_id, state)
@@ -261,12 +498,7 @@ class TaskLoop:
             if (self._store.root / task_id / "result.md").is_file():
                 self._raw_note(task_id, {"reason": "result.md present at boot; skipped"})
                 continue
-            if state == "WAITING_INPUT":
-                if task_id not in self._boot_gates:
-                    self._boot_gates.add(task_id)
-                    self._raw_note(task_id, {"reason": "gate restored at boot; re-arm pending (R10)"})
-                    counts["gate_restored"] += 1
-            elif state == "WAITING_DEPS":
+            if state == "WAITING_DEPS":
                 counts["deps_waiting"] += 1
                 try:
                     if self._store.ready_check(task_id) and self._raw_move(task_id, state, "READY"):
@@ -288,7 +520,9 @@ class TaskLoop:
     def _replay_failed_restarted(self, task_id: str, state: str) -> int:
         """Live agent session at restart: FAILED(restarted), never double-run.
 
-        FAILED is FSM-legal from RUNNING/ANALYZING/WAITING_INPUT; READY and
+        FAILED is FSM-legal from RUNNING/ANALYZING (and WAITING_INPUT, but
+        that state is handled BEFORE this branch — a parked gate's session is
+        agent_running by design, so it restores instead); READY and
         WAITING_DEPS cannot legally reach FAILED, so they park as INTERRUPTED
         WITHOUT requeue (honest never-double-run; the next boot — with the
         child dead — requeues them via the READY path)."""
@@ -356,6 +590,133 @@ class TaskLoop:
             if isinstance(state, str):
                 return state in _LIVE_SESSION_STATES
         return False
+
+    def _restore_gate(self, task_id: str) -> None:
+        """Rebuild a live in-process gate record for a persisted WAITING_INPUT
+        task (R10 boot re-arm, sync, always best-effort). Sources: state.json
+        (agent_session + attempt), the task events.jsonl (``gate_opened``
+        question) and the session transcript (last user/agent-final messages
+        for the resume prompt + the runner agent). Without a session ref the
+        record is degraded but still answerable — ``answer()`` then opens a
+        FRESH session and resumes with the answer (documented). The timeout
+        timer is armed later, in async ``start()`` (fresh FULL
+        ``tasks.gate_timeout_s`` — the old asyncio timer is gone)."""
+        state_data = self._store.read_state(task_id) or {}
+        session_id = state_data.get("agent_session")
+        session_id = session_id if isinstance(session_id, str) and session_id.strip() else None
+        attempt = state_data.get("attempt")
+        try:
+            attempt = int(attempt) if attempt is not None else 0
+        except (TypeError, ValueError):
+            attempt = 0
+        raw = self._raw_task_yaml(task_id)
+        question = self._persisted_question(task_id)
+        agent: str | None = None
+        prompt = (
+            "## Context\nThe task was parked for agent input before a restart; "
+            "the original prompt and transcript are unavailable. Answer the "
+            "parked question to continue."
+        )
+        if session_id is not None:
+            try:
+                records = read_jsonl(
+                    self._manager.sessions_root / session_id / "transcript.jsonl"
+                )
+            except (OSError, ValueError):
+                records = []
+            if records:
+                prompt = self._resume_prompt_from_transcript(records, question)
+                for record in reversed(records):
+                    if record.get("kind") == "agent_final":
+                        meta = record.get("meta")
+                        if isinstance(meta, dict) and isinstance(meta.get("agent"), str):
+                            agent = str(meta["agent"])
+                        break
+        workdir = raw.get("workdir") if isinstance(raw.get("workdir"), str) else None
+        description = raw.get("description")
+        description = description if isinstance(description, str) else "restored task"
+        self._gates[task_id] = {
+            "prompt": prompt,
+            "analysis": SimpleNamespace(
+                mode="gate",
+                workdir=workdir,
+                need_context=False,
+                skill_hints=[],
+            ),
+            "session": None,
+            "session_id": session_id,
+            "agent": agent,
+            "task_oneway": False,
+            "question": question,
+            "attempt": attempt,
+            "deadline_ts": None,
+            "renotified": False,
+            "timer": None,
+            "restored": True,
+        }
+        self._raw_note(task_id, {"reason": "gate restored at boot; timer re-arm pending start"})
+
+    async def _arm_restored_gates(self) -> None:
+        """Re-arm every restored gate's F15 timer with the FULL fresh
+        ``tasks.gate_timeout_s`` window and record the ``restored`` row."""
+        for task_id, record in list(self._gates.items()):
+            if record.get("timer") is not None:
+                continue
+            self._arm_gate_timer(task_id, self._gate_timeout_s())
+            self._gate_row(task_id, "restored", deadline_ts=record.get("deadline_ts"))
+
+    def _raw_task_yaml(self, task_id: str) -> dict:
+        """Best-effort raw task.yaml mapping (schema NOT enforced here — boot
+        restore must not fail over a task.yaml that the runner would reject)."""
+        try:
+            raw = yaml.safe_load(
+                (self._store.root / task_id / _TASK_YAML_FILENAME).read_text(encoding="utf-8")
+            )
+        except (OSError, yaml.YAMLError):
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _persisted_question(self, task_id: str) -> str:
+        """The parked question: the LAST ``gate_opened`` event's question."""
+        try:
+            events = read_jsonl(self._store.root / task_id / "events.jsonl")
+        except (OSError, ValueError):
+            return ""
+        for event in reversed(events):
+            if event.get("kind") == "gate_opened":
+                question = (event.get("data") or {}).get("question")
+                if isinstance(question, str):
+                    return question
+        return ""
+
+    def _resume_prompt_from_transcript(self, records: list[dict], question: str) -> str:
+        """Documented simplification (R10): the original agent prompt is not
+        persisted, so the restored gate resumes with a context summary — the
+        parked question plus the transcript's last user message and last
+        agent output — instead of the verbatim pre-restart prompt."""
+        last_user = ""
+        last_agent = ""
+        for record in records:
+            kind = record.get("kind")
+            data = record.get("data")
+            if not isinstance(data, dict):
+                continue
+            if kind == "user":
+                last_user = str(data.get("text") or "")
+            elif kind == "agent_final" and not (data.get("meta") or {}).get("failed"):
+                last_agent = str(data.get("text") or "")
+        preamble = (
+            "## Context\nThe task was parked for agent input and the process "
+            "restarted; the original prompt is approximated from the transcript."
+        )
+        sections = [preamble]
+        if question:
+            sections.append(f"### Parked question\n{question}")
+        if last_user:
+            sections.append(f"### Last user message\n{last_user}")
+        if last_agent:
+            sections.append(f"### Last agent output\n{last_agent}")
+        return "\n\n".join(sections)
 
     async def _boot_drain(self) -> None:
         pending = list(self._boot_pending)
@@ -672,6 +1033,7 @@ class TaskLoop:
         retries = max(0, int(self._cfg.tasks.retries))
         attempt = task.bump_attempt()
         while True:
+            self._ledger_row(task.id, agent, attempt, "RUNNING")
             spec = RunSpec(
                 prompt=prompt,
                 profile=None,  # PoC: profile stays None (hermes adapter default)
@@ -684,6 +1046,7 @@ class TaskLoop:
             started = time.monotonic()
             outcome, payload = await self._stream_once(task, session, agent, spec, gate_allowed)
             if outcome == "gate":
+                self._ledger_row(task.id, agent, attempt, "WAITING_INPUT")
                 await task.append_event("gate_opened", {"question": payload})
                 await self._publish(
                     "gate.opened", {"task_id": task.id, "question": payload}
@@ -693,19 +1056,51 @@ class TaskLoop:
                     "prompt": prompt,
                     "analysis": analysis,
                     "session": session,
+                    "session_id": session.id,
                     "agent": agent,
                     "task_oneway": task_oneway,
+                    "question": payload,
+                    "attempt": int(attempt),
+                    "deadline_ts": None,
+                    "renotified": False,
+                    "timer": None,
+                    "restored": False,
                 }
+                # F15: exactly one 24 h timer per parked gate.
+                timeout_s = self._gate_timeout_s()
+                self._arm_gate_timer(task.id, timeout_s)
+                self._gate_row(task.id, "opened", deadline_ts=self._gates[task.id]["deadline_ts"])
                 return
             if outcome == "done":
+                self._ledger_row(task.id, agent, attempt, "DONE")
                 await self._finalize(task, session, agent, payload, started)
                 return
             # failed: M-8 retries (agent + non-agent errors alike)
+            self._ledger_row(task.id, agent, attempt, "FAILED")
             if attempt <= retries:
                 attempt = task.bump_attempt()
                 continue
             await self._fail_live(task, f"agent error after {attempt} attempt(s): {payload}")
             return
+
+    def _ledger_row(self, task_id: str, agent: str, attempt: int, state: str) -> None:
+        """One runs-ledger row per runner adapter run (row 23 chain): the
+        gateway /materials consumer reads these as {ts, session_id|task_id,
+        state|outcome} — never block a run on ledger failure."""
+        try:
+            JsonlWriter(
+                Path(self._cfg.storage.data_dir) / "state" / _RUNS_LEDGER_FILENAME
+            ).append(
+                {
+                    "ts": _utc_now(),
+                    "task_id": task_id,
+                    "agent": agent,
+                    "attempt": int(attempt),
+                    "state": state,
+                }
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            _LOG.warning("runs ledger append for task %s failed: %s", task_id, exc)
 
     def _timeout_for(self, agent: str) -> int | None:
         conf = getattr(self._cfg.agents, agent, None)
@@ -830,16 +1225,51 @@ class TaskLoop:
             _LOG.warning("bus publish failed for %s: %s", topic, exc)
 
     async def _subscriber_loop(self) -> None:
-        """Optional bus sink consumer: task.state DONE events also trigger the
+        """Optional bus sink consumer: task.state DONE events trigger the
         WAITING_DEPS re-check (the direct recheck after own DONE is the
-        primary, duck-typed-bus-compatible mechanism)."""
-        queue = self._bus.subscribe(self._sink_name) if self._sink_name else None
+        primary, duck-typed-bus-compatible mechanism) and gate.answered
+        events (the Discord path) drive the SAME answer/resume as the HTTP
+        route (R10). One bus line per loop iteration."""
+        queue = self._sink_queue
+        if queue is None and self._sink_name is not None:
+            # Duck-typed bus fallback (start() already holds the sink queue
+            # for the real Bus; a second subscribe on the same name raises).
+            try:
+                queue = self._bus.subscribe(self._sink_name)
+            except ValueError:
+                return
         if queue is None:
             return
         while True:
             topic, payload = await queue.get()
             if topic == "task.state" and payload.get("new") == "DONE":
                 await self._recheck_waiting()
+            elif topic == "gate.answered":
+                await self._handle_gate_answered(payload if isinstance(payload, dict) else {})
+
+    async def _handle_gate_answered(self, payload: dict) -> None:
+        """One gate.answered bus line -> self.answer() when the payload's
+        task_id matches a LIVE gate. The Discord parity grammar is
+        ``answer T<id> <text>`` and the bot publishes task_id as ``T<id>``,
+        so the leading ``T`` is stripped to match the raw 8-char gate id.
+        Failures are swallowed to one warning line (resilient loop)."""
+        task_id = payload.get("task_id")
+        answer_text = payload.get("answer")
+        if not isinstance(task_id, str) or not task_id:
+            return
+        if not isinstance(answer_text, str) or not answer_text.strip():
+            return
+        candidates = [task_id]
+        if task_id.startswith("T") and len(task_id) > 1:
+            candidates.append(task_id[1:])
+        for candidate in candidates:
+            if candidate not in self._gates:
+                continue
+            try:
+                await self.answer(candidate, answer_text)
+            except Exception as exc:  # noqa: BLE001 — one line per event
+                _LOG.warning("gate.answered resume for task %s failed: %s", candidate, exc)
+            return
 
     # ------------------------------------------------------------------
     # DONE + SUBTASK_DROP (D17)
@@ -856,7 +1286,7 @@ class TaskLoop:
         # Children re-check: the bus subscriber handles it when available; the
         # direct re-check ALSO runs for duck-typed buses (documented choice).
         await self._recheck_waiting()
-        self._gates.pop(task.id, None)
+        self._drop_gate(task.id)
 
     async def _handle_drop(self, task: TaskDir, block: Any) -> None:
         """One parsed SUBTASK_DROP block: refusals are honest events; accepted
