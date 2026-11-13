@@ -1,0 +1,9 @@
+{
+  "route_valid": {"agent": "opencode", "task_title": "Fix login bug", "need_context": false, "skill_hints": []},
+  "route_valid_hermes": {"agent": "hermes", "task_title": "Research deploy options", "need_context": true, "skill_hints": ["deploy-flask"]},
+  "route_invalid_1": "{not json",
+  "route_invalid_2": "{\"agent\": \"wat\", \"task_title\": 12}",
+  "analyze_valid": {"agent": "opencode", "mode": "gate", "workdir": "/app/projects/site", "prompt_seed": "Fix the failing pytest", "task_title": "Fix pytest", "confidence": 0.8, "need_context": false, "skill_hints": []},
+  "fallback_route": {"agent": "opencode", "task_title": "Fix bug", "need_context": false, "skill_hints": []},
+  "fallback_analyze": {"agent": "hermes", "mode": "oneway", "workdir": "/app/projects", "prompt_seed": "Do the task", "task_title": "Task", "confidence": 0.5, "need_context": false, "skill_hints": []}
+}

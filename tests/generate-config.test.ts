@@ -117,27 +117,36 @@ describe('generate-config.sh', () => {
   });
 });
 
-describe('real hermes config merge', () => {
-  it('should correctly merge hermes.template.yaml with main/hermes.partial.yml', () => {
+describe('real hermes config merge (researcher — main deleted in R8)', () => {
+  it('should correctly merge hermes.template.yaml with researcher/hermes.partial.yml', () => {
     const template = path.join(PROJECT_ROOT, 'src', 'config', 'hermes.template.yaml');
-    const partial = path.join(PROJECT_ROOT, 'src', 'agents', 'main', 'hermes.partial.yml');
-    const output = path.join(TMP_DIR, 'hermes-main-merged.yaml');
+    const partial = path.join(PROJECT_ROOT, 'src', 'agents', 'researcher', 'hermes.partial.yml');
+    const output = path.join(TMP_DIR, 'hermes-researcher-merged.yaml');
 
     execSync(`node ${q(MERGE_SCRIPT)} ${q(template)} ${q(partial)} ${q(output)}`);
 
     const result = yaml.load(fs.readFileSync(output, 'utf8')) as any;
 
     // Partial overrides
-    expect(result.model.default).toBe('qwen3.5:2b-q4_K_M');
+    expect(result.model.default).toBe('glm-5.3:cloud');
     expect(result.model.provider).toBe('custom');
     expect(result.model.base_url).toBe('http://ollama:11434/v1');
 
-    // Template values preserved
+    // Template values preserved (template carries _config_version 44 — the
+    // partial has none; the partial's own max_turns 90 wins — verified
+    // computationally at R8 against the real files).
     expect(result.agent.max_turns).toBe(90);
-    expect(result._config_version).toBe(23);
+    expect(result._config_version).toBe(44);
 
     // Arrays replaced
     expect(result.custom_providers).toHaveLength(1);
-    expect(result.custom_providers[0].name).toBe('ollama/qwen3.5:2b-q4_K_M');
+    expect(result.custom_providers[0].name).toBe('ollama/glm-5.3:cloud');
+  });
+
+  it('main partial was deleted with the main profile in R8 (suite retargeted, round-1 M1)', () => {
+    // The main profile and src/agents/main/** were removed in R8 — the harness
+    // long-runner replaces it — so this suite was retargeted from
+    // src/agents/main/hermes.partial.yml (deleted) to the researcher partial.
+    expect(fs.existsSync(path.join(PROJECT_ROOT, 'src', 'agents', 'main'))).toBe(false);
   });
 });
