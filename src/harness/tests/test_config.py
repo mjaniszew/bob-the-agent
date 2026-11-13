@@ -6,7 +6,7 @@ import pathlib
 
 import pytest
 
-from harness.config import HarnessConfig, load_config
+from harness.config import HarnessConfig, SchedulerConfig, load_config
 from harness.errors import ConfigError, ConfigLoadError, ConfigValidationError
 
 _TEMPLATE_PATH = pathlib.Path(__file__).resolve().parents[1] / "harness.template.yaml"
@@ -44,6 +44,7 @@ def test_defaults(
     assert cfg.scheduler.coalesce is True
     assert cfg.scheduler.script_timeout_s == 600
     assert cfg.scheduler.jobs == []
+    assert cfg.scheduler.env_allowlist == []
     assert cfg.memory.budgets.memory_chars == 2200
     assert cfg.memory.budgets.user_chars == 1375
     assert cfg.memory.budgets.lessons_chars == 1500
@@ -177,3 +178,12 @@ def test_template_yaml_loads(tmp_volume: pathlib.Path) -> None:
     assert cfg.server.port == 8181
     assert cfg.router.api_key is None
     assert cfg.discord.home_channel_id is None
+
+
+def test_scheduler_config_env_allowlist_default_and_override() -> None:
+    """R11 WP2: env_allowlist defaults to an empty list and validates as a
+    list of strings when set (YAML-only field; no flat env binding)."""
+    model = SchedulerConfig()
+    assert model.env_allowlist == []
+    override = SchedulerConfig(env_allowlist=["FOO"])
+    assert override.env_allowlist == ["FOO"]

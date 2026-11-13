@@ -10,7 +10,14 @@ agents:
   opencode: {enabled: true, bin: "opencode", default_model: null, default_agent: build, timeout_s: 7200, workdir_root: "/app/projects", auto_approve: true}
 handoff: {enabled: true, max_depth: 3}
 tasks: {inbox: "tasks/inbox", poll_seconds: 2, max_concurrent: 1, max_depth: 2, retries: 1, gate_timeout_s: 86400, max_desc_chars: 4000}
-scheduler: {enabled: true, jobs_file: "state/scheduler.json", misfire_grace_s: 60, coalesce: true, script_timeout_s: 600, jobs: []}
+scheduler:
+  enabled: true
+  jobs_file: "state/scheduler.json"
+  misfire_grace_s: 60
+  coalesce: true
+  script_timeout_s: 600
+  env_allowlist: []
+  jobs: []
 memory: {budgets: {memory_chars: 2200, user_chars: 1375, lessons_chars: 1500, index_chars: 1500}}
 discord:
   enabled: true

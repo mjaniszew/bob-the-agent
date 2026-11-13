@@ -97,7 +97,7 @@ PAGE: str = """<!DOCTYPE html>
     </div>
     <div class="pane">
       <h2>tasks</h2>
-      <div id="tasks">tasks: coming in R10</div>
+      <div id="tasks" hx-get="/api/tasks" hx-trigger="load, every 5s" hx-swap="innerHTML"></div>
     </div>
   </div>
   <div>

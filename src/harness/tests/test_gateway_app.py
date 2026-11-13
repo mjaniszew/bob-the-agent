@@ -25,6 +25,7 @@ from harness.config import HarnessConfig, RateLimitConfig
 from harness.gateway.app import create_app
 from harness.persist import JsonlWriter, read_jsonl
 from harness.router import RouterBrain
+from harness.scheduler import SchedulerError
 from harness.session_manager import SessionManager
 from tests.mocks.router_model import make_fake_model
 
@@ -51,6 +52,42 @@ class ScriptedAdapter:
             yield event
 
 
+class _FakeScheduler:
+    """Recording fake of the R11 scheduler engine surface: ``list_jobs``,
+    ``add_job`` (raises the REAL ``SchedulerError`` on duplicate/unknown
+    kind, so the route except clause binds what the fake raises) and
+    ``remove_job`` (``KeyError`` on unknown ids, mapped to 404)."""
+
+    def __init__(self) -> None:
+        self.jobs: list[dict] = []
+        self.added: list[dict] = []
+        self.removed: list[str] = []
+
+    def list_jobs(self) -> list[dict]:
+        return sorted(self.jobs, key=lambda job: job["id"])
+
+    async def add_job(self, spec: dict) -> dict:
+        dup = [job for job in self.jobs if job["id"] == spec.get("id")]
+        if dup:
+            raise SchedulerError("job id already exists")
+        if spec.get("kind") not in ("spawn_agent", "run_script", "drop_task"):
+            raise SchedulerError("unknown job kind")
+        row = {
+            "id": str(spec.get("id")),
+            "kind": spec.get("kind"),
+            "created_ts": "2026-11-13T00:00:00+00:00",
+        }
+        self.jobs.append(row)
+        self.added.append(spec)
+        return dict(row)
+
+    async def remove_job(self, job_id: str) -> None:
+        if job_id not in [job["id"] for job in self.jobs]:
+            raise KeyError(job_id)
+        self.removed.append(job_id)
+        self.jobs = [job for job in self.jobs if job["id"] != job_id]
+
+
 def make_app(
     cfg: HarnessConfig,
     *,
@@ -59,9 +96,11 @@ def make_app(
     adapters: object = None,
     rate_limit: RateLimitConfig | None = None,
     delay_s: float = 0.15,
+    scheduler_: object | None = None,
 ) -> tuple:
     """Fresh app per test: fake router model + a scripted adapter behind the
-    R-3 seams (never a real provider/model call)."""
+    R-3 seams (never a real provider/model call); ``scheduler_`` wires the
+    R11 schedule routes when given."""
     if rate_limit is not None:
         cfg = cfg.model_copy(update={"rate_limit": rate_limit})
     bus = Bus()
@@ -82,7 +121,9 @@ def make_app(
     )
     if adapters is None:
         adapters = {"opencode": adapter, "hermes": adapter}
-    app = create_app(cfg, bus, manager, router_brain=brain, adapters=adapters)
+    app = create_app(
+        cfg, bus, manager, router_brain=brain, adapters=adapters, scheduler_=scheduler_
+    )
     return app, adapter, bus, manager
 
 
@@ -559,3 +600,156 @@ def test_stream_resume_filter(tmp_volume: Path, cfg: HarnessConfig) -> None:
         assert [payload["seq"] for payload in agent_chunks] == [2]
         assert agent_chunks[0]["text"] == "b"
         assert any(name == "reply.final" for name, _payload in interesting)
+
+
+# ----------------------------------------------------------------------
+# Schedule routes (R11 WP3)
+# ----------------------------------------------------------------------
+def test_schedule_routes_503_when_not_wired(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, *_ = make_app(cfg)  # no scheduler wired (the default)
+    with TestClient(app) as client:
+        listed = client.get("/api/schedule", headers=HEADERS)
+        assert listed.status_code == 503
+        assert listed.json() == {"detail": "scheduler not wired"}
+        spec = {
+            "id": "AAAAAAAA",
+            "kind": "drop_task",
+            "schedule": {"type": "interval", "seconds": 60},
+            "description": "tick",
+        }
+        created = client.post("/api/schedule", json=spec, headers=HEADERS)
+        assert created.status_code == 503
+        assert created.json() == {"detail": "scheduler not wired"}
+        deleted = client.delete("/api/schedule/AAAAAAAA", headers=HEADERS)
+        assert deleted.status_code == 503
+        assert deleted.json() == {"detail": "scheduler not wired"}
+
+
+def test_schedule_get_lists_jobs(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    fake.jobs = [
+        {"id": "BBBBBBBB", "kind": "run_script", "created_ts": "2026-11-13T00:00:01+00:00"},
+        {"id": "AAAAAAAA", "kind": "spawn_agent", "created_ts": "2026-11-13T00:00:00+00:00"},
+    ]
+    app, *_ = make_app(cfg, scheduler_=fake)
+    with TestClient(app) as client:
+        response = client.get("/api/schedule", headers=HEADERS)
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert [job["id"] for job in jobs] == ["AAAAAAAA", "BBBBBBBB"]  # sorted by id
+        for job in jobs:
+            # the safe projection rows ONLY: no schedule payloads, no raw specs
+            assert set(job) == {"id", "kind", "created_ts"}
+
+
+def test_schedule_create_roundtrip(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    app, *_ = make_app(cfg, scheduler_=fake)
+    spec = {
+        "id": "AAAAAAAA",
+        "kind": "drop_task",
+        "schedule": {"type": "interval", "seconds": 60},
+        "description": "drop a tick task",
+    }
+    with TestClient(app) as client:
+        response = client.post("/api/schedule", json=spec, headers=HEADERS)
+        assert response.status_code == 201
+        body = response.json()
+        assert body["ok"] is True
+        assert body["job"] == {
+            "id": "AAAAAAAA",
+            "kind": "drop_task",
+            "created_ts": "2026-11-13T00:00:00+00:00",
+        }
+        assert fake.added == [spec]
+        listed = client.get("/api/schedule", headers=HEADERS).json()
+        assert listed["jobs"] == [body["job"]]
+
+
+def test_schedule_create_invalid_body_422(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    app, *_ = make_app(cfg, scheduler_=fake)
+    with TestClient(app) as client:
+        raw = client.post("/api/schedule", content=b"not-json{{", headers=HEADERS)
+        assert raw.status_code == 422
+        assert raw.json()["detail"] == "invalid schedule body"
+        unknown = client.post(
+            "/api/schedule",
+            json={
+                "id": "AAAAAAAA",
+                "kind": "teleport",
+                "schedule": {"type": "interval", "seconds": 60},
+            },
+            headers=HEADERS,
+        )
+        assert unknown.status_code == 422
+        assert "unknown job kind" in unknown.json()["detail"]
+
+
+def test_schedule_create_duplicate_409(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    app, *_ = make_app(cfg, scheduler_=fake)
+    spec = {
+        "id": "AAAAAAAA",
+        "kind": "run_script",
+        "schedule": {"type": "at", "iso": "+60s"},
+        "argv": ["echo", "tick"],
+    }
+    with TestClient(app) as client:
+        assert client.post("/api/schedule", json=spec, headers=HEADERS).status_code == 201
+        dupe = client.post("/api/schedule", json=spec, headers=HEADERS)
+        assert dupe.status_code == 409
+        assert "already exists" in dupe.json()["detail"]
+        assert len(fake.added) == 1  # the duplicate never reached the engine
+
+
+def test_schedule_delete_roundtrip_404_unknown_badid(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    app, *_ = make_app(cfg, scheduler_=fake)
+    spec = {
+        "id": "AAAAAAAA",
+        "kind": "drop_task",
+        "schedule": {"type": "at", "iso": "+60s"},
+        "description": "one-shot",
+    }
+    with TestClient(app) as client:
+        assert client.post("/api/schedule", json=spec, headers=HEADERS).status_code == 201
+        deleted = client.delete("/api/schedule/AAAAAAAA", headers=HEADERS)
+        assert deleted.status_code == 200
+        assert deleted.json() == {"ok": True, "job_id": "AAAAAAAA"}
+        assert fake.removed == ["AAAAAAAA"]
+        unknown = client.delete("/api/schedule/BBBBBBBB", headers=HEADERS)
+        assert unknown.status_code == 404
+        assert unknown.json()["detail"] == "unknown job id"
+        malformed = client.delete("/api/schedule/abc", headers=HEADERS)
+        assert malformed.status_code == 404  # never 403: the guard misses are 404 too
+
+
+def test_schedule_delete_requires_auth(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, *_ = make_app(cfg, scheduler_=_FakeScheduler())
+    with TestClient(app) as client:
+        response = client.delete("/api/schedule/AAAAAAAA")
+        assert response.status_code == 401
+        assert response.headers.get("www-authenticate") == "APIKey"
+
+
+def test_materials_includes_scheduler_section(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    fake = _FakeScheduler()
+    fake.jobs = [
+        {"id": "AAAAAAAA", "kind": "drop_task", "created_ts": "2026-11-13T00:00:00+00:00"}
+    ]
+    app, *_ = make_app(cfg, scheduler_=fake)
+    with TestClient(app) as client:
+        payload = client.get("/materials?format=json", headers=HEADERS).json()
+        assert payload["schedule_jobs"] == [
+            {"name": "AAAAAAAA", "next_ts": None, "kind": "drop_task"}
+        ]
+        text = client.get("/materials", headers=HEADERS).text
+        assert "schedule_jobs" not in text  # the text rendering stays untouched
+
+
+def test_materials_scheduler_section_absent_when_none(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, *_ = make_app(cfg)  # scheduler not wired
+    with TestClient(app) as client:
+        payload = client.get("/materials?format=json", headers=HEADERS).json()
+        assert payload["schedule_jobs"] == []  # the key ALWAYS exists, empty list

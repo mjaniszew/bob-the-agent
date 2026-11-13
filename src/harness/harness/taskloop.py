@@ -128,7 +128,11 @@ class TaskLoop:
     - ``router``: ``None`` -> a :class:`~harness.router.RouterBrain` built
       lazily on the first analyze; tests inject an object with
       ````.analyze(task_desc, *, workdir=...)`` returning an
-      :class:`~harness.router.Analysis` (or an awaitable of one).
+      :class:`~harness.router.Analysis` (or an awaitable of one);
+    - ``scheduler_sink``: optional async callable(dict) invoked when a
+      SUBTASK_DROP block carries a ``schedule:`` demand (WP4 seam). Duck-typed
+      on purpose — NO ``harness.scheduler`` import, no hard dependency; the
+      supervisor wiring owns the late-bound engine handoff (R11 item 9).
 
     Resolved adapters are cached per agent — this cache is the seam the row-23
     spy wraps: every task-origin ``adapter.run`` flows through
@@ -143,12 +147,14 @@ class TaskLoop:
         adapters: Any | None = None,
         router: Any | None = None,
         adapter_factory: Any | None = None,
+        scheduler_sink: Any | None = None,
     ) -> None:
         self._cfg = cfg
         self._manager = manager
         self._bus = bus
         self._adapters = adapters
         self._adapter_factory = adapter_factory
+        self._scheduler_sink = scheduler_sink
         self._injected_router = router
         self._router_obj: Any | None = None
         self._store = TaskStore(cfg, bus=bus)
@@ -1322,6 +1328,19 @@ class TaskLoop:
                 )
                 return
             workdir = value
+        # WP4 demand seam: `schedule` is popped BEFORE validate_subtask_drop
+        # (same pattern as oneway/workdir — _SUBTASK_DROP_KEYS stays unchanged):
+        # a non-empty mapping DEMANDS a scheduled follow-up INSTEAD of an
+        # immediate subtask scheduling; the engine validates the shape later.
+        schedule_demand: dict | None = None
+        if "schedule" in fields:
+            value = fields.pop("schedule")
+            if not isinstance(value, dict) or not value:
+                await task.append_event(
+                    "subtask_refused", {"reason": "field 'schedule' must be a non-empty mapping"}
+                )
+                return
+            schedule_demand = value
         try:
             normalized = validate_subtask_drop(
                 fields, max_desc_chars=int(self._cfg.tasks.max_desc_chars)
@@ -1358,6 +1377,34 @@ class TaskLoop:
         except (TaskSchemaError, TaskExistsError) as exc:
             await task.append_event("subtask_refused", {"reason": str(exc)})
             return
+        if schedule_demand is not None:
+            if self._scheduler_sink is None:
+                await task.append_event(
+                    "subtask_schedule_note",
+                    {
+                        "reason": "schedule demand recorded but no scheduler sink wired",
+                        "schedule": schedule_demand,
+                    },
+                )
+            else:
+                try:
+                    await self._scheduler_sink(
+                        {
+                            "task_id": child_id,
+                            "schedule": schedule_demand,
+                            "description": normalized["description"],
+                            "origin_task": task.id,
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001 — a broken sink must not break the drop
+                    await task.append_event(
+                        "subtask_schedule_note", {"reason": f"scheduler sink failed: {exc}"}
+                    )
+                else:
+                    await task.append_event(
+                        "subtask_schedule_accepted",
+                        {"task_id": child_id, "schedule": schedule_demand},
+                    )
         await task.append_event("subtask_drop", {"child": child_id, "parent": task.id})
         _LOG.info("task %s: SUBTASK_DROP -> inbox child %s", task.id, child_id)
 

@@ -9,6 +9,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import types
 from typing import ClassVar
 
 import pytest
@@ -166,9 +167,9 @@ async def test_supervisor_start_bot_disabled_path(
 
 
 def _drive_serve(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, str]]:
-    """Patch the _serve seams (fake TaskLoop / create_app / uvicorn / recording
-    bus) and return the shared event log so tests can assert boot + shutdown
-    order."""
+    """Patch the _serve seams (fake TaskLoop / SchedulerEngine / create_app /
+    uvicorn / recording bus) and return the shared event log so tests can
+    assert boot + shutdown order."""
     import uvicorn
 
     import harness.gateway.app as gateway_app_module
@@ -211,6 +212,37 @@ def _drive_serve(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, str]]:
             self.stopped = True
             record(self, "taskloop.stop")
 
+    class _FakeScheduler:
+        instances: ClassVar[list[_FakeScheduler]] = []
+
+        def __init__(self, cfg_arg, manager=None, bus=None, **_kwargs) -> None:
+            self.cfg_arg = cfg_arg
+            self.manager = manager
+            self.bus = bus
+            self.restored = False
+            self.started = False
+            self.stopped = False
+            type(self).instances.append(self)
+
+        async def restore(self) -> dict[str, int]:
+            self.restored = True
+            record(self, "scheduler.restore")
+            return {"restored": 1, "misfire_skipped": 0}
+
+        async def start(self) -> None:
+            self.started = True
+            record(self, "scheduler.start")
+
+        # WP4: the demand sink binds this bound method ref after a successful
+        # start; the fake just needs to carry the attribute on the real path.
+        async def submit_demand(self, demand: dict) -> dict:
+            record(self, "scheduler.submit_demand")
+            return {"id": "SD00000X", "kind": "drop_task", "created_ts": "ts"}
+
+        async def stop(self) -> None:
+            self.stopped = True
+            record(self, "scheduler.stop")
+
     class _RecordingBus(Bus):
         async def aclose(self) -> None:
             record(self, "bus.aclose")
@@ -233,6 +265,17 @@ def _drive_serve(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, str]]:
             record(self, "serve")
 
     monkeypatch.setattr(taskloop_module, "TaskLoop", _FakeTaskLoop)
+    # When harness.scheduler is importable (WP1 landed) patch its attribute;
+    # otherwise inject a safe fake module (monkeypatch auto-undoes setitem).
+    try:
+        import harness.scheduler as scheduler_module
+    except ModuleNotFoundError:
+        scheduler_module = types.ModuleType("harness.scheduler")
+        scheduler_module.SchedulerEngine = _FakeScheduler  # type: ignore[attr-defined]
+        scheduler_module.SchedulerError = Exception  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "harness.scheduler", scheduler_module)
+    else:
+        monkeypatch.setattr(scheduler_module, "SchedulerEngine", _FakeScheduler)
     monkeypatch.setattr(gateway_app_module, "create_app", _fake_create_app)
     monkeypatch.setattr("harness.supervisor.Bus", _RecordingBus)
     monkeypatch.setattr(uvicorn, "Config", _FakeConfig)
@@ -249,32 +292,45 @@ def test_serve_wires_taskloop(
     """WP3: _serve constructs the TaskLoop, replays task state ONCE before the
     gateway app is built, logs the replay counts, starts the loop, and stops it
     on server shutdown (stop is safe even when start never ran is taskloop's
-    own contract, covered in WP2 tests)."""
+    own contract, covered in WP2 tests). WP2: the SchedulerEngine constructs
+    after taskloop.start, restores + starts before the gateway app is built,
+    and stops between taskloop.stop and bus.aclose."""
     from harness.supervisor import _serve
 
     events = _drive_serve(monkeypatch)
     with caplog.at_level(logging.INFO, logger="harness.supervisor"):
         assert asyncio.run(_serve(cfg)) == 0
+    import harness.scheduler as scheduler_module
     import harness.taskloop as taskloop_module
 
     loop = taskloop_module.TaskLoop.instances[0]
+    scheduler = scheduler_module.SchedulerEngine.instances[0]
     assert loop.replay_calls == 1
     assert loop.started and loop.stopped
+    assert scheduler.restored and scheduler.started and scheduler.stopped
+    assert scheduler.cfg_arg is cfg
     names = [name for _, name in events]
     assert names == [
         "taskloop.replay",
         "taskloop.start",
+        "scheduler.restore",
+        "scheduler.start",
         "create_app",
         "serve",
         "taskloop.stop",
+        "scheduler.stop",
         "bus.aclose",
     ]
+    assert names.index("scheduler.start") > names.index("taskloop.start")
+    assert names.index("scheduler.stop") > names.index("taskloop.stop")
+    assert names.index("scheduler.stop") < names.index("bus.aclose")
     assert events[names.index("create_app")][0] is cfg
     assert events[0][0] is loop  # replay recorded on the constructed loop
     assert (
         "tasks replayed: requeued=2 failed_restarted=1 gate_restored=4 deps_waiting=5"
         in caplog.text
     )
+    assert "scheduler restored: restored=1 misfire_skipped=0" in caplog.text
 
 
 def test_serve_stops_taskloop_before_bus_close(
@@ -294,11 +350,95 @@ def test_serve_stops_taskloop_before_bus_close(
     assert names.index("taskloop.stop") < names.index("bus.aclose")
 
 
+def test_serve_skips_scheduler_when_disabled_or_failed(
+    tmp_volume: pathlib.Path,
+    cfg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP2: scheduler.enabled=False means no engine is constructed at all (the
+    ctor-failure path is covered by test_serve_survives_scheduler_ctor_failure);
+    the boot + shutdown order matches the pre-scheduler shape (no scheduler.*
+    events anywhere), leaving the taskloop/bus pair untouched."""
+    import harness.scheduler as scheduler_module
+    from harness.supervisor import _serve
+
+    disabled = cfg.model_copy(
+        update={"scheduler": cfg.scheduler.model_copy(update={"enabled": False})}
+    )
+    events = _drive_serve(monkeypatch)
+    assert asyncio.run(_serve(disabled)) == 0
+    assert scheduler_module.SchedulerEngine.instances == []
+    names = [name for _, name in events]
+    assert not any(name.startswith("scheduler.") for name in names)
+    assert names == [
+        "taskloop.replay",
+        "taskloop.start",
+        "create_app",
+        "serve",
+        "taskloop.stop",
+        "bus.aclose",
+    ]
+
+
+def test_serve_survives_scheduler_ctor_failure(
+    tmp_volume: pathlib.Path,
+    cfg,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """WP2: a SchedulerEngine constructor that raises must NEVER block boot —
+    the warning path keeps scheduler_ None so no restore/start events fire,
+    the gateway still builds + serves, and shutdown proceeds normally."""
+    import harness.scheduler as scheduler_module
+    from harness.supervisor import _serve
+
+    class _ExplodingScheduler:
+        def __init__(self, *args, **kwargs) -> None:
+            raise RuntimeError("scheduler ctor boom")
+
+    events = _drive_serve(monkeypatch)
+    fake_engine = scheduler_module.SchedulerEngine
+    monkeypatch.setattr(scheduler_module, "SchedulerEngine", _ExplodingScheduler)
+    with caplog.at_level(logging.WARNING, logger="harness.supervisor"):
+        assert asyncio.run(_serve(cfg)) == 0
+    assert "scheduler startup failed: scheduler ctor boom" in caplog.text
+    assert fake_engine.instances == []
+    names = [name for _, name in events]
+    assert not any(name.startswith("scheduler.") for name in names)
+    assert names == [
+        "taskloop.replay",
+        "taskloop.start",
+        "create_app",
+        "serve",
+        "taskloop.stop",
+        "bus.aclose",
+    ]
+
+
 def test_import_supervisor_does_not_import_taskloop() -> None:
     """WP3: importing harness.supervisor (and --check) stays taskloop-free; the
     import lives lazily inside _serve, mirroring the gateway lazy-import."""
     package_root = pathlib.Path(__file__).resolve().parents[1]
     code = "import harness.supervisor,sys; print('harness.taskloop' in sys.modules)"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=package_root,
+        env={**os.environ, "PYTHONPATH": str(package_root)},
+        check=True,
+    )
+    assert result.stdout.strip() == "False"
+
+
+def test_import_supervisor_does_not_import_scheduler() -> None:
+    """WP2: importing harness.supervisor (and --check) stays scheduler-free
+    (harness.scheduler pulls apscheduler; heavy imports belong inside _serve)."""
+    package_root = pathlib.Path(__file__).resolve().parents[1]
+    code = (
+        "import harness.supervisor,sys; "
+        "print(any(m.startswith('harness.scheduler') for m in sys.modules))"
+    )
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,

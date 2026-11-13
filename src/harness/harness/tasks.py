@@ -179,6 +179,8 @@ EVENTS: set[str] = {
     "note",
     "subtask_drop",
     "subtask_refused",
+    "subtask_schedule_note",
+    "subtask_schedule_accepted",
     "dep_wait",
     "result_written",
 }

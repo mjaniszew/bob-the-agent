@@ -160,6 +160,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "misfire_grace_s": 60,
         "coalesce": True,
         "script_timeout_s": 600,
+        "env_allowlist": [],
         "jobs": [],
     },
     "memory": {
@@ -421,6 +422,12 @@ class SchedulerConfig(BaseModel):
     misfire_grace_s: int = 60
     coalesce: bool = True
     script_timeout_s: int = 600
+    # Allowlist of NON-HARNESS env var names the scheduler copies from the
+    # supervisor env into the run_script child env via build_child_env extra=
+    # (list-valued: YAML-only, no flat env binding). A HARNESS_* name here is
+    # NOT pre-filtered: build_child_env itself denies the prefix and raises,
+    # which the run_script handler surfaces as an error outcome.
+    env_allowlist: list[str] = Field(default_factory=list)
     jobs: list[dict] = []
 
 

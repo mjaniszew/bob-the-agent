@@ -2,7 +2,7 @@
 2.7, 5.2, 5.3 and 7.2; DECISIONS.md D6/D8; plan phase R6).
 
 :func:`create_app(cfg, bus, manager, *, router_brain=None, adapters=None,
-test_limiter=None, taskloop_=None)` wires:
+test_limiter=None, taskloop_=None, scheduler_=None)` wires:
 
 - **Auth (D6/5.2)** — ``X-API-Key`` (``hmac.compare_digest`` against
   ``cfg.api_key``; ``401`` + ``WWW-Authenticate: APIKey``) AND a signed
@@ -22,8 +22,10 @@ test_limiter=None, taskloop_=None)` wires:
   vendored htmx asset, chat turn, SSE stream, session meta list, transcript
   tail, materials report (7.2: sizes/counts/names only — NEVER file contents,
   env values, or raw ledger rows), task list/detail meta routes + the
-  WAITING_INPUT gate answer write (2.11/D18; repo-adjusted answer path) and
-  the internal handoff proxy.
+   WAITING_INPUT gate answer write (2.11/D18; repo-adjusted answer path) and
+   the internal handoff proxy. R11 adds the ``/api/schedule`` list, create
+   and delete routes over the wired scheduler engine.
+
 - **Streaming contract** — the bus is NOT replayable: an SSE connection
   receives only events published while subscribed (``?seq=`` resume drops
   already-seen ``reply.chunk`` events received on that same connection). Agent
@@ -89,6 +91,10 @@ _LOG = logging.getLogger("harness.gateway")
 # The generic 5.3 id guard (superset of base32 — kept uniform across id routes).
 _ID_GUARD = re.compile(r"^[a-zA-Z0-9-_]{1,64}$")
 
+# R11 scheduler route id guard: 8-char base32 (A-Z2-7), uniform with session ids
+# (a bad job id is 404 via _not_found(), never 403).
+_JOB_ID_GUARD = re.compile(r"^[A-Z2-7]{8}$")
+
 _COOKIE_NAME = "harness_session"
 _COOKIE_MESSAGE = b"harness-session-v1"
 _COOKIE_MAX_AGE_S = 30 * 24 * 60 * 60  # 30 days (D6)
@@ -97,6 +103,21 @@ _TITLE_MAX = 80
 
 # R5 runs ledger lands with R9/R10; until then the presence check only.
 _RUNS_LEDGER_FILENAME = "runs.jsonl"
+
+# Plain-text badge per task FSM state (state.json "state" values — exactly the
+# harness.tasks TRANSITIONS/STATES registry, nothing invented; bounded polish).
+_TASK_STATE_BADGES: dict[str, str] = {
+    "appeared": "new",
+    "ANALYZING": "analyze",
+    "ANALYZED": "analyzed",
+    "READY": "ready",
+    "RUNNING": "run",
+    "WAITING_DEPS": "wdeps",
+    "WAITING_INPUT": "wait",
+    "DONE": "done",
+    "FAILED": "fail",
+    "INTERRUPTED": "intr",
+}
 
 _HTMX_STATIC = Path(__file__).resolve().parent / "static" / "htmx.min.js"
 
@@ -157,6 +178,7 @@ def create_app(
     ) = None,
     test_limiter: Limiter | None = None,
     taskloop_: object | None = None,
+    scheduler_: object | None = None,
 ) -> FastAPI:
     """Build the full R6 gateway over the shared ``cfg``/``bus``/``manager``.
 
@@ -169,7 +191,11 @@ def create_app(
     their own app). ``taskloop_`` (R10/D18) wires ``POST /api/tasks/answer``;
     with ``None`` the gate answer write answers 503 ``task loop not wired``
     (the task LIST/DETAIL read routes still work through a local
-    :class:`~harness.tasks.TaskStore`).
+    :class:`~harness.tasks.TaskStore`). ``scheduler_`` (R11) wires the
+    ``/api/schedule`` routes the same way ``taskloop_`` wires
+    ``POST /api/tasks/answer``; with ``None`` the schedule routes answer
+    503 ``scheduler not wired`` (``/materials`` still carries its empty
+    ``schedule_jobs`` list).
     """
     limiter = test_limiter if test_limiter is not None else Limiter(key_func=get_remote_address)
     brain = router_brain if router_brain is not None else RouterBrain(cfg, bus=bus)
@@ -646,8 +672,48 @@ def create_app(
             raw = None
         return raw if isinstance(raw, dict) else {}
 
+    def _tasks_fragment(rows: list[dict]) -> str:
+        """The htmx tasks-pane fragment (R11/U1): one ``.taskrow`` div per row —
+        id, plain-text state badge (``_TASK_STATE_BADGES``), d<depth>p<parent>
+        and the 60-char description; WAITING_INPUT rows add the inline
+        gate-answer form, DONE rows the result link. Every user-visible string
+        is html-escaped (the chat route-line fragment pattern)."""
+        parts: list[str] = []
+        for row in rows:
+            task_id = html.escape(str(row.get("id") or ""))
+            state = row.get("state")
+            state_str = state if isinstance(state, str) else ""
+            depth = row.get("depth")
+            parent = row.get("parent")
+            line = (
+                '<div class="taskrow">#'
+                + task_id
+                + " "
+                + '<span class="taskbadge">'
+                + html.escape(_TASK_STATE_BADGES.get(state_str, "?"))
+                + "</span> d"
+                + html.escape(str(depth) if depth is not None else "-")
+                + "p"
+                + html.escape(str(parent) if parent is not None else "-")
+            )
+            title = row.get("title")
+            if isinstance(title, str) and title:
+                line += " " + html.escape(title[:60])
+            if state == "WAITING_INPUT":
+                line += (
+                    '<form hx-post="/api/tasks/answer/'
+                    + task_id
+                    + '" hx-target="#tasks">'
+                    + '<input type="text" name="text" autocomplete="off" required>'
+                    + '<button type="submit">answer</button></form>'
+                )
+            if state == "DONE":
+                line += ' <a href="/api/task/' + task_id + '">result</a>'
+            parts.append(line + "</div>")
+        return "".join(parts)
+
     @app.get("/api/tasks", dependencies=[Depends(require_auth)])
-    async def list_tasks() -> Response:
+    async def list_tasks(request: Request) -> Response:
         """Meta-only task listing (2.9/7.2): ``{id, state, title, depth,
         parent, updated}`` — title = task.yaml ``description[:80]``. No
         events, no result contents, no gate payloads, no raw ledger rows.
@@ -677,6 +743,8 @@ def create_app(
                     "updated": state_data.get("updated"),
                 }
             )
+        if request.headers.get("hx-request"):
+            return HTMLResponse(_tasks_fragment(rows))
         return JSONResponse(rows)
 
     @app.get("/api/task/{task_id}", dependencies=[Depends(require_auth)])
@@ -765,6 +833,64 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         fresh = _task_state(task_id) or {}
         return JSONResponse({"ok": True, "task_id": task_id, "state": fresh.get("state")})
+
+    # ------------------------------------------------------------------
+    # Schedule routes (R11): list/create/delete jobs on the scheduler
+    # ------------------------------------------------------------------
+    @app.get("/api/schedule", dependencies=[Depends(require_auth)])
+    async def list_schedule() -> Response:
+        """R11 safe job listing: ``{"jobs": [id, kind, created_ts,
+        schedule.type]}`` — the engine projection ONLY (never cron exprs,
+        payloads, trigger internals or raw records). 503 when the scheduler
+        is not wired."""
+        if scheduler_ is None:
+            raise HTTPException(status_code=503, detail="scheduler not wired")
+        return JSONResponse({"jobs": scheduler_.list_jobs()})
+
+    @app.post("/api/schedule", dependencies=[Depends(require_auth)])
+    @limiter.limit(lambda: f"{cfg.rate_limit.per_minute}/minute")
+    async def create_schedule(request: Request) -> Response:
+        """R11 job create: one raw JSON job spec dict handed to
+        ``scheduler_.add_job`` (the duck-typed ``harness.scheduler`` contract).
+        503 when not wired; 422 for an unreadable/non-mapping body or a
+        rejected spec (the SchedulerError detail); 409 on a duplicate job id;
+        500 for unexpected engine failures. Success 201 ``{ok,
+        job={id, kind, created_ts}}``."""
+        if scheduler_ is None:
+            raise HTTPException(status_code=503, detail="scheduler not wired")
+        try:
+            payload = json.loads(await request.body())
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="invalid schedule body") from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=422, detail="invalid schedule body")
+        from harness.scheduler import SchedulerError  # lazy: app.py stays scheduler-free
+
+        try:
+            job = await scheduler_.add_job(payload)
+        except SchedulerError as exc:
+            detail = str(exc)
+            raise HTTPException(
+                status_code=409 if "already exists" in detail else 422, detail=detail
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="schedule create failed") from exc
+        return JSONResponse({"ok": True, "job": job}, status_code=201)
+
+    @app.delete("/api/schedule/{job_id}", dependencies=[Depends(require_auth)])
+    async def delete_schedule(job_id: str) -> Response:
+        """R11 job delete: the base32 guard keeps bad ids a 404 (never 403);
+        unknown ids are 404 through the engine ``KeyError``; 503 when the
+        scheduler is not wired. Success ``{ok, job_id}``."""
+        if scheduler_ is None:
+            raise HTTPException(status_code=503, detail="scheduler not wired")
+        if _JOB_ID_GUARD.fullmatch(job_id) is None:
+            raise _not_found()
+        try:
+            await scheduler_.remove_job(job_id)
+        except KeyError as exc:
+            raise _not_found("unknown job id") from exc
+        return JSONResponse({"ok": True, "job_id": job_id})
 
     # ------------------------------------------------------------------
     # Handoff proxy
@@ -911,6 +1037,16 @@ def create_app(
                 for row in ledger[-20:]
             ]
 
+        schedule_jobs: list[dict] = []
+        if scheduler_ is not None:
+            try:
+                schedule_jobs = [
+                    {"name": str(job.get("id")), "next_ts": None, "kind": str(job.get("kind"))}
+                    for job in scheduler_.list_jobs()
+                ]
+            except Exception:  # noqa: BLE001 — report degradation only
+                schedule_jobs = []
+
         report_lines = [
             f"harness materials ({today})",
             f"sessions: {len(session_rows)}",
@@ -962,6 +1098,7 @@ def create_app(
             "router": {"calls": ledger_calls, "fallback": ledger_fallbacks},
             "runs": runs_rows if runs_path.is_file() else None,
             "tasks": {"total": tasks_total, "by_state": dict(sorted(task_counts.items()))},
+            "schedule_jobs": schedule_jobs,
         }
         return "\n".join(report_lines), payload
 

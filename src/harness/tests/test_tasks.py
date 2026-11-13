@@ -457,6 +457,8 @@ def test_events_registry_matches_design() -> None:
         "note",
         "subtask_drop",
         "subtask_refused",
+        "subtask_schedule_note",
+        "subtask_schedule_accepted",
         "dep_wait",
         "result_written",
     }

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from harness.config import HarnessConfig
 from harness.gateway.ui import PAGE, render_page
+from harness.tasks import TaskDir, TaskStore
 from tests.test_gateway_app import HEADERS, make_app  # reuse the app harness
 
 
@@ -77,3 +78,35 @@ def test_get_route_serves_page(tmp_volume: Path, cfg: HarnessConfig) -> None:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/html")
         assert response.text == PAGE
+
+
+def test_tasks_pane_polls_api() -> None:
+    # R11/U1: the tasks pane is a live htmx poller like the sessions pane.
+    assert 'id="tasks" hx-get="/api/tasks"' in PAGE
+    assert 'hx-trigger="load, every 5s" hx-swap="innerHTML"' in PAGE
+    assert "coming in R10" not in PAGE
+
+
+def test_tasks_fragment_roundtrip(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    # Del tmp_volume: cfg already points the TaskStore at the tmp volume.
+    del tmp_volume
+    store = TaskStore(cfg)
+    task_id = store.create_inbox_task("plain created chore", origin="user")
+    destination = store.move_from_inbox(task_id)
+    TaskDir.birth(destination, cfg, origin="user")
+    app, *_ = make_app(cfg)
+    with TestClient(app) as client:
+        hx = client.get("/api/tasks", headers={**HEADERS, "HX-Request": "true"})
+        assert hx.status_code == 200
+        assert hx.headers["content-type"].startswith("text/html")
+        fragment = hx.text
+        assert 'class="taskrow"' in fragment
+        assert f"#{task_id}" in fragment
+        assert ">new<" in fragment  # born state: the plain-text badge text
+        assert "d0" in fragment  # depth from state.json
+        assert "<form" not in fragment  # plain created task: NO answer form
+        # The JSON path stays exactly as-is for non-hx callers.
+        plain = client.get("/api/tasks", headers=HEADERS)
+        assert plain.status_code == 200
+        assert plain.headers["content-type"].startswith("application/json")
+        assert plain.json()[0]["id"] == task_id

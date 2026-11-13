@@ -146,7 +146,17 @@ close the bus on shutdown. The task loop (WP3): :class:`harness.taskloop.
 TaskLoop` is constructed after the session replay, boots with its sync
 replay (counts logged on an INFO line), starts its watcher/runner before
 the gateway serves, and is stopped in the shutdown ``finally`` (bot stop,
-taskloop stop, bus close order). M-5b (``server.behind_proxy``): the TLS/reverse
+taskloop stop, bus close order). R11 in-loop scheduler: when
+``cfg.scheduler.enabled`` the ``SchedulerEngine`` (lazy import) constructs
+after ``taskloop.start()``, restores + starts before the gateway serves, and
+is stopped between taskloop.stop and bus close; a scheduler that fails to
+construct/restore/start never blocks boot (warning only, engine stays off).
+WP4 (demand seam): TaskLoop gets the late-bound scheduler sink
+(``_scheduler_demand_sink`` resolving ``sink_holder["sink"]``); the holder
+stays None until a successful ``scheduler_.start()`` binds
+``scheduler_.submit_demand`` and the shutdown finally unbinds it, so a drop
+demand without a live engine is a no-op the loop records honestly.
+M-5b (``server.behind_proxy``): the TLS/reverse
 proxy termination is external (section 5.1); when ``cfg.server.behind_proxy``
 is set, uvicorn additionally trusts ``X-Forwarded-For`` from localhost
 (``proxy_headers=True``, ``forwarded_allow_ips="127.0.0.1"``) so client-keyed
@@ -156,9 +166,21 @@ rate limits see the real client; left untouched when False."""
     counts = manager.replay()
     logging.getLogger("harness.supervisor").info(SessionManager.ready_line(counts))
     _boot_skills_index(cfg)
+    # WP4 demand seam (R11 item 9): the scheduler engine does not exist at
+    # TaskLoop construction time (WP2 ordering), so the sink is a late-bound
+    # mutable cell — the supervisor binds the real engine method after a
+    # successful start (and unbinds it in the shutdown finally).
+    sink_holder: dict[str, Any] = {"sink": None}
+
+    async def _scheduler_demand_sink(payload: dict) -> None:
+        sink = sink_holder.get("sink")
+        if sink is None:
+            return
+        await sink(payload)
+
     from harness.taskloop import TaskLoop
 
-    taskloop = TaskLoop(cfg, manager, bus=bus)
+    taskloop = TaskLoop(cfg, manager, bus=bus, scheduler_sink=_scheduler_demand_sink)
     replay_counts = taskloop.replay()
     logging.getLogger("harness.supervisor").info(
         "tasks replayed: requeued=%d failed_restarted=%d gate_restored=%d deps_waiting=%d",
@@ -168,13 +190,44 @@ rate limits see the real client; left untouched when False."""
         replay_counts.get("deps_waiting", 0),
     )
     taskloop.start()
+    from harness.scheduler import SchedulerEngine
+
+    # WP4 wires the drop-demand sink via scheduler_sink/taskloop coupling.
+    scheduler_: Any | None = None
+    if cfg.scheduler.enabled:
+        try:
+            scheduler_ = SchedulerEngine(cfg, bus=bus, manager=manager)
+        except Exception as exc:  # noqa: BLE001 — scheduler startup must not kill the harness
+            logging.getLogger("harness.supervisor").warning("scheduler startup failed: %s", exc)
+            scheduler_ = None
+    if scheduler_ is not None:
+        try:
+            restored = await scheduler_.restore()
+            logging.getLogger("harness.supervisor").info(
+                "scheduler restored: restored=%d misfire_skipped=%d",
+                restored.get("restored", 0),
+                restored.get("misfire_skipped", 0),
+            )
+            await scheduler_.start()
+            # WP4: bind the bound method ref ONLY after a successful start.
+            sink_holder["sink"] = scheduler_.submit_demand
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger("harness.supervisor").warning("scheduler restore/start failed: %s", exc)
+            scheduler_ = None
     bot: Any | None = None
     bot = await _start_bot(cfg, bus, manager)
+    import inspect
+
     from harness.gateway.app import create_app
 
     # R10/D18: the task loop instance is wired so the POST /api/tasks/answer
     # gate route reaches TaskLoop.answer (the same resume path as Discord).
-    app = create_app(cfg, bus, manager, taskloop_=taskloop)
+    # WP3 adds scheduler_; the introspection keeps this commit self-green.
+    _accepts_scheduler = "scheduler_" in inspect.signature(create_app).parameters
+    if _accepts_scheduler:
+        app = create_app(cfg, bus, manager, taskloop_=taskloop, scheduler_=scheduler_)
+    else:
+        app = create_app(cfg, bus, manager, taskloop_=taskloop)
     import uvicorn
 
     if cfg.server.behind_proxy:
@@ -202,6 +255,13 @@ rate limits see the real client; left untouched when False."""
             except Exception:  # noqa: BLE001 — shutdown must not mask the real exit
                 logging.getLogger("harness.supervisor").warning("discord bot stop failed")
         await taskloop.stop()
+        if scheduler_ is not None:
+            try:
+                await scheduler_.stop()
+            except Exception:  # noqa: BLE001
+                logging.getLogger("harness.supervisor").warning("scheduler stop failed")
+            # WP4: unbind the demand sink (no demands after the engine is down).
+            sink_holder["sink"] = None
         await bus.aclose()
     return 0
 
