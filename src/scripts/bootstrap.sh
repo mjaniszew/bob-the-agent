@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bob the Agent — single-container bootstrap.
-# Provisions the default profile (main orchestrator) + three secondary
-# Hermes profiles, then execs the long-running gateway (hermes gateway run).
+# Provisions the two surviving Hermes profiles (researcher, simple), seeds the
+# Python harness state, then execs supervisord (the harness long-runner).
 # s6-overlay stays PID 1 (image entrypoint entrypoint-dispatch.sh execs /init,
 # which runs this script as its main program via main-wrapper.sh — dropped to
 # the `hermes` user, HOME=/opt/data, hermes venv already on PATH).
@@ -11,7 +11,7 @@ HERMES_HOME="${HERMES_HOME:-/opt/data}"
 TEMPLATE_FILE="/app/config/hermes.template.yaml"
 AGENTS_DIR="/app/agents"
 SKILLS_SRC="/app/skills"
-PROFILE_NAMES="researcher simple coder"
+PROFILE_NAMES="researcher simple"
 
 log() { echo "[bootstrap] $*"; }
 
@@ -57,29 +57,7 @@ copy_skills() { # <target_profile_dir> — rm-then-fresh-copy every skill; skip 
   done
 }
 
-# ---- 1. Default profile (main orchestrator) ------------------------------
-if [ ! -f "$HERMES_HOME/config.yaml" ] || [ ! -f "$HERMES_HOME/.initialized" ]; then
-  log "generating default (main) profile config"
-  /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" main "$HERMES_HOME/config.yaml"
-else
-  # Reconcile a pre-existing (e.g. migrated) config with the current partial:
-  # deep-merge, partial wins on overlapping keys, user-only keys preserved.
-  # Without this, a migrated config predating the single-container refactor
-  # never gains gateway.multiplex_profiles (or any new partial keys).
-  log "reconciling default (main) profile config with current partial"
-  pre_reconcile_backup "$HERMES_HOME/config.yaml"
-  node /app/scripts/merge-yaml.mjs "$HERMES_HOME/config.yaml" \
-    "$AGENTS_DIR/main/hermes.partial.yml" "$HERMES_HOME/config.yaml" \
-    || log "WARN: main config reconciliation failed; keeping existing config"
-fi
-if [ -f "$HERMES_HOME/SOUL.md" ] && [ ! -f "$HERMES_HOME/.initialized" ]; then
-  rm "$HERMES_HOME/SOUL.md"
-  cp "$AGENTS_DIR/main/SOUL.md" "$HERMES_HOME/SOUL.md"
-fi
-
-copy_skills "$HERMES_HOME"
-
-# ---- 2. Secondary profiles ------------------------------------------------
+# ---- 1. Secondary profiles --------------------------------------------------
 for name in $PROFILE_NAMES; do
   dir="$HERMES_HOME/profiles/$name"
   if [ ! -f "$dir/config.yaml" ]; then
@@ -108,6 +86,32 @@ for name in $PROFILE_NAMES; do
   hermes -p "$name" chat -c "Bot Chat" --create-if-missing >/dev/null 2>&1 || \
     log "WARN: could not create Bot Chat session for $name"
 done
+
+# ---- 2b. Harness state root + first-boot seeds (idempotent) -----------------
+# Harness state root + first-boot seeds (idempotent, never overwrites user files).
+# All harness state lives under the existing /opt/data bind (no new volume).
+H="$HERMES_HOME/harness"
+mkdir -p "$H/skills" "$H/memory" "$H/logs"
+# Config: template-copy-once — a boot that died mid-seed reruns safely; user
+# edits on the volume are never overwritten.
+[ -f "$H/config.yaml" ] || cp /app/harness/harness.template.yaml "$H/config.yaml"
+# Skills seed: remove-and-replace every skill SHIPPED in /app/skills (mirrors the
+# per-profile rm-then-fresh copy_skills so the harness index cannot go stale);
+# volume-created skills are preserved. Skip the same heavy dirs as copy_skills.
+for d in "$SKILLS_SRC"/*/; do
+  [ -d "$d" ] || continue
+  n="$(basename "$d")"
+  [ "$n" = "node_modules" ] && continue
+  [ "$n" = "dist" ] && continue
+  [ "$n" = ".venv" ] && continue
+  rm -rf "$H/skills/$n"
+  cp -r "$d" "$H/skills/$n"
+done
+# Memory continuity (best-effort): seed the harness MEMORY.md from the legacy
+# main-profile memories file, pre-truncated to the 2,200-char budget. Never
+# overwrites a user-curated harness file; $HERMES_HOME/memories/MEMORY.md may
+# itself be absent.
+[ -f "$H/memory/MEMORY.md" ] || head -c 2200 "$HERMES_HOME/memories/MEMORY.md" > "$H/memory/MEMORY.md" 2>/dev/null || true
 
 # ---- 3. OpenCode CLI config (coder two-layer) -----------------------------
 # Path is fixed by compose env (OPENCODE_CONFIG) so docker exec can verify it —
@@ -159,11 +163,12 @@ fi
 # ---- 5. Shared workspaces ---------------------------------------------------
 mkdir -p /app/projects /app/results
 
-# ---- 6. Exec the long-running gateway ---------------------------------------
-# s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init). This command runs
-# as a child of the already-running s6; exec-ing the gateway makes the container's lifetime
-# equal to the gateway process — the documented foreground daemon command for
-# Docker deployments. Bootstrap is idempotent, so a container restart re-runs
-# provisioning safely before exec-ing the gateway again.
-log "starting hermes gateway"
-exec hermes gateway run
+# ---- 6. Exec the harness ---------------------------------------------------------
+# s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init); this command runs as
+# a child of the already-running s6. exec-ing supervisord makes the container's
+# lifetime equal to the supervisor tree — supervisord runs `python -m
+# harness.supervisor` (the gateway/bot/task world) as the long-running foreground
+# program (see /app/harness/supervisord.conf). Bootstrap is idempotent, so a
+# container restart re-runs provisioning safely before exec-ing again.
+log "starting harness (supervisord)"
+exec /opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf

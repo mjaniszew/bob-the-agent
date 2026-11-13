@@ -2,7 +2,8 @@
 # Base = official Hermes Agent image, v0.21.3 (tag v2026.9.14).
 # s6-overlay v3 stays PID 1 (the image entrypoint /init is never overridden).
 # The container command is /app/scripts/bootstrap.sh: it provisions profiles,
-# then execs the long-running gateway ("hermes gateway run") as its last step.
+# then execs supervisord (/app/harness/supervisord.conf), which runs the Python
+# harness (gateway :8181) — the container's long-running foreground process.
 # Under s6-overlay v3, CMD runs as a child of the already-running /init, so the
 # gateway becomes the container's long-running foreground process.
 FROM nousresearch/hermes-agent:v2026.9.14
@@ -54,6 +55,20 @@ WORKDIR /app
 # exist (and are hermes-writable) even when the mounts are absent.
 RUN mkdir -p /app/projects /app/results \
     && chown hermes:hermes /app/projects /app/results
+
+# ── Harness (new orchestrator) ────────────────────────────────────────────
+# Plain-Python supervisor process per the harness design (thin orchestrator).
+# uv ships in the base image (0.11.6, /usr/local/bin/uv; Python 3.13 present).
+# Installs from the RUNTIME-ONLY requirements.lock (includes supervisor==4.3.0 —
+# the 3.13-era release; 4.2.5 predates 3.13). Lock generated ONCE at R1 via
+# `uv pip freeze` after install; regenerated ONLY at an explicit
+# dependency-bump phase. Dev tools stay unpinned in requirements-dev.txt and
+# never enter the image.
+COPY ./src/harness/ /app/harness/
+RUN /usr/local/bin/uv venv /opt/harness-venv --python 3.13 \
+ && /usr/local/bin/uv pip install --python /opt/harness-venv/bin/python \
+      -r /app/harness/requirements.lock \
+ && chown -R hermes:hermes /opt/harness-venv
 
 # No entrypoint override: the image default (entrypoint-dispatch.sh -> /init)
 # stays PID 1.

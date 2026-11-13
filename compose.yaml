@@ -8,7 +8,7 @@ x-agent-env: &agent-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
 x-agent-healthcheck: &agent-healthcheck
-  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
+  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8181' || exit 1"]
   interval: 30s
   timeout: 10s
   retries: 3
@@ -50,19 +50,17 @@ services:
           memory: 1G
 
   # ===========================================
-  # Hermes Agent - single multiplexed agent
-  # (profiles: main, researcher, simple, coder)
+  # Hermes Agent - single agent + Python harness long-runner
+  # (profiles: researcher, simple; harness runs the gateway, bot, tasks, scheduler)
   # ===========================================
   agent:
     image: *agent-image
     container_name: bob-the-agent
     command: ["/app/scripts/bootstrap.sh"]
     ports:
-      # Loopback-only (user decision 2026-09-19): the gateway fronts all
-      # profiles behind approvals.mode: off and its auth is unverified —
-      # nothing documented needs LAN exposure (Discord connects outbound).
-      - "8642:8642"
-      - "9119:9119"
+      # Harness gateway (API-key secured; replaces the hermes gateway + dashboard).
+      # Loopback default; widen to "8181:8181" when a reverse proxy exists.
+      - "127.0.0.1:8181:8181"
     environment:
       <<: *agent-env
       USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
@@ -73,15 +71,19 @@ services:
       USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
       HERMES_UID: ${HERMES_UID:-}
       HERMES_GID: ${HERMES_GID:-}
-      HERMES_DASHBOARD: ${HERMES_DASHBOARD:-}
-      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
-      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}
-      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
-      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
+      # Harness (thin Python orchestrator) — API key required (fail-fast if empty);
+      # router defaults to the same ollama OpenAI-compatible endpoint the profiles
+      # use; home channel is the pinned Discord notices channel (Q4).
+      HARNESS_API_KEY: ${HARNESS_API_KEY:-}
+      HARNESS_ROUTER_BASE_URL: ${HARNESS_ROUTER_BASE_URL:-http://ollama:11434/v1}
+      HARNESS_ROUTER_MODEL: ${HARNESS_ROUTER_MODEL:-glm-5.3-flash:cloud}
+      HARNESS_DATA_DIR: /opt/data/harness
+      HARNESS_WORKDIR: /app/projects
+      HARNESS_DISCORD_HOME_CHANNEL: ${HARNESS_DISCORD_HOME_CHANNEL:-}
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
     volumes:

@@ -29,6 +29,19 @@ describe('Dockerfile.hermes', () => {
     expect(dockerfileText()).toMatch(/npm install -g opencode-ai@1\.18\.32/);
   });
 
+  test('copies the harness package into the image', () => {
+    expect(dockerfileText()).toMatch(/COPY \.\/src\/harness\/ \/app\/harness\//);
+  });
+
+  test('builds the harness venv from the runtime-only lock', () => {
+    // uv ships in the base image; supervisor comes from requirements.lock
+    // (3.13-era pin) and the venv must belong to the hermes user.
+    expect(dockerfileText()).toMatch(/uv venv \/opt\/harness-venv --python 3\.13/);
+    expect(dockerfileText()).toMatch(/uv pip install --python \/opt\/harness-venv\/bin\/python/);
+    expect(dockerfileText()).toMatch(/-r \/app\/harness\/requirements\.lock/);
+    expect(dockerfileText()).toMatch(/chown -R hermes:hermes \/opt\/harness-venv/);
+  });
+
   test('per-skill installs replace the tsc build layer', () => {
     expect(dockerfileText()).toMatch(/npm ci --omit=dev/);
     expect(dockerfileText()).toMatch(/RUN --mount=type=cache,target=\/root\/\.npm/);
@@ -64,8 +77,9 @@ describe('compose.yaml infrastructure services', () => {
 
 describe('compose.yaml single-agent architecture', () => {
   // Slice out just the `agent:` service block. Several asserted keys
-  // (memory: 4G, 8642) also appear in infra services — whole-file regexes
-  // stayed green even if the agent block were gutted (Task 4 quality review).
+  // (memory: 4G, the ollama tcp healthcheck shape) also appear in infra
+  // services — agent-block-scoped regexes keep those assertions honest
+  // (Task 4 quality review).
   const agentBlock = () => {
     const m = composeText().match(/^  agent:\n([\s\S]*?)(?=^  \w|^#|^\w)/m);
     if (!m) throw new Error('agent service block not found in compose.yaml');
@@ -104,8 +118,10 @@ describe('compose.yaml single-agent architecture', () => {
 
   test('agent keeps results and projects mounts', () => {
     const b = agentBlock();
+    // projects is user-configurable (USER_PROJECTS_FOLDER) with the default
+    // ./volumes/projects — a literal-only match was stale and broke here.
     expect(b).toMatch(/\.\/volumes\/results:\/app\/results/);
-    expect(b).toMatch(/\.\/volumes\/projects:\/app\/projects/);
+    expect(b).toMatch(/\$\{USER_PROJECTS_FOLDER:-\.\/volumes\/projects\}:\/app\/projects/);
   });
 
   test('agent resource limits: 2 CPUs reserved and capped, 4G reserved / 8G limit', () => {
@@ -114,14 +130,17 @@ describe('compose.yaml single-agent architecture', () => {
     expect(b).toMatch(/limits:\s*\n\s+cpus: 2\s*\n\s+memory: 8G/);
   });
 
-  test('agent runs bootstrap.sh as command and exposes 8642 on loopback only', () => {
+  test('agent runs bootstrap.sh as command and exposes the harness gateway on 8181 loopback only', () => {
     const b = agentBlock();
     expect(b).toMatch(/command: \["\/app\/scripts\/bootstrap\.sh"\]/);
-    // Loopback-only (user decision, 2026-09-19): the single gateway fronts ALL
-    // profiles behind approvals.mode: off and its auth is unverified; nothing
-    // documented needs LAN exposure (health checks and tests use localhost,
-    // Discord connects outbound). Remote access via SSH tunnel if ever needed.
-    expect(b).toMatch(/127\.0\.0\.1:8642:8642/);
+    // Loopback-only (user decision, 2026-09-19): the harness gateway (8181)
+    // is API-key secured and nothing documented needs LAN exposure (health
+    // checks and tests use localhost, Discord connects outbound). Remote
+    // access via SSH tunnel if ever needed.
+    expect(b).toMatch(/- "127\.0\.0\.1:8181:8181"/);
+    // The removed dashboard-era port literals must be gone from the file.
+    expect(composeText()).not.toMatch(/8642/);
+    expect(composeText()).not.toMatch(/9119/);
   });
 
   test('agent no longer sets HERMES_YOLO_MODE (denylisted in v0.21)', () => {
@@ -137,6 +156,33 @@ describe('compose.yaml single-agent architecture', () => {
   test('agent depends on ollama and searxng, not nats', () => {
     expect(agentBlock()).toMatch(/depends_on:\s*\n\s+ollama:\s*\n\s+condition: service_healthy\s*\n\s+searxng:/);
     expect(composeText()).not.toMatch(/nats:/);
+  });
+
+  test('healthcheck probes the harness gateway tcp port 8181 (never 8642)', () => {
+    // The tcp probe lives in the x-agent-healthcheck anchor the agent service
+    // aliases, so assert at whole-file level.
+    const c = composeText();
+    expect(c).toMatch(/echo > \/dev\/tcp\/localhost\/8181/);
+    expect(c).not.toMatch(/8642/);
+  });
+
+  test('agent env wires the HARNESS_* contract (dashboard-era keys gone)', () => {
+    const b = agentBlock();
+    expect(b).toMatch(/HARNESS_API_KEY: \$\{HARNESS_API_KEY:-\}/);
+    expect(b).toMatch(/HARNESS_ROUTER_BASE_URL/);
+    expect(b).toMatch(/HARNESS_ROUTER_MODEL/);
+    expect(b).toMatch(/HARNESS_DATA_DIR: \/opt\/data\/harness/);
+    expect(b).toMatch(/HARNESS_WORKDIR: \/app\/projects/);
+    expect(b).toMatch(/HARNESS_DISCORD_HOME_CHANNEL/);
+    expect(composeText()).not.toMatch(/HERMES_DASHBOARD/);
+    expect(composeText()).not.toMatch(/HERMES_API_TIMEOUT/);
+  });
+
+  test('bootstrap execs supervisord (cross-file contract with the compose command)', () => {
+    // compose's command: ["/app/scripts/bootstrap.sh"] only makes sense for
+    // the R8 bootstrap whose final act is the harness long-runner exec.
+    expect(fs.readFileSync(path.join(ROOT, 'src/scripts/bootstrap.sh'), 'utf8'))
+      .toMatch(/exec \/opt\/harness-venv\/bin\/supervisord/);
   });
 });
 
@@ -164,16 +210,15 @@ describe('running stack (DOCKER_TESTS=1 only)', () => {
       throw new Error('bob-the-agent never became healthy within ~130s (start_period is 120s)');
     }, 300_000);
 
-    test('multiplexed gateway port 8642 reachable from host', () => {
-      require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8642"');
+    test('harness gateway port 8181 reachable from host', () => {
+      require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8181"');
     });
 
-    test('profiles researcher/simple/coder provisioned in /opt/data', () => {
+    test('profiles researcher/simple provisioned in /opt/data', () => {
       const out = require('child_process').execSync(
         'docker exec bob-the-agent ls /opt/data/profiles', { encoding: 'utf8' });
       expect(out).toMatch(/researcher/);
       expect(out).toMatch(/simple/);
-      expect(out).toMatch(/coder/);
     });
 
     testLive('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {

@@ -50,8 +50,9 @@ describe('Coder Agent SOUL.md', () => {
   it('should mention one-shot and interactive modes for OpenCode', () => {
     const content = fs.readFileSync(soulPath, 'utf-8');
     expect(content).toContain('opencode run');
-    expect(content).toContain('background=true');
-    expect(content).toContain('pty=true');
+    // R8: mode guidance moved into the opencode SKILL — the SOUL carries the
+    // pointer text, not literal background=true / pty=true flags.
+    expect(content).toContain('one-shot vs interactive');
   });
 
   it('should mention delegating to simple agent', () => {
@@ -76,10 +77,10 @@ describe('Coder Agent hermes.partial.yml', () => {
     expect(fs.existsSync(configPath)).toBe(true);
   });
 
-  it('should configure qwen3.5:2b-q4_K_M model', () => {
+  it('should configure the glm-5.3-flash:cloud model', () => {
     const content = fs.readFileSync(configPath, 'utf-8');
     const config = yaml.load(content) as any;
-    expect(config.model.default).toBe('qwen3.5:2b-q4_K_M');
+    expect(config.model.default).toBe('glm-5.3-flash:cloud');
   });
 
   it('should configure Ollama provider pointing to ollama:11434', () => {
@@ -112,11 +113,11 @@ describe('Coder Agent hermes.partial.yml', () => {
     expect(config.toolsets).toContain('browser');
   });
 
-  it('should have custom provider for qwen3.5:2b-q4_K_M', () => {
+  it('should have custom provider for glm-5.3-flash:cloud', () => {
     const content = fs.readFileSync(configPath, 'utf-8');
     const config = yaml.load(content) as any;
     expect(config.custom_providers).toBeDefined();
-    expect(config.custom_providers[0].name).toContain('qwen3.5:2b-q4_K_M');
+    expect(config.custom_providers[0].name).toContain('glm-5.3-flash:cloud');
   });
 });
 
@@ -161,10 +162,10 @@ describe('OpenCode Template Config', () => {
     expect(config.agents).toBeUndefined();
   });
 
-  it('should configure the build agent with qwen3.5:2b-q4_K_M model', () => {
+  it('should configure the build agent with the glm-5.3-flash:cloud model', () => {
     const content = fs.readFileSync(templatePath, 'utf-8');
     const config = JSON.parse(content);
-    expect(config.agent.build.model).toContain('qwen3.5:2b-q4_K_M');
+    expect(config.agent.build.model).toBe('ollama/glm-5.3-flash:cloud');
   });
 });
 
@@ -237,7 +238,9 @@ describe('Docker Compose - Agent Service (Coder Context)', () => {
   });
 
   it('should mount the projects volume', () => {
-    expect(agentBlock()).toMatch(/\.\/volumes\/projects:\/app\/projects/);
+    // R8: projects is user-configurable with a default fallback — matching
+    // the literal default was stale (same fix as tests/docker-compose.test.ts).
+    expect(agentBlock()).toMatch(/\$\{USER_PROJECTS_FOLDER:-\.\/volumes\/projects\}:\/app\/projects/);
   });
 
   it('should cap memory at 8G for coding tasks', () => {
@@ -272,18 +275,12 @@ describe('Delegate-Profile Skill - Coder Target', () => {
 });
 
 // ============================================================
-// Main SOUL.md Delegation Tests
+// Main SOUL.md Delegation Tests — MOVED OUT (R8)
 // ============================================================
-
-describe('Main Agent SOUL.md - Coder Delegation', () => {
-  const soulPath = path.join(PROJECT_ROOT, 'src/agents/main/SOUL.md');
-
-  it('should include coding delegation triggers', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('code');
-    expect(content).toContain('architecture');
-  });
-});
+// The 'Main Agent SOUL.md - Coder Delegation' describe read
+// src/agents/main/SOUL.md, which was deleted in R8 (main profile removed;
+// the harness long-runner replaces it). Its intent now lives in
+// tests/harness-contracts.test.ts ('main profile removed' describe).
 
 // ============================================================
 // Docker Integration Tests (skipped unless DOCKER_TESTS=1)
