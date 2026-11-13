@@ -117,6 +117,23 @@ def _boot_skills_index(cfg: HarnessConfig) -> None:
         logging.getLogger("harness.supervisor").warning("skills index rebuild failed: %s", exc)
 
 
+async def _start_bot(cfg: HarnessConfig, bus: Bus, manager: SessionManager) -> Any:
+    """Start the Discord bot on the running loop when enabled + tokened (ARCH 2.8).
+
+    Disabled (None + log) when cfg.discord.enabled is False or DISCORD_BOT_TOKEN is
+    unset/empty — the harness stays fully web-usable without it. The heavy discord
+    import happens only in the enabled path (lazy, inside spawn_bot)."""
+    if not cfg.discord.enabled:
+        logging.getLogger("harness.supervisor").info("discord bot disabled: discord.enabled false")
+        return None
+    if not (os.environ.get("DISCORD_BOT_TOKEN") or "").strip():
+        logging.getLogger("harness.supervisor").info("discord bot disabled: DISCORD_BOT_TOKEN unset")
+        return None
+    from harness.gateway.discord_bot import spawn_bot
+
+    return await spawn_bot(cfg, bus, manager)
+
+
 async def _serve(cfg: HarnessConfig) -> int:
     """Serve the gateway app until uvicorn's own signal handling stops it.
 
@@ -134,6 +151,8 @@ rate limits see the real client; left untouched when False."""
     counts = manager.replay()
     logging.getLogger("harness.supervisor").info(SessionManager.ready_line(counts))
     _boot_skills_index(cfg)
+    bot: Any | None = None
+    bot = await _start_bot(cfg, bus, manager)
     from harness.gateway.app import create_app
 
     app = create_app(cfg, bus, manager)
@@ -158,6 +177,11 @@ rate limits see the real client; left untouched when False."""
     try:
         await server.serve()
     finally:
+        if bot is not None:
+            try:
+                await bot.stop()
+            except Exception:  # noqa: BLE001 — shutdown must not mask the real exit
+                logging.getLogger("harness.supervisor").warning("discord bot stop failed")
         await bus.aclose()
     return 0
 

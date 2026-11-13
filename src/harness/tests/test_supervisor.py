@@ -113,3 +113,43 @@ def test_serve_smoke(
         pytest.skip("manual: uvicorn boot")
     exit_code = main(["--check", "--config", str(_write_check_config(tmp_path))])
     assert exit_code == 0
+
+
+async def test_supervisor_start_bot_disabled_path(
+    tmp_volume: pathlib.Path,
+    cfg,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D18/R7 wiring: _start_bot is spawned exactly once when enabled+tokened,
+    and short-circuits (never importing discord) when disabled at config or
+    token level (cheap checks BEFORE the lazy import; spawn_bot re-checks)."""
+    import harness.gateway.discord_bot as discord_module
+    from harness.bus import Bus
+    from harness.session_manager import SessionManager
+    from harness.supervisor import _start_bot
+
+    calls: list[object] = []
+
+    async def _stub(cfg_arg, bus_arg, manager_arg, **_kwargs):
+        calls.append(cfg_arg)
+
+    monkeypatch.setattr(discord_module, "spawn_bot", _stub)
+    bus = Bus()
+    manager = SessionManager(cfg, bus=bus)
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+
+    assert await _start_bot(cfg, bus, manager) is None
+    assert len(calls) == 1  # stub awaited once (enabled + tokened)
+
+    disabled = cfg.model_copy(
+        update={"discord": cfg.discord.model_copy(update={"enabled": False})}
+    )
+    assert await _start_bot(disabled, bus, manager) is None
+    assert len(calls) == 1  # short-circuit: stub NOT called
+
+    monkeypatch.delenv("DISCORD_BOT_TOKEN")
+    reenabled = cfg.model_copy(
+        update={"discord": cfg.discord.model_copy(update={"enabled": True})}
+    )
+    assert await _start_bot(reenabled, bus, manager) is None
+    assert len(calls) == 1  # token-unset: stub still NOT called
