@@ -80,32 +80,7 @@ agent:
 
 **Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same wiring pattern and runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) as main — researcher uses `glm-5.3:cloud` with `ollama_num_ctx: 256000`; simple uses `glm-5.3-flash:cloud` with `ollama_num_ctx: 65536`. Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5, main 3600/6.
 
-**Coder profile** (`src/agents/coder/hermes.partial.yml`):
-```yaml
-model:
-  default: glm-5.3-flash:cloud
-  provider: custom
-  base_url: http://ollama:11434/v1
-  ollama_num_ctx: 256000
-custom_providers:
-  - name: ollama/glm-5.3-flash:cloud
-    base_url: http://ollama:11434/v1
-    model: glm-5.3-flash:cloud
-toolsets:
-  - hermes-cli
-  - browser
-agent:
-  max_turns: 120
-  gateway_timeout: 7200
-  reasoning_effort: medium
-  local_stream_stale_timeout: 3600
-terminal:
-  backend: local
-  cwd: /app/projects
-  timeout: 3600   # OpenCode runs can take minutes per LLM call
-```
-
-The coder profile uses higher limits (120 max_turns, 7200s gateway timeout, 3600s terminal timeout) than other profiles because coding tasks typically take longer to complete.
+**Coder profile removed:** The coder Hermes profile was removed in the harness PoC final phase. The harness invokes OpenCode directly; the researcher and simple profiles remain. See `tests/coder-agent.test.ts`, which now asserts the deletion (`src/agents/coder` must not reappear).
 
 ### Runtime knobs worth knowing
 

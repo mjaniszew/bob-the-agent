@@ -1,8 +1,9 @@
 /**
- * Coder Agent Integration Tests
+ * Coder Agent Deletion + OpenCode Template Tests
  *
- * Tests for the coder profile configuration (single-container Hermes
- * multiplexing), Docker compose setup, and OpenCode template configuration.
+ * The coder Hermes profile (src/agents/coder) was removed in the harness PoC
+ * final phase: the harness invokes OpenCode directly. This file is now the
+ * coder-deletion contract plus the OpenCode template/bootstrap contract.
  *
  * Run with: npm test -- --testPathPattern=coder-agent
  * Docker tests: DOCKER_TESTS=1 npm test -- --testPathPattern=coder-agent
@@ -11,113 +12,18 @@
 import { describe, it, expect } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 // ============================================================
-// Coder Agent SOUL.md Tests
+// Coder Agent Deletion Contract
 // ============================================================
 
-describe('Coder Agent SOUL.md', () => {
-  const soulPath = path.join(PROJECT_ROOT, 'src/agents/coder/SOUL.md');
-
-  it('should exist', () => {
-    expect(fs.existsSync(soulPath)).toBe(true);
-  });
-
-  it('should contain identity section', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('Name:** Coder');
-    expect(content).toContain('Software Engineering Specialist Agent');
-  });
-
-  it('should reference delegate-profile skill', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('delegate-profile');
-  });
-
-  it('should reference opencode skill', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('opencode');
-  });
-
-  it('should mention supervision protocol', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('Supervision Protocol');
-  });
-
-  it('should mention one-shot and interactive modes for OpenCode', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('opencode run');
-    // R8: mode guidance moved into the opencode SKILL — the SOUL carries the
-    // pointer text, not literal background=true / pty=true flags.
-    expect(content).toContain('one-shot vs interactive');
-  });
-
-  it('should mention delegating to simple agent', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('simple');
-  });
-
-  it('should mention saving results to /app/results/', () => {
-    const content = fs.readFileSync(soulPath, 'utf-8');
-    expect(content).toContain('/app/results/');
-  });
-});
-
-// ============================================================
-// Coder Agent Hermes Partial Config Tests
-// ============================================================
-
-describe('Coder Agent hermes.partial.yml', () => {
-  const configPath = path.join(PROJECT_ROOT, 'src/agents/coder/hermes.partial.yml');
-
-  it('should exist', () => {
-    expect(fs.existsSync(configPath)).toBe(true);
-  });
-
-  it('should configure the glm-5.3-flash:cloud model', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.model.default).toBe('glm-5.3-flash:cloud');
-  });
-
-  it('should configure Ollama provider pointing to ollama:11434', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.model.base_url).toBe('http://ollama:11434/v1');
-  });
-
-  it('should have higher max_turns for coding tasks', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.agent.max_turns).toBeGreaterThanOrEqual(120);
-  });
-
-  it('should have higher gateway_timeout for long-running coding tasks', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.agent.gateway_timeout).toBeGreaterThanOrEqual(7200);
-  });
-
-  it('should include hermes-cli toolset', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.toolsets).toContain('hermes-cli');
-  });
-
-  it('should include browser toolset', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.toolsets).toContain('browser');
-  });
-
-  it('should have custom provider for glm-5.3-flash:cloud', () => {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const config = yaml.load(content) as any;
-    expect(config.custom_providers).toBeDefined();
-    expect(config.custom_providers[0].name).toContain('glm-5.3-flash:cloud');
+describe('Coder Agent (removed)', () => {
+  it('src/agents/coder is gone (the harness invokes OpenCode directly)', () => {
+    // Guard: if the in-container coder profile ever reappears, restore its
+    // SOUL/partial coverage deliberately instead of reviving stale tests.
+    expect(fs.existsSync(path.join(PROJECT_ROOT, 'src/agents/coder'))).toBe(false);
   });
 });
 
@@ -193,10 +99,10 @@ describe('OpenCode Template Env Substitution', () => {
 });
 
 // ============================================================
-// Bootstrap (Coder) Tests
+// Bootstrap (OpenCode layer) Tests
 // ============================================================
 
-describe('Bootstrap (Coder)', () => {
+describe('Bootstrap (OpenCode layer)', () => {
   const bootstrapPath = path.join(PROJECT_ROOT, 'src/scripts/bootstrap.sh');
   const dockerfilePath = path.join(PROJECT_ROOT, 'dockerfiles/Dockerfile.hermes');
 
