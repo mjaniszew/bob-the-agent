@@ -1,18 +1,18 @@
 # Bob The Agent
 ![Bob The Agent](img/bob-logo-sm.png)
 
-A containerized multi-agent system that runs 24/7 autonomously via Docker Compose. Built with the Hermes Agent framework and Ollama for LLM inference — all specialized agents run as Hermes profiles inside a single container.
+A containerized autonomous agent that runs 24/7 via Docker Compose. A Python harness long-runner provides the FastAPI gateway, Discord bot, task loop and scheduler, while researcher/simple Hermes profiles and Ollama (LLM inference) run in the same stack.
 
 ## Features
 
-- **Multi-Agent Architecture** — Specialized agents (orchestrator, researcher, simple tasks, coder) as Hermes profiles in a single container
+- **Multi-Agent Architecture** — Researcher and simple task agents as Hermes profiles alongside the harness in a single container
 - **Autonomous Operation** — Runs tasks without user interaction via Discord or CLI
 - **Local & Cloud Models** — Uses Ollama for both local and cloud model inference
 - **Web Search** — Built-in SearXNG metasearch engine (free, no API keys needed)
 - **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, profile delegation
 - **Discord Bot** — Chat with your agent through Discord
-- **Delegation** — Main agent delegates specialized tasks to the researcher, simple, and coder profiles in-process (no messaging transport)
-- **Coding Agent** — Dedicated coder profile with a two-layer architecture: Hermes supervising OpenCode CLI for software engineering tasks
+- **Delegation** — Harness delegates specialized tasks to the researcher and simple profiles in-process (no messaging transport)
+- **Harness Long-Runner** — Python harness long-runner — FastAPI gateway on 8181, Discord bot, task loop, in-loop APScheduler; OpenCode invoked directly for coding tasks
 - **Docker** — Easy deployment with Docker Compose
 
 ## Quick Start
@@ -80,12 +80,25 @@ docker exec bob-the-agent-ollama ollama pull kimi-k2.7-code:cloud
 # Check all containers are running
 docker compose ps
 
-# Check main agent health
-curl http://localhost:8642/health
+# Check harness gateway health (API-key secured; loopback-bound by default)
+curl http://localhost:8181/
 
 # Check Ollama
 curl http://localhost:11434/api/tags
 ```
+
+### Host smoke verification
+
+Run the smoke script on the **Docker host** (not inside a container):
+
+```bash
+./scripts/host-smoke.sh                 # full run
+./scripts/host-smoke.sh --skip-build    # re-run without rebuilding the image
+```
+
+It performs six checks: image build, `docker compose up -d`, a poll of `http://127.0.0.1:8181/` for up to ~35 minutes (first boot may pull/bootstrap a model), the `starting harness (supervisord)` startup marker in the container logs, an in-container `import harness`, and `docker compose ps` showing all four services Up. Record results in [tests/SMOKE_LOG.md](tests/SMOKE_LOG.md).
+
+> The `poc` branch is a proof-of-concept. It is **not pushed to any remote** — all work lives on the local `poc` branch only.
 
 ### 6. Configure Discord Bot (Optional)
 
@@ -117,15 +130,16 @@ See [Discord Setup](docs/DISCORD_SETUP.md) for detailed instructions.
 │  ┌─────┴──────────────────────────────────────────────┐         │
 │  │  agent (single container)                           │         │
 │  │                                                     │         │
-│  │  main profile (:8642)                               │         │
-│  │  Orchestrator + Discord bot                         │         │
+│  │  harness (:8181)                                    │         │
+│  │  FastAPI gateway + Discord bot                      │         │
+│  │  task loop + APScheduler                            │         │
 │  │                                                     │         │
 │  │  secondary profiles (multiplexed gateway):          │         │
-│  │  ┌──────────┐ ┌────────┐ ┌──────────┐              │         │
-│  │  │researcher│ │ simple │ │  coder   │              │         │
-│  │  │ Research │ │ Simple │ │ Hermes + │              │         │
-│  │  │          │ │ Tasks  │ │ OpenCode │              │         │
-│  │  └──────────┘ └────────┘ └──────────┘              │         │
+│  │  ┌──────────┐ ┌────────┐                           │         │
+│  │  │researcher│ │ simple │                           │         │
+│  │  │ Research │ │ Simple │                           │         │
+│  │  │          │ │ Tasks  │                           │         │
+│  │  └──────────┘ └────────┘                           │         │
 │  └────────────────────────────────────────────────────┘         │
 │                                                                  │
 │  ┌─────────────┐  ┌─────────┐  Web Search + Cache              │
@@ -141,17 +155,29 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed diagrams and documentat
 
 ### Environment Variables
 
+The harness gateway listens on `8181` (bound to `127.0.0.1` by default). It replaces the old main-profile `:8642` gateway; there is no `8080` gateway.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logging level | `info` |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
 | `SEARXNG_BASE_URL` | SearXNG base url | `http://searxng:8888` |
+| `HARNESS_API_KEY` | Required; API key securing the harness gateway (fail-fast). Generate one with: `openssl rand -hex 32` | (unset = startup FATAL) |
+| `HARNESS_ROUTER_BASE_URL` | OpenAI-compatible router endpoint | `http://ollama:11434/v1` |
+| `HARNESS_ROUTER_MODEL` | Router model | `glm-5.3-flash:cloud` |
+| `HARNESS_DATA_DIR` | Harness state dir (in-container) | `/opt/data/harness` |
+| `HARNESS_WORKDIR` | Harness working directory (in-container) | `/app/projects` |
+| `HARNESS_DISCORD_HOME_CHANNEL` | Pinned Discord notices/home channel for the bot | (unset) |
 | `USER_X_COM_API_TOKEN` | X.com API token | - |
 | `USER_XAI_SEARCH_API_KEY` | xAI API key for Grok search | - |
 | `USER_AWS_S3_BUCKET` | AWS S3 Bucket | - |
 | `USER_AWS_S3_REGION` | AWS S3 Region | - |
 | `USER_AWS_S3_ACCESS_KEY_ID` | AWS Access Key | - |
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | AWS Secret Key | - |
+
+> **Harness API key:** an empty `HARNESS_API_KEY` makes supervisord hit `FATAL` at startup (`config.py` fail-fast). Generate one with `openssl rand -hex 32` and put it in `.env`.
+
+> **Discord:** the bot requires the **MESSAGE CONTENT INTENT** enabled in the Discord developer portal. `discord_bot.py` sets `intents.message_content = True`; without the portal-side intent, `on_message` events carry no text.
 
 ### Agent Configuration
 
@@ -161,15 +187,15 @@ Each profile has its own configuration in `src/agents/{name}/hermes.partial.yml`
 
 | Path | Purpose |
 |------|---------|
-| `./volumes/agent` | Single agent workspace: main profile at the root, researcher/simple/coder under `profiles/` |
-| `./volumes/projects` | Shared project workspace (git repos for coder) |
+| `./volumes/agent` | Single agent workspace: profiles under `profiles/` are researcher/simple only |
+| `./volumes/projects` | Shared project workspace (git repos for coding tasks) |
 | `./volumes/results` | Task output files |
 
 ## Skills
 
 Built-in skills for:
-- in-process delegation to the researcher/simple/coder profiles
-- OpenCode CLI integration (coder profile coding engine)
+- in-process delegation to the researcher/simple profiles
+- OpenCode CLI integration (invoked directly for coding tasks)
 - SearXNG web search capabilities
 - x-com(Twitter) searching directly
 - grok (xAI) search as an x-com fallback
@@ -194,11 +220,9 @@ bob-the-agent/
 ├── dockerfiles/
 │   └── Dockerfile.hermes     # Hermes Agent container
 ├── src/
-│   ├── agents/               # Agent definitions (main, researcher, simple, coder)
-│   │   ├── main/             # Main orchestrator
+│   ├── agents/               # Agent definitions (researcher, simple)
 │   │   ├── researcher/       # Research specialist
-│   │   ├── simple/           # Simple task handler
-│   │   └── coder/            # Coding specialist (Hermes + OpenCode CLI)
+│   │   └── simple/           # Simple task handler
 │   ├── config/               # Hermes and SearXNG configuration
 │   ├── scripts/              # Container setup scripts
 │   └── skills/               # Standalone skills, invoked directly per their SKILL.md
