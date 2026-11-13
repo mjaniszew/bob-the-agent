@@ -185,12 +185,17 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
 _FLAT_ENV_BINDINGS: tuple[tuple[str, str], ...] = (
     ("HARNESS_HOST", "server.host"),
     ("HARNESS_PORT", "server.port"),
+    ("HARNESS_BEHIND_PROXY", "server.behind_proxy"),
     ("HARNESS_API_KEY", "api_key"),
     ("HARNESS_DATA_DIR", "storage.data_dir"),
     ("HARNESS_ROUTER_BASE_URL", "router.base_url"),
     ("HARNESS_ROUTER_MODEL", "router.model"),
     ("HARNESS_WORKDIR", "agents.opencode.workdir_root"),
 )
+
+# Flat env bindings carrying booleans: their raw string values are cast in
+# _read_flat_env_overrides ('true'/'1'/'yes'/'on' -> True, anything else False).
+_FLAT_ENV_BOOL_PATHS: frozenset[str] = frozenset({"server.behind_proxy"})
 
 _HARNESS_DISCORD_HOME_CHANNEL_ENV = "HARNESS_DISCORD_HOME_CHANNEL"
 _DISCORD_HOME_CHANNEL_ENV = "DISCORD_HOME_CHANNEL"
@@ -264,6 +269,8 @@ def _read_flat_env_overrides() -> dict[str, Any]:
     for env_name, dotted_path in _FLAT_ENV_BINDINGS:
         value = os.environ.get(env_name)
         if value:
+            if dotted_path in _FLAT_ENV_BOOL_PATHS:
+                value = value.strip().lower() in ("true", "1", "yes", "on")
             set_path(dotted_path, value)
 
     home_channel = os.environ.get(_HARNESS_DISCORD_HOME_CHANNEL_ENV) or os.environ.get(
@@ -302,6 +309,9 @@ class ServerConfig(BaseModel):
     # Repo reconciliation (c), user decision Q1: gateway port is 8181 everywhere
     # (the plan said 8080; superseded).
     port: int = 8181
+    # M-5b (plan 770-771 / 8.4): trust X-Forwarded-For from a localhost reverse
+    # proxy so rate limits key on the real client (default False = no change).
+    behind_proxy: bool = False
 
 
 class RateLimitConfig(BaseModel):
