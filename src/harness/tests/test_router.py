@@ -93,21 +93,84 @@ def test_route_invalid_twice_swallowed_keyword_fallback(cfg) -> None:
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("fix the login bug", "opencode"),
-        ("implement X", "opencode"),
-        ("code review", "opencode"),
-        ("refactor", "opencode"),
-        ("research X", "hermes"),
-        ("summarize", "hermes"),
-        ("deploy flask", "hermes"),
-        ("hello", "hermes"),
-        ("FIX now", "opencode"),
+        ("fix the login bug", ("opencode", None)),
+        ("implement X", ("opencode", None)),
+        ("code review", ("opencode", None)),
+        ("refactor", ("opencode", None)),
+        ("research X", ("hermes", "researcher")),
+        ("summarize", ("hermes", "researcher")),
+        ("deploy flask", ("hermes", "simple")),
+        ("hello", ("hermes", "simple")),
+        ("FIX now", ("opencode", None)),
     ],
 )
 def test_keyword_fallback_table(text: str, expected: str) -> None:
     from harness.router import _keyword_fallback
 
     assert _keyword_fallback(text) == expected
+
+
+# ---------------------------------------------------------------------------
+# 2b: profile selection (task 22) — the hermes CLI has no usable default
+# profile in the container, so hermes runs MUST carry a profile everywhere.
+# ---------------------------------------------------------------------------
+
+
+def test_route_model_has_profile() -> None:
+    assert Route(agent="hermes", task_title="t", profile="researcher").profile == "researcher"
+    assert Route(agent="hermes", task_title="t").profile is None
+
+
+def test_analysis_model_has_profile(tmp_volume, cfg) -> None:
+    analysis = Analysis(
+        agent="hermes", workdir="/app/projects/x", prompt_seed="s", profile="researcher"
+    )
+    assert analysis.profile == "researcher"
+    assert Analysis(
+        agent="hermes", workdir="/app/projects/x", prompt_seed="s"
+    ).profile is None
+
+
+def test_route_profile_unknown_value_normalized(cfg) -> None:
+    brain, _model = _brain(
+        cfg, [{"agent": "hermes", "task_title": "t", "profile": "banana"}]
+    )
+    assert brain.route("hello").profile is None
+
+
+def _boom_brain(cfg) -> RouterBrain:
+    from pydantic_ai.exceptions import ModelAPIError
+
+    def _raises(messages, info):
+        raise ModelAPIError("boomer", "provider down")
+
+    return RouterBrain(cfg, model=FunctionModel(_raises, model_name="boomer"))
+
+
+def test_fallback_profile_research(cfg) -> None:
+    route = _boom_brain(cfg).route("deep research on quantum computing")
+    assert route.agent == "hermes"
+    assert route.profile == "researcher"
+
+
+def test_fallback_profile_simple(cfg) -> None:
+    route = _boom_brain(cfg).route("hello there")
+    assert route.agent == "hermes"
+    assert route.profile == "simple"
+
+
+def test_fallback_profile_opencode_none(cfg) -> None:
+    route = _boom_brain(cfg).route("fix this bug in the code")
+    assert route.agent == "opencode"
+    assert route.profile is None
+
+
+def test_resolve_run_profile(cfg) -> None:
+    from harness.router import resolve_run_profile
+
+    assert resolve_run_profile(cfg, "hermes", None) == "simple"  # config default
+    assert resolve_run_profile(cfg, "hermes", "researcher") == "researcher"
+    assert resolve_run_profile(cfg, "opencode", "anything") is None
 
 
 # ---------------------------------------------------------------------------

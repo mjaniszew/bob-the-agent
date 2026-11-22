@@ -74,6 +74,7 @@ __all__ = [
     "Route",
     "RouterBrain",
     "long_session_guard",
+    "resolve_run_profile",
     "validate_handoff_block",
 ]
 
@@ -86,14 +87,16 @@ You are the router of a 24/7 harness: pick the agent that handles the next turn.
 ## Rules
 - agent: "opencode" for code tasks (implement, refactor, fix bugs, run tests, build tools);
   "hermes" for research and general chat (summarize, explain, plan, discuss).
+- profile (task 22): when agent is "hermes", pick "simple" for quick chat/simple
+  tasks or "researcher" for research/analysis; omit (null) for "opencode".
 - task_title: short title for the conversation thread (at most 80 characters).
 - need_context: true only when the turn clearly needs prior transcript context.
 - skill_hints: up to 3 skill names worth preloading; use [] when none apply.
 - Emit ONLY the JSON object below. No prose, no code fence, lowercase names.
 
 ## Output contract
-{"agent": "hermes" | "opencode", "task_title": "<str>", "need_context": <bool>,
- "skill_hints": ["<str>"]}
+{"agent": "hermes" | "opencode", "profile": "simple" | "researcher" | null,
+ "task_title": "<str>", "need_context": <bool>, "skill_hints": ["<str>"]}
 """
 
 # The D16 schema extension appended for the analyze() flavor.
@@ -102,9 +105,12 @@ _ANALYZE_SCHEMA = """\
 ## Analysis schema (task file analysis)
 {"agent": "hermes" | "opencode", "mode": "oneway" | "interactive" | "gate",
  "workdir": "/app/projects/<name>", "prompt_seed": "<str, at most 800 chars>",
+ "profile": "simple" | "researcher" | null,
  "task_title": "<str>", "confidence": <0..1>, "need_context": <bool>,
  "skill_hints": ["<str>"]}
 - pick agent for the TASK (code -> opencode, research/general -> hermes).
+- profile (task 22): when agent is "hermes", pick "simple" or "researcher"
+  (researcher for research/analysis tasks); omit (null) for "opencode".
 - mode "oneway" runs to completion; "interactive" shows the session in chat;
   "gate" only when a user question mid-task is expected (rare).
 - workdir MUST start with "/app/projects"; use the task's own workdir when given.
@@ -175,14 +181,44 @@ def _emit(bus: Any | None, topic: str, payload: dict) -> None:
     loop.create_task(_publish())
 
 
-def _keyword_fallback(text: str) -> str:
-    """Deterministic keyword table (plan R5): opencode keywords first, default hermes."""
+_FALLBACK_PROFILE_KEYWORDS: tuple[str, ...] = (
+    "research", "analyz", "analys", "summar", "investigat", "compar", "report", "deep dive",
+)
+
+
+def _fallback_profile(text: str) -> str:
+    """Fallback hermes profile: researcher for research-ish text, else simple."""
+    lowered = (text or "").lower()
+    for keyword in _FALLBACK_PROFILE_KEYWORDS:
+        if keyword in lowered:
+            return "researcher"
+    return "simple"
+
+
+def resolve_run_profile(cfg: Any, agent: str, profile: str | None) -> str | None:
+    """Profile for a hermes RunSpec; ``None`` for non-hermes agents (task 22).
+
+    LLM-provided profile (Route/Analysis) wins; the config default
+    (``agents.hermes.default_profile``, "simple") covers the omitted /
+    provider-down cases. Hermes never runs profile-less in the container (no
+    inference provider on the default profile).
+    """
+    if agent != "hermes":
+        return None
+    return profile or cfg.agents.hermes.default_profile
+
+
+def _keyword_fallback(text: str) -> tuple[str, str | None]:
+    """Deterministic keyword table (plan R5): opencode keywords first, default hermes.
+
+    Task 22: hermes fallback routes also carry a profile (hermes has no usable
+    default profile in the container); opencode routes carry None."""
     lowered = (text or "").lower()
     for agent in ("opencode", "hermes"):
         for keyword in _FALLBACK_KEYWORDS[agent]:
             if keyword in lowered:
-                return agent
-    return "hermes"
+                return agent, (_fallback_profile(text) if agent == "hermes" else None)
+    return "hermes", _fallback_profile(text)
 
 
 def _clamp_fields(result: Any) -> Any:
@@ -246,6 +282,16 @@ def _part_snippet(content: Any) -> str:
     return json.dumps(content, default=str)[:_SHORT_REASON_CAP]
 
 
+_VALID_PROFILES: tuple[str, ...] = ("simple", "researcher")
+
+
+def _normalize_profile(value: str | None) -> str | None:
+    """Task 22: keep only the provisioned hermes profiles; anything else -> None."""
+    if value is None:
+        return None
+    return value.strip() if value.strip() in _VALID_PROFILES else None
+
+
 class Route(BaseModel):
     """A chat-turn routing decision (ARCHITECTURE.md section 2.1, frozen order)."""
 
@@ -253,6 +299,15 @@ class Route(BaseModel):
     task_title: str
     need_context: bool = False
     skill_hints: list[str] = []
+    # Task 22: profile for hermes runs (None for opencode); the keyword
+    # fallback rules and cfg.agents.hermes.default_profile cover the
+    # provider-down / omitted cases.
+    profile: str | None = None
+
+    @field_validator("profile")
+    @classmethod
+    def _known_profile(cls, value: str | None) -> str | None:
+        return _normalize_profile(value)
 
 
 class Analysis(BaseModel):
@@ -266,6 +321,12 @@ class Analysis(BaseModel):
     confidence: float = 0.5
     need_context: bool = False
     skill_hints: list[str] = []
+    profile: str | None = None
+
+    @field_validator("profile")
+    @classmethod
+    def _known_profile(cls, value: str | None) -> str | None:
+        return _normalize_profile(value)
 
     @field_validator("workdir")
     @classmethod
@@ -696,9 +757,9 @@ class RouterBrain:
                                     elapsed_ms=elapsed)
 
     def _fallback_route(self, text: str) -> Route:
-        agent = _keyword_fallback(text)
+        agent, profile = _keyword_fallback(text)
         title = text.strip().split("\n", 1)[0][:_TITLE_MAX]
-        return Route(agent=agent, task_title=title, need_context=False, skill_hints=[])
+        return Route(agent=agent, task_title=title, need_context=False, skill_hints=[], profile=profile)
 
     def _fallback_analysis(self, task_desc: str, workdir: str) -> Analysis:
         title = task_desc.strip().split("\n", 1)[0][:_TITLE_MAX]
