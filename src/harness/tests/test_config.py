@@ -29,6 +29,7 @@ def test_defaults(
     assert cfg.router.model == "glm-5.3-flash:cloud"
     assert cfg.router.api_key is None
     assert cfg.agents.hermes.profile_timeouts == {"simple": 900, "researcher": 3600}
+    assert cfg.agents.hermes.default_profile == "simple"
     assert cfg.agents.hermes.timeout_s == 3600
     assert cfg.agents.opencode.timeout_s == 7200
     assert cfg.agents.opencode.workdir_root == "/app/projects"

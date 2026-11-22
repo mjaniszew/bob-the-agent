@@ -130,6 +130,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
             "enabled": True,
             "bin": "/opt/hermes/.venv/bin/hermes",
             "default_model": None,
+            "default_profile": "simple",  # task 22: hermes never runs profile-less in the container
             "timeout_s": 3600,  # plan section 10: chat raised to researcher parity (600 superseded)
             "max_output_bytes": 4_000_000,
             "profile_timeouts": {"simple": 900, "researcher": 3600},  # plan section 10 parity
@@ -355,6 +356,11 @@ class HermesAgentsConfig(BaseModel):
     enabled: bool = True
     bin: str = "/opt/hermes/.venv/bin/hermes"
     default_model: str | None = None
+    # Task 22: hermes has no usable default/main profile in the container — every
+    # hermes run MUST name a provisioned profile (-p). This is the fallback when
+    # a Route/Analysis carries no profile (router LLM omitted it, provider-down
+    # path only sets it via rules).
+    default_profile: str = "simple"
     # Repo reconciliation per plan section 10: chat timeout raised to researcher
     # parity (the design said 600; superseded).
     timeout_s: int = 3600
