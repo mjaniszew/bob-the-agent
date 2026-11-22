@@ -73,7 +73,7 @@ from harness.config import HarnessConfig
 from harness.errors import SessionFSMError
 from harness.memory import MemoryEngine
 from harness.persist import AtomicCounter, JsonlWriter, read_jsonl
-from harness.router import RouterBrain
+from harness.router import RouterBrain, resolve_run_profile
 from harness.session import Session
 from harness.session_manager import SessionManager
 from harness.skills import SkillsEngine
@@ -1042,7 +1042,12 @@ class TaskLoop:
             self._ledger_row(task.id, agent, attempt, "RUNNING")
             spec = RunSpec(
                 prompt=prompt,
-                profile=None,  # PoC: profile stays None (hermes adapter default)
+                # Task 22: hermes runs MUST carry a provisioned profile — the
+                # analysis profile when the router picked one, the config
+                # default (simple) otherwise; opencode runs pass None.
+                profile=resolve_run_profile(
+                    self._cfg, agent, getattr(analysis, "profile", None)
+                ),
                 workdir=getattr(analysis, "workdir", None),
                 resume_ref=session.agents_refs.get(agent),
                 timeout_s=self._timeout_for(agent),

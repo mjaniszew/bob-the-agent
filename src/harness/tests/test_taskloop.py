@@ -50,12 +50,16 @@ class _Router:
         return self.result.model_copy(update={"prompt_seed": task_desc})
 
 
-def _analysis(seed: str, *, agent: str = "hermes", mode: str = "oneway") -> Analysis:
+def _analysis(
+    seed: str, *, agent: str = "hermes", mode: str = "oneway",
+    profile: str | None = None,
+) -> Analysis:
     return Analysis(
         agent=agent,  # type: ignore[arg-type]
         mode=mode,  # type: ignore[arg-type]
         workdir="/app/projects",
         prompt_seed=seed,
+        profile=profile,
         task_title=seed[:40],
     )
 
@@ -72,6 +76,7 @@ class _Adapter:
     def run(self, spec: RunSpec) -> AsyncIterator[StreamEvent]:
         self._count += 1
         entry: dict = {"prompt": spec.prompt, "resume_ref": spec.resume_ref,
+                       "profile": spec.profile, "workdir": spec.workdir,
                        "oneway": spec.oneway, "start": time.monotonic()}
         index = self._count - 1
         self._runs.append(entry)
@@ -668,3 +673,60 @@ async def test_unknown_dep_failed_f14(cfg) -> None:
     finally:
         await loop.stop()
         assert store.read_state(_T1)["state"] == "FAILED"
+
+
+# ---------------------------------------------------------------------------
+# 21. Task 22: hermes runs carry a profile (LLM analysis value or cfg default)
+# ---------------------------------------------------------------------------
+async def test_hermes_task_carries_analysis_profile(cfg) -> None:
+    bus = _Bus()
+    store = TaskStore(cfg, bus=bus)
+    store.create_inbox_task("research transformer tokenizers", origin="user", task_id=_T5)
+    runs: list[dict] = []
+    loop = TaskLoop(
+        cfg, SessionManager(cfg, bus=bus), bus=bus,
+        adapter_factory=_factory(runs, lambda s, i: [(0.0, _final("done.", session_ref="s1"))]),
+        router=_Router(_analysis("seed", profile="researcher")),
+    )
+    loop.start()
+    try:
+        await asyncio.wait_for(_wait_state(store, _T5, "DONE"), 6)
+        assert runs and runs[0]["profile"] == "researcher"
+    finally:
+        await loop.stop()
+
+
+async def test_hermes_task_profile_falls_back_to_config_default(cfg) -> None:
+    bus = _Bus()
+    store = TaskStore(cfg, bus=bus)
+    store.create_inbox_task("plain hermes task", origin="user", task_id=_T4)
+    runs: list[dict] = []
+    loop = TaskLoop(
+        cfg, SessionManager(cfg, bus=bus), bus=bus,
+        adapter_factory=_factory(runs, lambda s, i: [(0.0, _final("done.", session_ref="s1"))]),
+        router=_Router(),
+    )
+    loop.start()
+    try:
+        await asyncio.wait_for(_wait_state(store, _T4, "DONE"), 6)
+        assert runs and runs[0]["profile"] == "simple"
+    finally:
+        await loop.stop()
+
+
+async def test_opencode_task_profile_none(cfg) -> None:
+    bus = _Bus()
+    store = TaskStore(cfg, bus=bus)
+    store.create_inbox_task("fix the failing code", origin="user", task_id=_T3)
+    runs: list[dict] = []
+    loop = TaskLoop(
+        cfg, SessionManager(cfg, bus=bus), bus=bus,
+        adapter_factory=_factory(runs, lambda s, i: [(0.0, _final("done.", session_ref="s1"))]),
+        router=_Router(_analysis("seed", agent="opencode")),
+    )
+    loop.start()
+    try:
+        await asyncio.wait_for(_wait_state(store, _T3, "DONE"), 6)
+        assert runs and runs[0]["profile"] is None
+    finally:
+        await loop.stop()
