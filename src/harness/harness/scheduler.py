@@ -71,6 +71,7 @@ from harness.adapters import get as registry_get
 from harness.adapters.base import RunSpec, build_child_env, kill_process_group, start_process
 from harness.bus import Bus
 from harness.errors import SessionFSMError
+from harness.router import resolve_run_profile
 from harness.persist import JsonlWriter
 from harness.tasks import DEFAULT_MAX_DESC_CHARS, TaskStore
 
@@ -712,7 +713,9 @@ class SchedulerEngine:
         if kind == "spawn_agent":
             return {
                 "prompt": str(record.get("prompt") or ""),
-                "agent": str(record.get("agent") or "simple"),
+                # Task 22: default agent name must be a registry agent
+                # ("hermes"/"opencode"); "simple" is a hermes PROFILE name.
+                "agent": str(record.get("agent") or "hermes"),
                 "channel": str(record.get("channel") or "schedule"),
             }
         if kind == "run_script":
@@ -758,8 +761,12 @@ class SchedulerEngine:
         cfg_agent = getattr(self._cfg.agents, route.agent, None)
         spec = RunSpec(
             prompt=prompt_text,
-            profile=None,
-            workdir=None,
+            profile=resolve_run_profile(self._cfg, route.agent, getattr(route, "profile", None)),
+            workdir=(
+                f"{self._cfg.agents.opencode.workdir_root}/harness-sessions/{session.id}"
+                if route.agent == "opencode"
+                else None
+            ),
             resume_ref=session.agents_refs.get(route.agent),
             timeout_s=None if cfg_agent is None else cfg_agent.timeout_s,
         )

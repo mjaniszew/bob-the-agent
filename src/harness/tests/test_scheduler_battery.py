@@ -38,7 +38,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from harness.adapters.base import StreamEvent
+from harness.adapters.base import RunSpec, StreamEvent
 from harness.blocks import parse_blocks
 from harness.bus import Bus
 from harness.gateway.app import create_app
@@ -116,10 +116,11 @@ def _b_bus_recorder() -> Bus:
 def _b_engine(cfg: Any, tmp_volume: Path, clock: _BClock | None = None, **kw: Any) -> Any:
     """Battery build-under-test: the real engine against tmp_volume state."""
     bus = kw.pop("bus", None) or _b_bus_recorder()
+    manager = kw.pop("manager", None)  # task 22: default spawn path tests wire one
     return SchedulerEngine(
         cfg,
         bus=bus,
-        manager=None,
+        manager=manager,
         clock=clock,
         jobs_file=str(tmp_volume / "state" / "scheduler.json"),
         **kw,
@@ -200,7 +201,7 @@ async def test_battery_spawn_agent_e2e_fakeclock(tmp_volume, cfg) -> None:
     assert record["id"] == "bat1" and record["kind"] == "spawn_agent"
     assert payload == {
         "prompt": "battery prompt for the coder",
-        "agent": "simple",
+        "agent": "hermes",  # task 22: registry-valid default agent name
         "channel": "schedule",
     }
     rows = read_jsonl(_b_ledger(cfg))
@@ -810,3 +811,77 @@ async def test_battery_demand_sink_e2e(tmp_volume, cfg) -> None:
     raw = yaml.safe_load((store.inbox / children[0] / "task.yaml").read_text(encoding="utf-8"))
     assert raw["description"] == "battery demand child"
     assert rows[0]["detail"] == {"task_id": children[0]}
+
+
+# ---------------------------------------------------------------------------
+# Task 22: spawn_agent default path — hermes profile + opencode workdir, and
+# the registry-valid default agent name in the payload.
+# ---------------------------------------------------------------------------
+class _BRecordingAdapter:
+    """_BStubAdapter with RunSpec recording."""
+
+    def __init__(self) -> None:
+        self.specs: list[RunSpec] = []
+
+    async def run(self, spec: RunSpec):
+        self.specs.append(spec)
+        yield StreamEvent(kind="final", final_text="battery final")
+
+
+async def test_battery_spawn_payload_default_agent_is_hermes(tmp_volume, cfg) -> None:
+    engine = _b_engine(cfg, tmp_volume, clock=None)
+    payload = engine._spawn_payload({"kind": "spawn_agent", "prompt": "x"})
+    assert payload["agent"] == "hermes"
+
+
+async def test_battery_spawn_agent_hermes_profile(tmp_volume, cfg) -> None:
+    adapter = _BRecordingAdapter()
+    brain = RouterBrain(
+        cfg,
+        model=make_fake_model([{"agent": "hermes", "profile": "researcher", "task_title": "R"}]),
+    )
+    engine = _b_engine(
+        cfg,
+        tmp_volume,
+        clock=None,
+        router=brain,
+        adapters={"hermes": adapter},
+        manager=SessionManager(cfg, bus=Bus()),
+    )
+    await engine.restore()
+    await engine.start()
+    try:
+        await engine._handle_spawn_agent(
+            {"id": "T22A2345", "kind": "spawn_agent", "prompt": "deep research thing"}
+        )
+        assert await _b_spin_until(lambda: bool(adapter.specs), attempts=60)
+    finally:
+        await engine.stop()
+    assert adapter.specs[0].profile == "researcher"
+
+
+async def test_battery_spawn_agent_opencode_workdir(tmp_volume, cfg) -> None:
+    adapter = _BRecordingAdapter()
+    brain = RouterBrain(
+        cfg, model=make_fake_model([{"agent": "opencode", "task_title": "work"}])
+    )
+    engine = _b_engine(
+        cfg,
+        tmp_volume,
+        clock=None,
+        router=brain,
+        adapters={"opencode": adapter},
+        manager=SessionManager(cfg, bus=Bus()),
+    )
+    await engine.restore()
+    await engine.start()
+    try:
+        await engine._handle_spawn_agent(
+            {"id": "T22B2345", "kind": "spawn_agent", "prompt": "fix the build"}
+        )
+        assert await _b_spin_until(lambda: bool(adapter.specs), attempts=60)
+    finally:
+        await engine.stop()
+    spec = adapter.specs[0]
+    assert spec.workdir is not None
+    assert spec.workdir.startswith(cfg.agents.opencode.workdir_root + "/harness-sessions/")
