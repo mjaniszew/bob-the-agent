@@ -268,6 +268,13 @@ rate limits see the real client; left untouched when False."""
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point: ``--check`` validates config and prints the data tree."""
+    # Task 22: without a root handler the harness INFO logs (ready line, discord
+    # bot, scheduler) never reach stdout — `docker logs` shows only uvicorn's
+    # own lines. Honor compose's LOG_LEVEL env (default INFO).
+    logging.basicConfig(
+        level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(
         prog="harness.supervisor", description="harness supervisor and gateway entry point"
     )
