@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -442,6 +443,68 @@ def test_handoff_creates_child_and_runs(tmp_volume: Path, cfg: HarnessConfig) ->
             "/api/handoff", json={"session_id": parent_id, "text": "no fence here"}, headers=HEADERS
         )
         assert invalid.status_code == 422
+
+
+# ----------------------------------------------------------------------
+# Task 22: hermes profile + opencode workdir on the interactive paths
+# ----------------------------------------------------------------------
+def test_chat_runspec_hermes_profile(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, adapter, _bus, _manager = make_app(
+        cfg,
+        outputs=[{"agent": "hermes", "profile": "researcher", "task_title": "Research"}],
+        delay_s=0.01,
+    )
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/chat", json={"text": "deep research topic"}, headers=HEADERS
+        )
+        assert resp.status_code == 200
+        wait_idle(client, resp.json()["session_id"])
+    assert adapter.specs and adapter.specs[0].profile == "researcher"
+
+
+def test_chat_runspec_hermes_profile_default(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, adapter, _bus, _manager = make_app(
+        cfg, outputs=[{"agent": "hermes", "task_title": "t"}], delay_s=0.01
+    )
+    with TestClient(app) as client:
+        resp = client.post("/api/chat", json={"text": "hello there"}, headers=HEADERS)
+        assert resp.status_code == 200
+        wait_idle(client, resp.json()["session_id"])
+    assert adapter.specs and adapter.specs[0].profile == "simple"
+
+
+def test_chat_runspec_opencode_workdir(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, adapter, _bus, _manager = make_app(cfg, delay_s=0.01)
+    with TestClient(app) as client:
+        resp = client.post("/api/chat", json={"text": "refactor the parser"}, headers=HEADERS)
+        assert resp.status_code == 200
+        wait_idle(client, resp.json()["session_id"])
+    assert adapter.specs, "opencode run never captured a RunSpec"
+    workdir = adapter.specs[0].workdir
+    assert workdir is not None
+    assert workdir.startswith(cfg.agents.opencode.workdir_root + "/harness-sessions/")
+    # the adapter's own validator must accept it (nested under the root)
+    assert re.compile(re.escape(cfg.agents.opencode.workdir_root) + "/").match(workdir)
+
+
+def test_handoff_runspec_hermes_profile(tmp_volume: Path, cfg: HarnessConfig) -> None:
+    app, adapter, _bus, _manager = make_app(
+        cfg,
+        outputs=[{"agent": "hermes", "profile": "researcher", "task_title": "Research"}],
+        delay_s=0.01,
+    )
+    with TestClient(app) as client:
+        parent = client.post("/api/chat", json={"text": "start the work"}, headers=HEADERS)
+        parent_id = parent.json()["session_id"]
+        wait_idle(client, parent_id)
+        handoff_text = "```HANDOFF\nAGENT: hermes\nPROMPT: continue the research\n```"
+        child_resp = client.post(
+            "/api/handoff", json={"session_id": parent_id, "text": handoff_text}, headers=HEADERS
+        )
+        assert child_resp.status_code == 200
+        wait_idle(client, child_resp.json()["session_id"])
+    assert adapter.specs and adapter.specs[-1].profile == "researcher"
 
 
 # ----------------------------------------------------------------------

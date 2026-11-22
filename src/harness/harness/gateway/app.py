@@ -78,7 +78,7 @@ from harness.errors import SessionFSMError
 from harness.gateway.ui import render_page
 from harness.memory import MemoryEngine
 from harness.persist import read_jsonl
-from harness.router import Route, RouterBrain, validate_handoff_block
+from harness.router import Route, RouterBrain, resolve_run_profile, validate_handoff_block
 from harness.session import Session
 from harness.session_manager import SessionManager
 from harness.skills import SkillsEngine
@@ -275,6 +275,15 @@ def create_app(
             adapter = entry(agent) if callable(entry) and not hasattr(entry, "run") else entry
         adapter_cache[agent] = adapter
         return adapter
+
+    def _opencode_workdir(session: Session, route: Route) -> str | None:
+        """Task 22: interactive opencode runs get a per-session workdir under
+        the configured root (the adapter validates + mkdir -p's it);
+        profile-less hermes runs are the adapter default the task fixed —
+        hermes always runs via :func:`resolve_run_profile`."""
+        if route.agent != "opencode":
+            return None
+        return f"{cfg.agents.opencode.workdir_root}/harness-sessions/{session.id}"
 
     def _assemble_prompt(session: Session, route: Route, text: str) -> str:
         """Chat prompt: memory digests when ``route.need_context`` and skill
@@ -534,8 +543,8 @@ def create_app(
 
         spec = RunSpec(
             prompt=_assemble_prompt(session, route, text),
-            profile=None,
-            workdir=None,  # Route carries no workdir (R5): analysis workdirs land R9/R10
+            profile=resolve_run_profile(cfg, route.agent, route.profile),
+            workdir=_opencode_workdir(session, route),
             resume_ref=session.agents_refs.get(route.agent),
             timeout_s=getattr(cfg.agents, route.agent).timeout_s,
         )
@@ -985,8 +994,8 @@ def create_app(
         await manager.move(child, "agent_running")
         spec = RunSpec(
             prompt=_assemble_prompt(child, route, prompt),
-            profile=None,
-            workdir=None,
+            profile=resolve_run_profile(cfg, route.agent, route.profile),
+            workdir=_opencode_workdir(child, route),
             resume_ref=child.agents_refs.get(route.agent),
             timeout_s=getattr(cfg.agents, route.agent).timeout_s,
         )
