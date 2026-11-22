@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bob the Agent — single-container bootstrap.
 # Provisions the two surviving Hermes profiles (researcher, simple), seeds the
-# Python harness state, then execs supervisord (the harness long-runner).
+# Python harness state, then execs the harness (python -m harness.supervisor).
 # s6-overlay stays PID 1 (image entrypoint entrypoint-dispatch.sh execs /init,
 # which runs this script as its main program via main-wrapper.sh — dropped to
 # the `hermes` user, HOME=/opt/data, hermes venv already on PATH).
@@ -165,10 +165,18 @@ mkdir -p /app/projects /app/results
 
 # ---- 6. Exec the harness ---------------------------------------------------------
 # s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init); this command runs as
-# a child of the already-running s6. exec-ing supervisord makes the container's
-# lifetime equal to the supervisor tree — supervisord runs `python -m
-# harness.supervisor` (the gateway/bot/task world) as the long-running foreground
-# program (see /app/harness/supervisord.conf). Bootstrap is idempotent, so a
+# a child of the already-running s6. Task 22: supervisord was removed — as the
+# unprivileged hermes user it could not REOPEN the root-owned container stdout
+# pipe (stdout_logfile=/dev/fd/1 → EACCES making dispatchers → FATAL loop, the
+# harness never launched). Exec-ing the harness directly keeps stdout inherited
+# (write-only fds need no reopen), so `docker logs` shows all harness output;
+# uvicorn handles SIGTERM (docker stop) gracefully, and compose's
+# restart: unless-stopped covers crashes. Bootstrap is idempotent, so a
 # container restart re-runs provisioning safely before exec-ing again.
-log "starting harness (supervisord)"
-exec /opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf
+# NOTE: the harness child CLIs (hermes/opencode) resolve via PATH (hermes venv
+# is already on PATH from main-wrapper) and OPENCODE_*/HERMES_HOME env below.
+log "starting harness (python -m harness.supervisor)"
+export PYTHONPATH="/app/harness"
+export PYTHONUNBUFFERED=1
+export HOME="${HERMES_HOME:-/opt/data}"
+exec /opt/harness-venv/bin/python -m harness.supervisor

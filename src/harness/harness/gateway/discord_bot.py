@@ -804,7 +804,7 @@ async def spawn_bot(
     ``import discord`` is skipped); otherwise the real discord.py client is
     built here (the ONLY lazy ``import discord`` in the module — module import
     stays lightweight and testable). First-connect failures log ERROR + return
-    None (F8: web-only; the PoC does not auto-reconnect — supervisord restarts
+    None (F8: web-only; the PoC does not auto-reconnect — docker restart: unless-stopped restarts
     the whole process). The token is NEVER logged."""
     _logger = log if log is not None else _LOG
     if not cfg.discord.enabled:

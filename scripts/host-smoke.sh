@@ -92,13 +92,13 @@ while :; do
 done
 
 logs="$(docker compose logs agent 2>/dev/null | tail -50 || true)"
-if ! printf '%s\n' "$logs" | grep -qF 'starting harness (supervisord)'; then
+if ! printf '%s\n' "$logs" | grep -qF 'starting harness (python -m harness.supervisor)'; then
   logs="$(docker logs bob-the-agent 2>/dev/null | tail -50 || true)"
 fi
-if printf '%s\n' "$logs" | grep -qF 'starting harness (supervisord)'; then
-  pass "4/6" "container logs contain 'starting harness (supervisord)'"
+if printf '%s\n' "$logs" | grep -qF 'starting harness (python -m harness.supervisor)'; then
+  pass "4/6" "container logs contain 'starting harness (python -m harness.supervisor)'"
 else
-  fail "4/6" "container logs contain 'starting harness (supervisord)'" \
+  fail "4/6" "container logs contain 'starting harness (python -m harness.supervisor)'" \
     "marker not found in the last 50 log lines"
 fi
 
