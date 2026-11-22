@@ -36,9 +36,11 @@ Design contract / live facts (probes recorded 2026-11-12; see
   trailing newline and pty ``\\r`` artifacts, EXCEPT lines matched by
   :data:`LINE_FILTERS` (query echo, banner, box/rule decoration, blanks);
   ``Resume this session with:`` help lines and ``Session:``/``Title:``/
-  ``Duration:``/``Messages:`` footer lines are faithfully relayed. Hermes runs
-  emit NO synthetic ``final`` event on success — the last relayed chunk is the
-  stream tail; a ``failed`` event, when present, is terminal (F1/F2).
+  ``Duration:``/``Messages:`` footer lines are faithfully relayed. A success
+  run ends with exactly ONE ``final`` event (task 22: the consumers — gateway
+  relay loop, discord FSM, e2e battery — treat a stream without a terminal
+  event as a failure; final_text joins all relayed chunks and carries the
+  session_ref). A ``failed`` event, when present, is terminal (F1/F2).
 - Session id: extracted from stdout (``Session:`` line first, then the
   ``hermes --resume`` help line), falling back to a read-only sqlite peek at
   the profile store (``tests/fixtures/hermes-sqlite-store-NOTE.md``). The
@@ -244,6 +246,7 @@ class HermesAdapter:
         stderr_text = ""
         error: str | None = None
         timed_out = False
+        final_text: str | None = None
         try:
             async with asyncio.timeout(timeout):
                 with tempfile.NamedTemporaryFile(
@@ -271,6 +274,7 @@ class HermesAdapter:
                             exit_code = proc.returncode
                     stderr_text = (await stderr_task).decode("utf-8", errors="replace")
                     session = extract_session_id("\n".join(stdout_parts))
+                    final_text = "\n".join(stdout_parts)
                     if session is None:
                         profile_dir = self._profile_dir(spec.profile)
                         if profile_dir is not None:
@@ -320,6 +324,15 @@ class HermesAdapter:
                 yield StreamEvent(kind="failed", error=error)
             else:
                 yield StreamEvent(kind="failed", error=error, exit_code=exit_code)
+        else:
+            # Task 22: exactly ONE success final — the R6/R7 consumers treat a
+            # stream that ends without a terminal event as a failure ("adapter
+            # stream ended without a final event"). final_text joins ALL
+            # relayed chunks so the web/discord surfaces can edit-in-place the
+            # complete reply; session_ref drives Session.set_agent_ref.
+            yield StreamEvent(
+                kind="final", final_text=final_text, session_ref=session
+            )
 
     def _resolve_timeout(self, spec: RunSpec) -> int:
         """``spec.timeout_s`` overrides both; else ``profile_timeouts[profile]``;

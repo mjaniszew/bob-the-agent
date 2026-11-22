@@ -89,7 +89,7 @@ async def test_argv_snapshot_profile_run(
     ]
     assert Path(argv[argv.index("--query-file") + 1]).name.startswith("harness-query-")
     assert calls[0]["cwd"] == os.getcwd()
-    assert [event.kind for event in events] == []
+    assert [event.kind for event in events] == ["final"]  # task 22: success terminal
 
 
 async def test_argv_snapshot_profile_run_full_featured(
@@ -337,7 +337,8 @@ async def test_session_store_fallback_when_stdout_has_no_session(
         monkeypatch, FakeProc([b"RESULT line with no session footer\r\n"], b"", 0)
     )
     events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
-    assert [event.kind for event in events] == ["chunk"]  # success, no failed event
+    # task 22: success ends with the one final event ("no failed event" intent kept)
+    assert [event.kind for event in events] == ["chunk", "final"]
     row = read_jsonl(tmp_path / "runs_ledger.jsonl")[-1]
     assert extract_session_id("RESULT line with no session footer") is None
     assert row["session_ref"] == "store-session-id"  # sqlite fallback answered
@@ -385,13 +386,14 @@ async def test_relay_filters_fixture_lines(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Fixture-driven relay: banner/box/echo lines filtered, content kept."""
+    """Fixture-driven relay: banner/box/echo lines filtered, content kept,
+    then exactly ONE success final (task 22: consumers require a terminal)."""
     adapter = _adapter(tmp_path)
     install_fake_start_process(
         monkeypatch, FakeProc(fixture_lines("hermes-oneshot-stdout.txt"), b"", 0)
     )
     events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
-    assert [(event.kind, event.text) for event in events] == [
+    assert [(event.kind, event.text) for event in events[:-1]] == [
         ("chunk", "PROBE_OK"),
         ("chunk", "Resume this session with:"),
         ("chunk", "  hermes --resume 20261112_223916_4f2531 -p simple"),
@@ -399,6 +401,8 @@ async def test_relay_filters_fixture_lines(
         ("chunk", "Duration:       9s"),
         ("chunk", "Messages:       2 (1 user, 0 tool calls)"),
     ]
+    final = events[-1]
+    assert final.kind == "final"
 
 
 async def test_relay_resumes_with_help_and_title_lines(
@@ -411,7 +415,7 @@ async def test_relay_resumes_with_help_and_title_lines(
         monkeypatch, FakeProc(fixture_lines("hermes-resume-probe.out"), b"", 0)
     )
     events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
-    assert [(event.kind, event.text) for event in events] == [
+    assert [(event.kind, event.text) for event in events[:-1]] == [
         ("chunk", "↻ Resumed session 20261112_223916_4f2531 (1 user message, 2 total messages)"),
         ("chunk", "CONT_OK"),
         ("chunk", "Resume this session with:"),
@@ -422,6 +426,25 @@ async def test_relay_resumes_with_help_and_title_lines(
         ("chunk", "Duration:       8s"),
         ("chunk", "Messages:       4 (2 user, 0 tool calls)"),
     ]
+    assert events[-1].kind == "final"
+
+
+async def test_success_final_carries_joined_text_and_session_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 22: one terminal final per success — final_text joins ALL relayed
+    chunks line-by-line and session_ref comes from the stdout footers, so the
+    consumers (gateway relay loop, discord FSM, agent_refs) bind the run."""
+    adapter = _adapter(tmp_path)
+    install_fake_start_process(
+        monkeypatch, FakeProc(fixture_lines("hermes-oneshot-stdout.txt"), b"", 0)
+    )
+    events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
+    final = events[-1]
+    assert final.kind == "final"
+    assert final.final_text == "PROBE_OK\nResume this session with:\n  hermes --resume 20261112_223916_4f2531 -p simple\nSession:        20261112_223916_4f2531\nDuration:       9s\nMessages:       2 (1 user, 0 tool calls)"
+    assert final.session_ref == "20261112_223916_4f2531"
 
 
 # --- failures, watchdog, ledger ---------------------------------------------
