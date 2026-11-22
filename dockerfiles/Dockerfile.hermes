@@ -34,6 +34,13 @@ COPY ./src/agents/ /app/agents/
 COPY ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/* && chmod -R +x /app/skills/*/scripts/ 2>/dev/null || true
 
+# Task 22: the Python harness is the ONLY orchestrator. This cont-init hook
+# (sorts before 02-reconcile-profiles) clears the persisted legacy-gateway
+# state so the base image never auto-starts `hermes gateway` (its profile
+# Discord bots would compete with the harness bot for the same identity).
+COPY ./src/scripts/cont-init-no-legacy-gateway.sh /etc/cont-init.d/02-harness-only
+RUN chmod +x /etc/cont-init.d/02-harness-only
+
 # YAML merge tooling used by generate-config.sh (merge-yaml.mjs)
 RUN cd /app/scripts && npm install js-yaml@4.1.1
 
