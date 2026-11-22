@@ -281,3 +281,21 @@ def test_supervisor_boot_skills_index_never_raises(
         record for record in caplog.records if "skills index rebuild failed" in record.message
     ]
     assert len(warnings) == 1 and warnings[0].levelno == logging.WARNING
+
+
+# ---------------------------------------------------------------------------
+# Task 22: the SHIPPED repo skills must parse (frontmatter was invalid in
+# all files whose description contained unquoted colons).
+# ---------------------------------------------------------------------------
+def test_shipped_skills_frontmatter_parses() -> None:
+    from harness.skills import _parse_frontmatter
+
+    # repo skills live at ../../skills relative to src/harness/tests (the same
+    # relative path works in-container: /app/harness/tests -> /app/skills)
+    skills_root = Path(__file__).resolve().parent.parent.parent / "skills"
+    shipped = [d for d in skills_root.iterdir() if (d / "SKILL.md").is_file()]
+    assert shipped, "shipped repo skills not found"
+    for directory in shipped:
+        reason, fields = _parse_frontmatter((directory / "SKILL.md").read_text(encoding="utf-8"))
+        assert reason is None and isinstance(fields, dict), f"{directory.name}: {reason}"
+        assert fields.get("name") and fields.get("description"), f"{directory.name}: missing name/description"

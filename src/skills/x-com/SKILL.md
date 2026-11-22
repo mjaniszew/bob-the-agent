@@ -1,6 +1,6 @@
 ---
 name: x-com
-description: Use this skill to search X.com (Twitter) directly via the native X API for posts, users, and timelines. Trigger words: x.com api search|twitter api search|x-com api
+description: "Use this skill to search X.com (Twitter) directly via the native X API for posts, users, and timelines. Trigger words: x.com api search|twitter api search|x-com api"
 ---
 
 # X.com Search Skill

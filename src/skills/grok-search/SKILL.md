@@ -1,6 +1,6 @@
 ---
 name: grok-search
-description: Use this skill to search X.com (Twitter) via xAI Grok's x_search tool. Fallback when x-com fails or when requested. Trigger words: grok search|xai search|grok x search
+description: "Use this skill to search X.com (Twitter) via xAI Grok's x_search tool. Fallback when x-com fails or when requested. Trigger words: grok search|xai search|grok x search"
 ---
 
 # Grok Search Skill
