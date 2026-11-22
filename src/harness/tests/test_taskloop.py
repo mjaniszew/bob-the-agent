@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -727,6 +728,43 @@ async def test_opencode_task_profile_none(cfg) -> None:
     loop.start()
     try:
         await asyncio.wait_for(_wait_state(store, _T3, "DONE"), 6)
+        assert runs and runs[0]["profile"] is None
+    finally:
+        await loop.stop()
+
+
+async def test_watch_continues_after_syntax_failure(cfg) -> None:
+    """Task 22 verification: after one inbox task fails with a syntax error
+    (missing workdir), the watcher must still pick up LATER dropped tasks."""
+    cfg = _tweak(cfg, poll_seconds=0.05)
+    bus = _Bus()
+    store = TaskStore(cfg, bus=bus)
+    workdir = "/app/projects/watch-t22"
+    os.makedirs(workdir, exist_ok=True)
+    bad_id = "AAA23456"
+    (store.inbox / bad_id).mkdir(parents=True)
+    (store.inbox / bad_id / "task.yaml").write_text(
+        'description: "x"\nagent: opencode\nworkdir: /app/projects/definitely-missing\n',
+        encoding="utf-8",
+    )
+    runs: list[dict] = []
+    loop = TaskLoop(
+        cfg, SessionManager(cfg, bus=bus), bus=bus,
+        adapter_factory=_factory(runs, lambda s, i: [(0.0, _final("second ran.", session_ref="s2"))]),
+        router=_Router(),
+    )
+    loop.start()
+    try:
+        await _wait_state(store, bad_id, "FAILED")
+        # drop a VALID task AFTER the failure, exactly like the live container
+        good_id = "BBB23457"
+        (store.inbox / good_id).mkdir(parents=True)
+        (store.inbox / good_id / "task.yaml").write_text(
+            'description: "create the file"\nagent: opencode\n'
+            "workdir: %s\n" % json.dumps(workdir),
+            encoding="utf-8",
+        )
+        await _wait_state(store, good_id, "DONE")
         assert runs and runs[0]["profile"] is None
     finally:
         await loop.stop()

@@ -734,8 +734,23 @@ class TaskLoop:
     # Watcher (D14): poll inbox, publish appeared once, pick up on capacity
     # ------------------------------------------------------------------
     async def _watch(self) -> None:
+        beat = 0
         while True:
             await self._poll_once()
+            beat += 1
+            # Task 22 heartbeat: a silently dead/stalled watcher strands the
+            # inbox with zero log evidence (observed live). Every ~60s at the
+            # default poll beat, log liveness so strandage is diagnosable
+            # (and a STOPPED heartbeat dates the death).
+            if beat % 30 == 0:
+                try:
+                    inbox_n = len(self._store.list_inbox())
+                except OSError:
+                    inbox_n = -1
+                _LOG.info(
+                    "taskloop watcher alive: inbox=%d capacity=%s picked=%d",
+                    inbox_n, self._capacity_free(), len(self._picked),
+                )
             await asyncio.sleep(self._cfg.tasks.poll_seconds)
 
     async def _poll_once(self) -> None:
