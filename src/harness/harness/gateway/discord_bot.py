@@ -49,7 +49,7 @@ from harness.config import HarnessConfig
 from harness.errors import SessionFSMError
 from harness.memory import MemoryEngine
 from harness.persist import read_jsonl
-from harness.router import Route, RouterBrain
+from harness.router import Route, RouterBrain, resolve_run_profile
 from harness.session import Session
 from harness.session_manager import SessionManager
 from harness.skills import SkillsEngine
@@ -229,9 +229,18 @@ class DiscordBot:
             return
         if not text.strip():
             return
+        # Task 22: every inbound message is logged at INFO (before allowlist)
+        # so a "online but silent" bot is diagnosable from the harness logs.
+        self._log.info(
+            "discord inbound: channel=%s user=%s",
+            getattr(message.channel, "id", "?"),
+            getattr(message.author, "id", "?"),
+        )
         if not self.is_allowed(message):
-            self._log.debug(
-                "discord message from %s denied by allowlist", getattr(message.author, "id", "?")
+            self._log.info(
+                "discord inbound denied by allowlist: channel=%s user=%s",
+                getattr(message.channel, "id", "?"),
+                getattr(message.author, "id", "?"),
             )
             return
         channel = message.channel
@@ -321,8 +330,14 @@ class DiscordBot:
         await self._manager.move(session, "agent_running")
         spec = RunSpec(
             prompt=self._assemble_prompt(session, route, text),
-            profile=None,
-            workdir=None,
+            profile=resolve_run_profile(
+                self._cfg, route.agent, getattr(route, "profile", None)
+            ),
+            workdir=(
+                f"{self._cfg.agents.opencode.workdir_root}/harness-sessions/{session.id}"
+                if route.agent == "opencode"
+                else None
+            ),
             resume_ref=session.agents_refs.get(route.agent),
             timeout_s=getattr(self._cfg.agents, route.agent).timeout_s,
         )
@@ -830,6 +845,15 @@ async def spawn_bot(
             await client.start(token)
         except asyncio.CancelledError:
             raise
+        except discord.errors.PrivilegedIntentsRequired:
+            # Task 22: the generic "connect failed" below names the symptom;
+            # this names the fix. The exception still surfaces via first_connect.
+            _logger.error(
+                "discord bot disabled: privileged intents rejected — enable MESSAGE "
+                "CONTENT and SERVER MEMBERS intents for this app in the Discord "
+                "developer portal"
+            )
+            return
         except Exception:  # noqa: BLE001 — surfaced through first_connect below
             return
         finally:

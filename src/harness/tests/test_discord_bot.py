@@ -500,3 +500,72 @@ async def test_home_channel_notice(
         if record.name == "harness.gateway.discord"
     )
     assert len(client.sent_to.get(home.id, [])) == 2  # no home-channel send after unset
+
+
+# ----------------------------------------------------------------------
+# Task 22: hermes profile + opencode workdir + inbound/denial logging
+# ----------------------------------------------------------------------
+
+
+async def test_chat_runspec_hermes_profile(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bot, _bus, _manager, adapter, client = await _make_bot(
+        cfg,
+        monkeypatch,
+        outputs=[{"agent": "hermes", "profile": "researcher", "task_title": "Research"}],
+        delay_s=0.0,
+    )
+    await _guild_turn(bot, client, 5100, 5101, "deep research topic")
+    assert adapter.specs and adapter.specs[0].profile == "researcher"
+
+
+async def test_chat_runspec_hermes_profile_default(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bot, _bus, _manager, adapter, client = await _make_bot(
+        cfg, monkeypatch,
+        outputs=[{"agent": "hermes", "task_title": "t"}],
+        delay_s=0.0,
+    )
+    await _guild_turn(bot, client, 5100, 5101, "hello there")
+    assert adapter.specs and adapter.specs[0].profile == "simple"
+
+
+async def test_chat_runspec_opencode_workdir(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bot, _bus, _manager, adapter, client = await _make_bot(cfg, monkeypatch, delay_s=0.0)
+    await _guild_turn(bot, client, 5100, 5101, "fix this bug")
+    assert adapter.specs, "opencode run never captured a RunSpec"
+    workdir = adapter.specs[0].workdir
+    assert workdir is not None
+    assert workdir.startswith(cfg.agents.opencode.workdir_root + "/harness-sessions/")
+
+
+async def test_inbound_logged_at_info(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    bot, _bus, _manager, _adapter, client = await _make_bot(cfg, monkeypatch, delay_s=0.0)
+    with caplog.at_level(logging.INFO, logger="harness.gateway.discord"):
+        await _guild_turn(bot, client, 5100, 5101, "hello there")
+    assert any(
+        "discord inbound" in record.getMessage() for record in caplog.records
+    )
+
+
+async def test_denial_logged_at_info(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    bot, _bus, _manager, _adapter, client = await _make_bot(
+        cfg, monkeypatch, users="999", delay_s=0.0
+    )
+    message = make_message(
+        client, "hello", channel=client.channels[5100],
+        user=FakeUser(5101), member=FakeMember(5101, roles=[]),
+    )
+    with caplog.at_level(logging.INFO, logger="harness.gateway.discord"):
+        await bot.on_message(message)
+    assert any(
+        "denied by allowlist" in record.getMessage() for record in caplog.records
+    )
