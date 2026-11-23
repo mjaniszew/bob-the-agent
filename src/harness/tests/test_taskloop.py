@@ -768,3 +768,42 @@ async def test_watch_continues_after_syntax_failure(cfg) -> None:
         assert runs and runs[0]["profile"] is None
     finally:
         await loop.stop()
+
+
+async def test_watcher_survives_invalid_inbox_id(cfg) -> None:
+    """Task 22 verification: an inbox dir with an INVALID id (e.g. digits 8/9)
+    raised ValueError from _require_task_id — outside _pick_up's catch list —
+    and silently killed the watcher task, stranding every later task. The
+    watcher must log-and-skip the bad id and keep processing valid ones."""
+    cfg = _tweak(cfg, poll_seconds=0.05)
+    bus = _Bus()
+    store = TaskStore(cfg, bus=bus)
+    workdir = "/app/projects/watch-t22b"
+    os.makedirs(workdir, exist_ok=True)
+    # invalid id: alphabet digits are 2-7 only — this id carries 8s/9s
+    bad_id = "BADID9999"
+    (store.inbox / bad_id).mkdir(parents=True)
+    (store.inbox / bad_id / "task.yaml").write_text(
+        'description: "never picked (invalid id)"\n', encoding="utf-8"
+    )
+    runs: list[dict] = []
+    loop = TaskLoop(
+        cfg, SessionManager(cfg, bus=bus), bus=bus,
+        adapter_factory=_factory(runs, lambda s, i: [(0.0, _final("still alive.", session_ref="s3"))]),
+        router=_Router(),
+    )
+    loop.start()
+    try:
+        good_id = "CCC24567"
+        (store.inbox / good_id).mkdir(parents=True)
+        (store.inbox / good_id / "task.yaml").write_text(
+            'description: "create the file"\nagent: opencode\n'
+            "workdir: %s\n" % json.dumps(workdir),
+            encoding="utf-8",
+        )
+        await _wait_state(store, good_id, "DONE")
+        # the bad id stays in the inbox (rejected, never silently swallowed)
+        assert bad_id in store.list_inbox()
+        assert len(runs) == 1  # only the good task ran
+    finally:
+        await loop.stop()

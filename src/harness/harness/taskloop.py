@@ -174,6 +174,9 @@ class TaskLoop:
         # and ids ever picked up (never re-fired, even if re-dropped into the
         # inbox — the re-dropped dir is left in place, documented deviation).
         self._announced: set[str] = set()
+        # Task 22: inbox dirs rejected permanently (invalid id alphabet, etc.)
+        # — logged once, never retried, never swallowed silently.
+        self._rejected: set[str] = set()
         self._picked: set[str] = set()
         # Boot replay state: requeue-once guards + the pre-loop pending list.
         self._boot_queued: set[str] = set()
@@ -736,7 +739,14 @@ class TaskLoop:
     async def _watch(self) -> None:
         beat = 0
         while True:
-            await self._poll_once()
+            try:
+                await self._poll_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — task 22: the watcher must
+                # NEVER die silently (one malformed inbox dir used to strand
+                # the whole inbox with zero log evidence).
+                _LOG.exception("taskloop watcher beat failed: %s", exc)
             beat += 1
             # Task 22 heartbeat: a silently dead/stalled watcher strands the
             # inbox with zero log evidence (observed live). Every ~60s at the
@@ -767,7 +777,7 @@ class TaskLoop:
             _LOG.warning("watcher: inbox listing failed: %s", exc)
             return
         for task_id in inbox_ids:
-            if task_id in self._picked:
+            if task_id in self._picked or task_id in self._rejected:
                 continue
             if task_id not in self._announced:
                 self._announced.add(task_id)
@@ -776,7 +786,21 @@ class TaskLoop:
                     {"task_id": task_id, "path": str(self._store.inbox / task_id)},
                 )
             if self._capacity_free():
-                await self._pick_up(task_id)
+                try:
+                    await self._pick_up(task_id)
+                except asyncio.CancelledError:
+                    raise
+                except (ValueError, TaskSchemaError) as exc:
+                    # Task 22: a malformed inbox dir (e.g. invalid id alphabet)
+                    # is systematic — reject it forever instead of dying (the
+                    # per-task crash used to kill the watcher silently and
+                    # strand every later task) or spamming every beat.
+                    self._rejected.add(task_id)
+                    _LOG.error(
+                        "watcher: rejecting inbox %s permanently: %s", task_id, exc
+                    )
+                except Exception as exc:  # noqa: BLE001 — transient (I/O):
+                    _LOG.warning("watcher: pickup of %s deferred: %s", task_id, exc)
 
     def _capacity_free(self) -> bool:
         cap = max(1, int(self._cfg.tasks.max_concurrent))
