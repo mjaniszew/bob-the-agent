@@ -4,7 +4,7 @@ This document describes the architecture of Bob The Agent system.
 
 ## Container Architecture
 
-The system runs as a single Hermes Agent container managed by Docker Compose. All specialized agents (main, researcher, simple, coder) are **Hermes profiles** inside that one container — there is no messaging transport and no per-agent container. The `agent` service runs the default profile (`main`) as the primary agent, with the gateway multiplexing the secondary profiles; it shares a common Ollama model provider and SearXNG search engine with the infra containers. The image is `bob-the-agent:latest`, built from `dockerfiles/Dockerfile.hermes` (based on the official Hermes Agent image `nousresearch/hermes-agent:v2026.9.14`, Hermes v0.21.3).
+The system runs as a single container managed by Docker Compose. The orchestrator is the **Python harness** (pydantic-AI-based, gateway :8181) that delegates to two Hermes profiles (`researcher`, `simple`) and OpenCode CLI via one-shot subprocesses — there is no messaging transport and no per-agent container. It shares a common Ollama model provider and SearXNG search engine with the infra containers. The image is `bob-the-agent:latest`, built from `dockerfiles/Dockerfile.hermes` (based on the official Hermes Agent image `nousresearch/hermes-agent:v2026.9.14`, Hermes v0.21.3).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -20,19 +20,23 @@ The system runs as a single Hermes Agent container managed by Docker Compose. Al
 │  ┌─────┴──────────────────────────────────────────────────────┐         │
 │  │  agent (single container)                                   │         │
 │  │                                                             │         │
-│  │  default profile "main"                                     │         │
-│  │  ├─ Hermes agent (main orchestrator)                        │         │
-│  │  ├─ multiplexed gateway (:8642)                             │         │
-│  │  └─ Discord bot (outbound)                                  │         │
+│  │  Python harness (the orchestrator; task 22 replaces the old │         │
+│  │  gateway; replaces the old "main"-profile orchestration):  │         │
+│  │  ├─ gateway (:8181, FastAPI + htmx UI, X-API-Key auth)      │         │
+│  │  ├─ pydantic-AI router brain (hermes vs opencode + profile)  │        │
+│  │  ├─ Discord bot (single identity, harness-owned)            │         │
+│  │  └─ taskloop + scheduler (inbox queue, cron jobs)           │         │
 │  │                                                             │         │
-│  │  secondary profiles (/opt/data/profiles/):                  │         │
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────────────┐      │         │
-│  │  │ researcher │ │ simple     │ │ coder              │      │         │
-│  │  │ research   │ │ simple     │ │ Hermes + OpenCode  │      │         │
-│  │  │ specialist │ │ tasks      │ │ CLI (coding engine)│      │         │
-│  │  └────────────┘ └────────────┘ └────────────────────┘      │         │
-│  │  delegated via `hermes -p <profile> chat --oneshot`         │         │
-│  │  (in-process, delegate-profile skill)                       │         │
+│  │  Hermes profiles (/opt/data/profiles/):                     │         │
+│  │  ┌────────────┐ ┌────────────┐                              │         │
+│  │  │ researcher │ │ simple     │                              │         │
+│  │  │ research   │ │ simple     │                              │         │
+│  │  │ specialist │ │ tasks      │                              │         │
+│  │  └────────────┘ └────────────┘                              │         │
+│  │  called via `hermes -p <profile> chat --oneshot`            │         │
+│  │  (one-shot subprocess per run; always a provisioned profile)│         │
+│  │  OpenCode CLI = coding engine (`opencode run`, workdir      │         │
+│  │  under /app/projects)                                        │        │
 │  └─────────────────────────────────────────────────────────────┘         │
 │                                                                         │
 │  ┌──────────────────────────────────────────────────┐                   │
@@ -49,9 +53,10 @@ The system runs as a single Hermes Agent container managed by Docker Compose. Al
 │  │  - ollama_data (models)                                      │       │
 │  │  - searxng_config, searxng_data (search engine)              │       │
 │  │  - valkey_data (cache)                                       │       │
-│  │  - ./volumes/agent (single agent workspace: main profile at  │       │
-│  │    the root, researcher/simple/coder under profiles/)        │       │
-│  │  - ./volumes/projects (shared project workspace for coder)   │       │
+│  │  - ./volumes/agent (single agent workspace: harness state  │       │
+│  │    under /harness, profiles under profiles/)                │       │
+│  │  - ./volumes/projects (shared project workspace, opencode   │       │
+│  │    workdir root)                                             │       │
 │  │  - ./volumes/results (task outputs)                          │       │
 │  └──────────────────────────────────────────────────────────────┘       │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -59,20 +64,20 @@ The system runs as a single Hermes Agent container managed by Docker Compose. Al
 
 ### In-process Delegation
 
-Profiles are delegated to **in-process** — there is no messaging layer. The `delegate-profile` skill (used by the main profile) runs the target profile via the `hermes` CLI, exactly as an operator would:
+Agents are invoked **in-process** as one-shot subprocesses — there is no messaging layer. The harness router (`RouterBrain`) picks the agent + hermes profile; the adapter runs the CLI directly:
 
-- **Foreground**: `hermes -p <profile> chat --oneshot` runs the task to completion; the result summary is returned directly
-- **Background**: the skill starts the same one-shot run detached with a log file and a `.running` marker, which `check_task` polls (state lives under `/opt/data/delegation/`)
-- **File handoff**: result files are written to `/app/results` (mounted at `./volumes/results` on the host), passed via the `save_results_to` parameter
+- **Hermes**: `hermes -p <profile> chat --oneshot --query-file <tmpfile> ...` (task 22: ALWAYS a provisioned profile — `simple` for quick chat/simple tasks, `researcher` for research/analysis; the router LLM picks with keyword fallbacks and `agents.hermes.default_profile` as the safety net)
+- **OpenCode**: `opencode run <prompt> --format json ...` inside a validated workdir under `/app/projects` (task-inbox tasks carry their own workdir; chat/Discord/scheduled runs get `/app/projects/harness-sessions/<session-id>`)
+- **File handoff / results**: task result files land under the task dir (`tasks/<id>/result.md`); `/app/results` (mounted at `./volumes/results`) remains the payload drop for handoff-style flows
 
-Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60m, coder 120m). Orphaned background tasks (a `.running` marker that outlived the target's timeout + grace, e.g. after a container restart) are reported with `stale: true`; delegation logs and `.running` markers are auto-cleaned after 7 days. A gateway limitation prevents a multiplexed gateway session from messaging other profiles via `message_agent` (tracked upstream in Hermes issue #91260); the CLI-based delegation above is the working path today, and the per-profile Bot Chat sessions (`message_agent`/Bot Chat) created at bootstrap are the future messaging path once that issue is resolved.
+Per-run timeouts live in the harness config (`agents.*.timeout_s`, `agents.hermes.profile_timeouts`), enforced by the adapter watchdog (process-group kill). Runs are streamed into the session transcript and (for tasks) recorded in the runs ledger.
 
 ### Services
 
 | Service | Description | Port |
 |---------|-------------|------|
 | `ollama` | LLM inference engine (local and cloud models) | 11434 |
-| `agent` | Single Hermes Agent container — default profile `main` (orchestrator + Discord) with a gateway multiplexing the researcher/simple/coder profiles | 8642 (gateway); 9119 (dashboard) |
+| `agent` | Single container: the Python harness (gateway/UI :8181, router, Discord bot, task loop, scheduler) delegating to the Hermes profiles (`researcher`, `simple`) and OpenCode | 8181 (harness gateway, loopback) |
 | `searxng` | Privacy-respecting metasearch engine | 8888 |
 | `valkey` | Redis-compatible cache for SearXNG | 6379 |
 
@@ -81,55 +86,34 @@ Each target has a fixed timeout enforced by the skill (simple 15m, researcher 60
 - `agent` depends on `ollama` (LLM inference, healthy) and `searxng` (started)
 - `searxng` depends on `valkey` (caching)
 
-The compose `agent` healthcheck is a TCP check on port 8642 (`start_period: 120s`). The gateway answers 200 on `/health` and `/v1/health`; `/healthz` is not a gateway endpoint (404s). Port 9119 serves the Hermes dashboard (an s6 service), gated on the `HERMES_DASHBOARD` env var; non-loopback binds require authentication (`HERMES_DASHBOARD_BASIC_AUTH_USERNAME`/`_PASSWORD`/`_SECRET` or OAuth).
+The compose `agent` healthcheck is a TCP check on port 8181 (`start_period: 120s`). The harness gateway answers `{"ok":true}` on `/healthz` and serves the UI at `/` (task 22: bootstrap execs `python -m harness.supervisor` directly — no supervisord layer; the legacy per-profile Hermes gateway is held down by the `02-harness-only` cont-init hook so the harness bot owns the Discord identity).
 
 ### Agent Profiles
 
+The orchestrator is the **Python harness** (`/app/harness`, gateway/UI + router + Discord bot + task loop + scheduler) — there is no `main` profile. The Hermes profiles are one-shot workers the harness invokes:
+
 | Profile | Model (default) | Role |
 |-------|-------|------|
-| `main` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Main orchestrator — receives tasks, delegates to specialist profiles, provides Discord bot, manages results |
 | `researcher` | `glm-5.3:cloud` (cloud, via Ollama) | Research specialist — performs deep research, analysis, cross-referencing of sources |
-| `simple` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Simple task handler — web search, summaries, data extraction, S3 uploads |
-| `coder` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Coding specialist — Hermes profile orchestrating OpenCode CLI for software engineering tasks |
+| `simple` | `glm-5.3-flash:cloud` (cloud, via Ollama) | Simple task handler — web search, summaries, data extraction, S3 uploads; the `agents.hermes.default_profile` chat fallback |
 
 Model defaults live in `src/config/hermes.template.yaml`; per-profile overrides (e.g. the per-request `ollama_num_ctx` context pins) are set in `src/agents/{name}/hermes.partial.yml` (see [Configuration Guide](./CONFIGURATION.md)). GLM cloud limits: 512000-token context, 32000-token output.
 
-The coder profile's OpenCode layer (`src/config/opencode.template.jsonc` → `opencode.jsonc`) configures its own agent models: `build` primary = `glm-5.3-flash:cloud`, `plan` primary = `glm-5.3:cloud`, `code-reviewer` primary = `kimi-k2.7-code:cloud` (read-only: write/edit tools disabled); its subagents (`general`, `explore`, `scout`) use `glm-5.3-flash:cloud`.
+Coding tasks are handled by **OpenCode CLI** (its own agent, not a Hermes profile — task 22 removed the coder profile): OpenCode CLI is installed at image build time (`npm install -g opencode-ai@1.18.32`, a deliberate pin — not `@latest`) and invoked by the harness as `opencode run <prompt> --format json` inside a validated workdir under `/app/projects`. Its agent models (`src/config/opencode.template.jsonc` → `opencode.jsonc`): `build` primary = `glm-5.3-flash:cloud`, `plan` primary = `glm-5.3:cloud`, `code-reviewer` primary = `kimi-k2.7-code:cloud` (read-only: write/edit tools disabled); its subagents (`general`, `explore`, `scout`) use `glm-5.3-flash:cloud`.
 
-### Coder Profile: Two-Layer Architecture
-
-Unlike the other profiles that use a single Hermes Agent instance, the coder profile uses a **two-layer architecture** where Hermes acts as a supervisor and communication bridge, and OpenCode CLI serves as the coding engine. Both layers live in the same container; OpenCode CLI is installed at image build time (`npm install -g opencode-ai@1.18.32`, a deliberate pin — not `@latest`):
+### OpenCode: Coding Engine
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                Coder profile (in the agent container)            │
+│                OpenCode CLI (in the agent container)            │
 │                                                                 │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Layer 1: Hermes profile "coder" (Supervisor/Bridge)        ││
-│  │                                                             ││
-│  │  - Receives tasks via in-process delegation                 ││
-│  │    (delegate-profile skill → hermes -p coder --oneshot)     ││
-│  │  - Translates tasks into OpenCode prompts                   ││
-│  │  - Monitors OpenCode via terminal/process tools             ││
-│  │  - Reports results back (summary + /app/results files)      ││
-│  │  - Sends status updates for long-running tasks             ││
-│  │                                                             ││
-│  │  Communication:  terminal() + process() tools               ││
-│  │                  ──────────────────────                     ││
-│  │                  ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼                     ││
-│  ├─────────────────────────────────────────────────────────────┤│
-│  │  Layer 2: OpenCode CLI (Coding Engine)                      ││
-│  │                                                             ││
-│  │  - Executes coding tasks (write, refactor, debug, review)   ││
-│  │  - Operates on repos in /app/projects/                     ││
-│  │  - Uses cloud GLM models from opencode.jsonc                ││
-│  │  - Supports one-shot (opencode run) and                    ││
-│  │    interactive modes                                        ││
-│  │  - Configured via opencode.jsonc (env-substituted template) ││
-│  └─────────────────────────────────────────────────────────────┘│
+│  - Invoked per run by the harness opencode adapter:             │
+│    `opencode run <prompt> --format json` (NDJSON event stream)  │
+│  - workdir is mandatory and must be nested under /app/projects  │
+│    (task workdir, or /app/projects/harness-sessions/<session>)  │
+│  - Configured via opencode.jsonc (env-substituted template)     │
 │                                                                 │
 │  Volumes:                                                       │
-│  - /opt/data/profiles/coder <- profile workspace (config, etc.) │
 │  - /app/projects     <- shared git repos and code              │
 │  - /app/results      <- task output files                      │
 └─────────────────────────────────────────────────────────────────┘
@@ -137,7 +121,7 @@ Unlike the other profiles that use a single Hermes Agent instance, the coder pro
 
 ## Configuration Flow
 
-The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the container command; the script provisions the default (main) profile and the three secondary profiles, then execs the long-running gateway:
+The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the container command; the script provisions the two Hermes profiles (`researcher`, `simple`), seeds the harness state, and then execs the harness long-runner directly (task 22: `python -m harness.supervisor` — no supervisord layer; the legacy hermes gateway never auto-runs, see the `02-harness-only` cont-init hook):
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -145,16 +129,14 @@ The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the conta
 │                                                               │
 │  bootstrap.sh (container CMD /app/scripts/bootstrap.sh)       │
 │     │                                                         │
-│     ├── 1. Default profile (main)                             │
+│     ├── 2. Hermes profiles (researcher, simple)               │
+│     │   Each under /opt/data/profiles/{name}/:                │
 │     │   ├── config.yaml missing? → generate-config.sh         │
-│     │   │   (merge hermes.template.yaml + main partial via    │
-│     │   │    merge-yaml.mjs, partial wins)                    │
-│     │   └── config.yaml exists? → reconcile with the current  │
-│     │       partial (one-time .pre-reconcile.bak snapshot;    │
-│     │       partial wins, user-only keys preserved)           │
-│     │   └── Copy SOUL.md + skills (skips node_modules)        │
-│     │                                                         │
-│     ├── 2. Secondary profiles (researcher, simple, coder)     │
+│     │   │   (merge hermes.template.yaml + the profile partial │
+│     │   │    via merge-yaml.mjs, partial wins)                │
+│     │   ├── config.yaml exists? → reconcile with the current  │
+│     │   │   partial (one-time .pre-reconcile.bak snapshot)    │
+│     │   └── SOUL.md, skills, profile.yaml, per-profile .env   │
 │     │   Each under /opt/data/profiles/{name}/:                │
 │     │   ├── config.yaml (generate or reconcile, as above)     │
 │     │   ├── SOUL.md, skills/, profile.yaml bot roster         │
@@ -166,18 +148,21 @@ The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the conta
 │     │   └── env-substitute opencode.template.jsonc →          │
 │     │       /opt/data/.config/opencode/opencode.jsonc         │
 │     │                                                         │
-│     ├── 4. Default Ollama model                               │
+│     ├── 4. Harness state root (+ skills seed)                 │
+│     │   └── /opt/data/harness (config from template once,     │
+│     │       memory seed, skills)                              │
+│     ├── 5. Default Ollama model                               │
 │     │   └── Pull the template default glm-5.3-flash:cloud if  │
 │     │       missing (best-effort, capped at 30 minutes); a    │
 │     │       cloud manifest pull, not a large local download   │
 │     │                                                         │
-│     └── 5. exec hermes gateway run                            │
-│          (gateway fronts all profiles; container lifetime     │
-│           equals the gateway process)                         │
+│     └── 5. exec python -m harness.supervisor                  │
+│          (the gateway/UI fronts the harness; container        │
+│           lifetime equals the harness process)                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Bootstrap is idempotent — a container restart re-runs provisioning safely before exec-ing the gateway again.
+Bootstrap is idempotent — a container restart re-runs provisioning safely before exec-ing the harness again.
 
 ### Key Files
 
@@ -186,8 +171,8 @@ Bootstrap is idempotent — a container restart re-runs provisioning safely befo
 | `src/config/hermes.template.yaml` | Shared Hermes config template (model defaults, toolsets, agent settings; sets `gateway.multiplex_profiles: true`, which applies globally to the single gateway) |
 | `src/agents/{name}/hermes.partial.yml` | Per-profile config overrides (e.g. per-request Ollama context via `ollama_num_ctx`) |
 | `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
-| `src/config/opencode.template.jsonc` | OpenCode CLI config template for coder profile (env-substituted at startup) |
-| `src/scripts/bootstrap.sh` | Container command: provisions all profiles, then execs the gateway |
+| `src/config/opencode.template.jsonc` | OpenCode CLI config template (env-substituted at startup) |
+| `src/scripts/bootstrap.sh` | Container command: provisions profiles + harness state, then execs `python -m harness.supervisor` |
 | `src/scripts/generate-config.sh` | Config generation orchestrator |
 | `src/scripts/merge-yaml.mjs` | YAML deep-merge utility (partial wins on overlapping keys) |
 | `src/scripts/migrate-volumes.sh` | One-time migration of old per-agent volumes into `./volumes/agent` |
@@ -249,7 +234,7 @@ Skills ship with their manifests: `src/skills/` is copied as-is to `/app/skills`
 | aws-s3 | ✅ Active | Upload files and generate presigned URLs for S3 |
 | data-extraction | ✅ Implemented | Extract structured data from websites/documents |
 | math-operations | ✅ Implemented | Mathematical calculations and operations |
-| delegate-profile | ✅ Active | In-process task delegation to the researcher/simple/coder profiles |
+| delegate-profile | ✅ Active | In-process task delegation to the researcher/simple profiles |
 
 Skills are invoked directly (see each SKILL.md for flags and parameters):
 ```bash
@@ -260,64 +245,59 @@ node /app/skills/<skill-name>/cli.ts '<json-params>'
 ## Data Flow
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                           Data Flow                                  │
-│                                                                      │
-│  User → Discord → agent Gateway (:8642)                              │
-│                        │                                             │
-│                        ▼                                             │
-│                  Main profile (Orchestrator)                          │
-│                        │                                             │
-│           ┌────────────┼──────────────┬──────────────┐               │
-│           │            │              │              │                │
-│           ▼            ▼              ▼              ▼                │
-│     direct        delegate-profile  delegate-profile delegate        │
-│     execution     (in-process)      (in-process)     (in-process)    │
-│           │            │              │                              │
-│           ▼            ▼              ▼                              │
-│        main       researcher    simple          coder                │
-│     (own work)    (deep research) (simple tasks) (Hermes + OpenCode)  │
-│           │            │              │                              │
-│           ▼            ▼              ▼                              │
-│    ┌─────────────────────────────────────────────────────┐          │
-│    │   /opt/data/ (main profile workspace)                │          │
-│    │   - SOUL.md                                         │          │
-│    │   - memories/ (daily notes)                         │          │
-│    │   - config.yaml (Hermes config)                     │          │
-│    │   - skills/, delegation/ (task logs & markers)      │          │
-│    │   - profiles/{researcher,simple,coder}/             │          │
-│    └─────────────────────────────────────────────────────┘          │
-│                        │                                             │
-│                        ▼                                             │
-│                 ./volumes/results/                                    │
-│              (final output to user)                                  │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    External Services                          │   │
-│  │  ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌─────────┐  │   │
-│  │  │ SearXNG  │  │ X.com API    │  │ xAI Grok │  │ AWS S3  │  │   │
-│  │  │  :8888   │  │ (via x-com)  │  │ (grok)   │  │         │  │   │
-│  │  └──────────┘  └──────────────┘  └──────────┘  └─────────┘  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
++----------------------------------------------------------------------+
+|                           Data Flow                                  |
+|                                                                      |
+|  User -> Discord bot / gateway UI (:8181)                            |
+|                        |                                             |
+|                        v                                             |
+|   Router brain (pydantic-AI LLM): agent + profile | opencode         |
+|                        |                                              |
+|           +------------+--------------+                              |
+|           v                           v                              |
+|      hermes adapter            opencode adapter                      |
+|      hermes -p <profile>       opencode run --format json            |
+|      chat --oneshot            (validated workdir under              |
+|                                 /app/projects)                       |
+|           |                           |                              |
+|           v                           v                              |
+|   +-----------------------------------------------------+           |
+|   |   /opt/data/ (agent workspace)                       |           |
+|   |   - harness/ (sessions, tasks, memory, skills,      |           |
+|   |     ledger, scheduler state)                         |           |
+|   |   - memories/ (legacy seed)                          |           |
+|   |   - config.yaml (Hermes default, unused by harness)  |           |
+|   |   - profiles/{researcher,simple}/                    |           |
+|   +-----------------------------------------------------+           |
+|                        |                                             |
+|                        v                                             |
+|                 tasks/<id>/result.md +                                |
+|                 ./volumes/results/                                    |
+|              (final output to user)                                  |
+|                                                                      |
+|   +----------------------------------------------------------+      |
+|   |                    External Services                      |     |
+|   |   SearXNG (:8888) | X.com API | xAI Grok | AWS S3         |     |
+|   +----------------------------------------------------------+      |
++----------------------------------------------------------------------+
 ```
 
-### Agent Delegation Protocol
+### Agent Run Protocol
 
-The main profile delegates to specialist profiles in-process via the `delegate-profile` skill:
+The harness decides agent + profile per turn/task via `RouterBrain.route_async`/`analyze_async` (pydantic-AI LLM call; keyword fallback when the provider is down; NEVER raises for provider problems — F4/F5):
 
-1. **Main profile** calls the skill's `send_task` (or `send_task_background` for long tasks) with `target_agent_id`, `goal`, and optional `context`/`save_results_to`
-2. The skill runs `hermes -p <profile> chat --oneshot` — foreground for the summary, or detached with a log file for background tasks
-3. **Target profile** executes the task with its own config, SOUL.md and skills (and OpenCode CLI for `coder`)
-4. Foreground: the summary is returned directly; background: `check_task` polls status and returns the log tail
-5. Result files are written to `/app/results` and picked up by the main profile
+1. The chat turn / Discord message / inbox task / scheduled job is routed to `hermes` or `opencode`
+2. A `RunSpec` is built: hermes always carries `-p <profile>` (LLM-picked `simple`/`researcher`; config default `agents.hermes.default_profile` when the route omits it), opencode carries a validated workdir under `/app/projects`
+3. The adapter streams the child's stdout into the session transcript (chunks, tool events, exactly one terminal `final`/`failed`)
+4. Task results are written to `tasks/<id>/result.md`; the FSM moves the task to DONE/FAILED; `/app/results` remains the payload drop
+
 
 ### Storage Locations
 
 | Path (Container) | Path (Host) | Purpose |
 |-------------------|-------------|---------|
 | `/opt/data` | `./volumes/agent` | Main (default) profile workspace (config, SOUL.md, memory, skills) |
-| `/opt/data/profiles/{researcher,simple,coder}` | `./volumes/agent/profiles/...` | Secondary profile workspaces (config, SOUL.md, skills, per-profile `.env`) |
+| `/opt/data/profiles/{researcher,simple}` | `./volumes/agent/profiles/...` | Secondary profile workspaces (config, SOUL.md, skills, per-profile `.env`) |
 | `/app/results` | `./volumes/results` | Agents results data |
 | `/app/projects` | `./volumes/projects` | Shared project workspace (git repos, code) |
 | `/root/.ollama` | `ollama_data` volume | Downloaded models |
@@ -340,7 +320,7 @@ See `.env.template` for all configurable variables:
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | For AWS S3 | AWS secret key |
 | `USER_AWS_S3_BUCKET` | For AWS S3 | S3 bucket name |
 | `USER_AWS_S3_REGION` | For AWS S3 | S3 bucket region |
-| `OLLAMA_CONTEXT_LENGTH` | No | Ollama server context length (compose default: 65536). Known tension: `hermes.partial.yml` pins `ollama_num_ctx` to 256000 for main/coder/researcher (65536 for simple), which can exceed this default |
+| `OLLAMA_CONTEXT_LENGTH` | No | Ollama server context length (compose default: 65536). Known tension: `hermes.partial.yml` pins `ollama_num_ctx` to 256000 for researcher (65536 for simple), which can exceed this default |
 | `HERMES_API_TIMEOUT` | No | Hermes API read timeout in seconds (default: 3600) |
 | `HERMES_UID` / `HERMES_GID` | No | Linux hosts: run the container with these UID/GID so `./volumes/*` bind mounts are owned by your user |
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |

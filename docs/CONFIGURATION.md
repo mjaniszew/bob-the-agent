@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the two surviving Hermes profiles (`researcher`, `simple`) behind the Hermes gateway, plus the harness long-runner (the FastAPI harness gateway on 127.0.0.1:8181) managed by supervisord, with OpenCode CLI as the direct coding engine (no coder profile).
+Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the Python harness (the orchestrator: FastAPI harness gateway on 127.0.0.1:8181, pydantic-AI router, Discord bot, task loop, scheduler) which delegates to the two Hermes profiles (`researcher`, `simple`) and OpenCode CLI via one-shot subprocesses (no coder profile; no legacy hermes gateway).
 
 ## Configuration Files
 
@@ -145,6 +145,9 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 | `OPENCODE_CONFIG` | path | `/opt/data/.config/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
 | `USER_PROJECTS_FOLDER` | string | - | Host-side source override for the `/app/projects` bind mount |
 
+| `HARNESS_DISCORD_HOME_CHANNEL` | string | - | Discord home channel (numeric id) for harness notices with no originating thread (task state changes, gate questions); fallback env `DISCORD_HOME_CHANNEL`; unset = notices dropped with a rate-limited log |
+| `DISCORD_ALLOWED_USERS` / `DISCORD_ALLOWED_ROLES` | string | - | Optional comma/space-separated allowlists (user/role ids); unset/empty = allow-all (PoC single-user default) |
+
 ### Model Providers
 
 | Variable | Type | Description |
@@ -182,7 +185,7 @@ Note: the skills that consume these variables are standalone — each carries it
 
 ### Service Architecture
 
-The compose file defines 4 services. The two surviving Hermes profiles (`researcher`, `simple`) live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions those two profiles, seeds the harness state root, and execs `/opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf`, which runs `[program:harness]` (the harness gateway, API-key secured, listening on 127.0.0.1:8181) and `[program:opencode-serve]` (`autostart=false`):
+The compose file defines 4 services. The two Hermes profiles (`researcher`, `simple`) live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions those two profiles, seeds the harness state root, and execs the harness long-runner directly (task 22: `python -m harness.supervisor` with `PYTHONPATH=/app/harness` — the FastAPI harness gateway, API-key secured, listening on 0.0.0.0:8181; s6 stays PID 1, docker's `restart: unless-stopped` covers crashes; there is no supervisord layer and no legacy hermes gateway — a `02-harness-only` cont-init hook clears the persisted `gateway_state.json` each boot so the base image never auto-starts it):
 
 ```yaml
 services:
@@ -256,6 +259,10 @@ custom_providers:
 ```bash
 docker compose up -d --force-recreate agent
 ```
+
+### Harness Router + Profiles (task 22)
+
+The harness delegates only via provisioned hermes profiles — `hermes -p <profile> chat --oneshot`, never profile-less (the default profile has no inference provider). The router LLM picks the profile per route (`simple` for quick chat/simple tasks, `researcher` for research/analysis); when it omits one, the config default `agents.hermes.default_profile` (`simple`) applies — set in `src/harness/harness.template.yaml` (hermes agents line) and overridable in `/opt/data/harness/config.yaml`. The OpenCode adapter requires a workdir nested under `/app/projects`: task-inbox tasks carry their own `workdir`, chat/Discord/scheduled runs get `/app/projects/harness-sessions/<session-id>` (auto-created).
 
 ### Adding Models to Ollama
 

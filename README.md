@@ -9,7 +9,7 @@ A containerized autonomous agent that runs 24/7 via Docker Compose. A Python har
 - **Autonomous Operation** — Runs tasks without user interaction via Discord or CLI
 - **Local & Cloud Models** — Uses Ollama for both local and cloud model inference
 - **Web Search** — Built-in SearXNG metasearch engine (free, no API keys needed)
-- **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, profile delegation
+- **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, profile delegation (task 22: fixed all four skills' broken frontmatter YAML — they now load)
 - **Discord Bot** — Chat with your agent through Discord
 - **Delegation** — Harness delegates specialized tasks to the researcher and simple profiles in-process (no messaging transport)
 - **Harness Long-Runner** — Python harness long-runner — FastAPI gateway on 8181, Discord bot, task loop, in-loop APScheduler; OpenCode invoked directly for coding tasks
@@ -96,7 +96,7 @@ Run the smoke script on the **Docker host** (not inside a container):
 ./scripts/host-smoke.sh --skip-build    # re-run without rebuilding the image
 ```
 
-It performs six checks: image build, `docker compose up -d`, a poll of `http://127.0.0.1:8181/` for up to ~35 minutes (first boot may pull/bootstrap a model), the `starting harness (supervisord)` startup marker in the container logs, an in-container `import harness`, and `docker compose ps` showing all four services Up. Record results in [tests/SMOKE_LOG.md](tests/SMOKE_LOG.md).
+It performs six checks: image build, `docker compose up -d`, a poll of `http://127.0.0.1:8181/` for up to ~35 minutes (first boot may pull/bootstrap a model), the `starting harness (python -m harness.supervisor)` startup marker in the container logs, an in-container `import harness`, and `docker compose ps` showing all four services Up. Record results in [tests/SMOKE_LOG.md](tests/SMOKE_LOG.md).
 
 > The `poc` branch is a proof-of-concept. It is **not pushed to any remote** — all work lives on the local `poc` branch only.
 
@@ -175,9 +175,9 @@ The harness gateway listens on `8181` (bound to `127.0.0.1` by default). It repl
 | `USER_AWS_S3_ACCESS_KEY_ID` | AWS Access Key | - |
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | AWS Secret Key | - |
 
-> **Harness API key:** an empty `HARNESS_API_KEY` makes supervisord hit `FATAL` at startup (`config.py` fail-fast). Generate one with `openssl rand -hex 32` and put it in `.env`.
+> **Harness API key:** an empty `HARNESS_API_KEY` fails the harness at startup (`config.py` fail-fast; task 22: the harness is exec'd directly by bootstrap — there is no supervisord layer). Generate one with `openssl rand -hex 32` and put it in `.env`.
 
-> **Discord:** the bot requires the **MESSAGE CONTENT INTENT** enabled in the Discord developer portal. `discord_bot.py` sets `intents.message_content = True`; without the portal-side intent, `on_message` events carry no text.
+> **Discord:** the bot requires BOTH privileged intents enabled in the Discord developer portal (Bot → Privileged Gateway Intents): **MESSAGE CONTENT INTENT** and **SERVER MEMBERS INTENT**. `discord_bot.py` requests both; without the portal-side toggles the connect fails with an actionable error in the harness logs. `DISCORD_ALLOWED_USERS`/`DISCORD_ALLOWED_ROLES` are the optional allowlists (unset = allow-all).
 
 ### Agent Configuration
 

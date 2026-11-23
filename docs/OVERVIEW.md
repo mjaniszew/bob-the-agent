@@ -4,14 +4,15 @@ This project purpose is to build containerized AI agent which can be run via Doc
 
 ## Architecture
 
-The project uses a **single-container architecture** built on the Hermes Agent framework (v0.21.3, image `nousresearch/hermes-agent:v2026.9.14`). One `agent` container runs the Hermes Agent with multiple profiles:
+The project uses a **single-container architecture**. The orchestrator is a **custom Python harness** (thin, pydantic-AI based, `src/harness/`) replacing the former "main"-profile Hermes gateway for orchestration. One `agent` container runs:
 
-- **main** (default profile) — Orchestrator that delegates tasks and provides the Discord bot interface
-- **researcher** — Deep research and analysis specialist
-- **simple** — Lightweight handler for simple tasks
-- **coder** — Software engineering specialist using a two-layer architecture: Hermes profile (supervisor/bridge) orchestrating OpenCode CLI (coding engine)
+- **Python harness** — gateway/UI (`:8181`, API-key secured), pydantic-AI **router brain** (picks agent + hermes profile per turn/task with keyword fallbacks), **Discord bot** (single identity, harness-owned), **task loop** (inbox queue with gates) and **cron scheduler**
+- **Hermes profiles** (`/opt/data/profiles/`) — one-shot CLI workers invoked by the harness adapters, always with a provisioned profile (`hermes -p <profile>`):
+  - **researcher** — deep research and analysis specialist
+  - **simple** — lightweight handler for simple tasks (the default chat fallback profile)
+- **OpenCode CLI** — the coding engine (`opencode run --format json` inside a validated workdir under `/app/projects`); there is no `coder` Hermes profile
 
-The gateway multiplexes all profiles in the single container (`gateway.multiplex_profiles: true`). Ollama serves LLM inference and SearXNG provides search. Delegation between profiles is in-process: the main profile uses the `delegate-profile` skill, which runs `hermes -p <profile> chat --oneshot` and hands off result files via `/app/results`.
+Ollama serves LLM inference (local + ollama.com cloud proxy) and SearXNG provides search. Bootstrap (`src/scripts/bootstrap.sh`) provisions the profiles and harness state, then execs the harness directly (`python -m harness.supervisor` — s6 stays PID 1; the legacy per-profile Hermes gateway is held down by the `02-harness-only` cont-init hook so the harness bot owns the Discord identity).
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, container configuration, and data flow.
 
