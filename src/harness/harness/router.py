@@ -916,6 +916,35 @@ class RouterBrain:
         )
         return result
 
+    async def analyze_async(
+        self,
+        task_desc: str,
+        *,
+        workdir: str | None = None,
+        session: Session | None = None,
+    ) -> Analysis:
+        """Awaitable flavor of :meth:`analyze` — identical decision, but the
+        model call is PydanticAI's awaited ``agent.run`` (task 22): the taskloop
+        lives inside the harness event loop, where ``analyze``'s ``run_sync``
+        cannot run ("This event loop is already running"). Same fallback and
+        ledger machinery."""
+
+        if not isinstance(task_desc, str) or not task_desc.strip():
+            raise ValueError("analyze() requires non-empty task_desc")
+        default_workdir = (
+            workdir if workdir is not None else str(self._cfg.agents.opencode.workdir_root)
+        )
+        prompt = self._build_analyze_prompt(task_desc, workdir=default_workdir, session=session)
+        result, _engaged = await self._decide_async(
+            self._agent_analyze,
+            prompt,
+            attempt_kind="analyze",
+            decision_kind="analyze_fallback",
+            session_id=session.id if session is not None else None,
+            fallback_result=partial(self._fallback_analysis, task_desc, default_workdir),
+        )
+        return result
+
     # ------------------------------------------------------------------
     # health_check() — boot ping (section 3.4, round-1 m4a)
     # ------------------------------------------------------------------

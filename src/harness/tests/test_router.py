@@ -443,3 +443,30 @@ async def test_route_async_publishes_route_decided(cfg, tmp_volume) -> None:
         topic, payload = await asyncio.wait_for(queue.get(), timeout=2.0)
     assert topic == "route.decided"
     assert payload == {"session_id": session.id, "route": "opencode"}
+
+
+# ---------------------------------------------------------------------------
+# Task 22: analyze_async — the taskloop lives in the harness event loop;
+# RouterBrain.analyze's run_sync explodes there ("This event loop is already
+# running"), so the loop needs the awaited agent.run flavor.
+# ---------------------------------------------------------------------------
+async def test_analyze_async_valid(cfg) -> None:
+    brain, _model = _brain(cfg, [sample("analyze_valid")])
+    analysis = await brain.analyze_async("run the failing pytest suite for the site project")
+    assert isinstance(analysis, Analysis)
+    assert analysis.agent == "opencode"
+    assert analysis.mode == "gate"
+    assert analysis.workdir == "/app/projects/site"
+
+
+async def test_analyze_async_fallback_after_invalids(cfg) -> None:
+    brain, model = _brain(
+        cfg, [sample("route_invalid_1"), sample("route_invalid_2"), sample("analyze_valid")]
+    )
+    analysis = await brain.analyze_async("do the scheduled cleanup sweep")
+    assert analysis.agent == "hermes"
+    assert analysis.mode == "oneway"
+    assert analysis.workdir == cfg.agents.opencode.workdir_root
+    assert len(model.calls) == 2
+    rows = brain.ledger_rows()
+    assert rows[-1]["kind"] == "analyze_fallback"

@@ -988,9 +988,16 @@ class TaskLoop:
         desc = normalized["description"]
         hint = normalized["agent"]
         try:
-            # Direct sync analyze() — blocks the loop (PoC, documented); an
-            # async double's coroutine result is awaited.
-            result = self._router.analyze(desc, workdir=normalized["workdir"])
+            # Task 22: prefer the async analyze flavor — this loop IS the
+            # harness event loop, where RouterBrain.analyze's ``run_sync``
+            # cannot run ("This event loop is already running"). Test fakes
+            # may only provide the sync analyze(); their awaitable/None
+            # handling is preserved.
+            analyze_async = getattr(self._router, "analyze_async", None)
+            if analyze_async is not None:
+                result = analyze_async(desc, workdir=normalized["workdir"])
+            else:
+                result = self._router.analyze(desc, workdir=normalized["workdir"])
             analysis = await result if inspect.isawaitable(result) else result
         except Exception as exc:  # noqa: BLE001 — M-8b: analyze provider failure = task failure
             await self._fail_live(task, f"analyze failed (provider down?): {exc}")
