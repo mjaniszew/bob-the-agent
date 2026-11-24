@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic_ai.messages import RetryPromptPart
+from pydantic_ai.messages import UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 
 from bob_harness.bus import Bus
@@ -64,8 +64,13 @@ async def test_route_one_invalid_then_valid_retries(cfg) -> None:
     assert route.agent == "opencode"
     assert len(model.calls) == 2
     retry = [part for message in model.calls[1] for part in message.parts]
-    assert isinstance(retry[-1], RetryPromptPart)
-    assert "json_invalid" in str(retry[-1].content) or isinstance(retry[-1].content, list)
+    assert isinstance(retry[-1], UserPromptPart)
+    # v2 2.73.0 renders the validation-retry round as a user-voice fenced prompt
+    assert retry[-1].content.startswith(
+        "Your previous response failed the application's validation"
+    )
+    assert "<pyai:validation_errors>" in retry[-1].content
+    assert "json_invalid" in retry[-1].content
     rows = brain.ledger_rows()
     assert rows[-1]["kind"] == "route" and rows[-1]["fallback"] is False
 

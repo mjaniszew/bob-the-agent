@@ -6,6 +6,7 @@ adapter.run caller for task-origin runs."""
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import time
@@ -16,6 +17,7 @@ from typing import Any
 import pytest
 import yaml
 
+import bob_harness.taskloop
 from bob_harness.adapters.base import RunSpec, StreamEvent
 from bob_harness.persist import read_jsonl
 from bob_harness.router import Analysis
@@ -28,6 +30,26 @@ _T2 = "BBB23457"
 _T3 = "CCC24567"
 _T4 = "DDD23567"
 _T5 = "EEE24567"
+
+
+def _patch_workdir_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point taskloop's workdir checks at tmp_path.
+
+    The host ``/app/projects`` is root-owned, so the SUBTASK_DROP prefix check
+    (taskloop.py reads its own module-global at call time) and the
+    ``load_task_yaml`` seam (taskloop resolves the name in its own module
+    namespace at call time; ``workdir_prefix`` is a def-time default in
+    tasks.py, so the tasks-module constant cannot be patched usefully) both
+    need taskloop-module patches for the tmp workdir to validate.
+    """
+    prefix = str(tmp_path) + "/"
+    monkeypatch.setattr(bob_harness.taskloop, "_WORKDIR_PREFIX", prefix)
+    load_original = bob_harness.taskloop.load_task_yaml
+    monkeypatch.setattr(
+        bob_harness.taskloop,
+        "load_task_yaml",
+        functools.partial(load_original, workdir_prefix=prefix),
+    )
 
 
 class _Bus:
@@ -733,14 +755,20 @@ async def test_opencode_task_profile_none(cfg) -> None:
         await loop.stop()
 
 
-async def test_watch_continues_after_syntax_failure(cfg) -> None:
+async def test_watch_continues_after_syntax_failure(
+    cfg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Task 22 verification: after one inbox task fails with a syntax error
-    (missing workdir), the watcher must still pick up LATER dropped tasks."""
+    (missing workdir), the watcher must still pick up LATER dropped tasks.
+    workdir moved under tmp_path + workdir-prefix/load_task_yaml monkeypatched
+    because the host /app/projects is root-owned (environmental portability
+    fix, decision bytes unchanged)."""
     cfg = _tweak(cfg, poll_seconds=0.05)
     bus = _Bus()
     store = TaskStore(cfg, bus=bus)
-    workdir = "/app/projects/watch-t22"
+    workdir = str(tmp_path / "watch-t22")
     os.makedirs(workdir, exist_ok=True)
+    _patch_workdir_root(tmp_path, monkeypatch)
     bad_id = "AAA23456"
     (store.inbox / bad_id).mkdir(parents=True)
     (store.inbox / bad_id / "task.yaml").write_text(
@@ -770,16 +798,22 @@ async def test_watch_continues_after_syntax_failure(cfg) -> None:
         await loop.stop()
 
 
-async def test_watcher_survives_invalid_inbox_id(cfg) -> None:
+async def test_watcher_survives_invalid_inbox_id(
+    cfg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Task 22 verification: an inbox dir with an INVALID id (e.g. digits 8/9)
     raised ValueError from _require_task_id — outside _pick_up's catch list —
     and silently killed the watcher task, stranding every later task. The
-    watcher must log-and-skip the bad id and keep processing valid ones."""
+    watcher must log-and-skip the bad id and keep processing valid ones.
+    workdir moved under tmp_path + workdir-prefix/load_task_yaml monkeypatched
+    because the host /app/projects is root-owned (environmental portability
+    fix, decision bytes unchanged)."""
     cfg = _tweak(cfg, poll_seconds=0.05)
     bus = _Bus()
     store = TaskStore(cfg, bus=bus)
-    workdir = "/app/projects/watch-t22b"
+    workdir = str(tmp_path / "watch-t22b")
     os.makedirs(workdir, exist_ok=True)
+    _patch_workdir_root(tmp_path, monkeypatch)
     # invalid id: alphabet digits are 2-7 only — this id carries 8s/9s
     bad_id = "BADID9999"
     (store.inbox / bad_id).mkdir(parents=True)
