@@ -63,7 +63,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -77,23 +77,29 @@ from pydantic_settings import (
 from bob_harness.errors import ConfigError, ConfigLoadError, ConfigValidationError
 
 __all__ = [
-    "ServerConfig",
-    "RateLimitConfig",
-    "RouterConfig",
     "AgentsConfig",
-    "HermesAgentsConfig",
-    "OpencodeAgentsConfig",
+    "DiscordAllowlist",
+    "DiscordConfig",
     "HandoffConfig",
-    "TasksConfig",
-    "SchedulerConfig",
+    "HarnessAskUserCapabilityConfig",
+    "HarnessConfig",
+    "HarnessDelegationCapabilityConfig",
+    "HarnessHarnessConfig",
+    "HarnessMemoryCapabilityConfig",
+    "HarnessSkillsCapabilityConfig",
+    "HarnessSubagentsCapabilityConfig",
+    "HermesAgentsConfig",
     "MemoryBudgetsConfig",
     "MemoryConfig",
-    "DiscordConfig",
-    "DiscordAllowlist",
+    "OpencodeAgentsConfig",
+    "RateLimitConfig",
+    "RouterConfig",
+    "SchedulerConfig",
+    "ServerConfig",
     "StorageConfig",
-    "HarnessConfig",
-    "load_config",
+    "TasksConfig",
     "effective_router_settings",
+    "load_config",
 ]
 
 # ${NAME} placeholder pattern scanned in every string leaf of the merged config.
@@ -158,6 +164,36 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "retries": 1,
         "gate_timeout_s": 86400,
         "max_desc_chars": 4000,
+        "runner": "analyzed",  # P7's dispatch flip switch: analyzed today
+    },
+    # P2 (plan §3.4): executor agent capability-configuration group. Every
+    # capability toggle defaults to ON for the shipped executor; the P2 test
+    # fixtures (tests/test_adapter_executor.py) turn them all OFF via YAML and
+    # assert graceful degradation (assemble_capabilities() == [] still runs).
+    "harness": {
+        "memory": {
+            "enabled": True,
+            "dir": "",
+            "workspace_root": "",
+            "agent_name": "executor",
+            "inject": True,
+            "max_tokens": 2000,
+        },
+        "skills": {
+            "enabled": True,
+            "include": [],
+            "exclude": [],
+            "read_files": False,
+            "missing_directories": "skip",
+        },
+        "ask_user": {
+            "enabled": True,
+            "id": "ask_user",
+            "answerer": "deferred",
+            "timeout_s": None,
+        },
+        "subagents": {"enabled": True, "max_depth": 3},
+        "delegation": {"enabled": True, "tool_name": "delegate_run"},
     },
     "scheduler": {
         "enabled": True,
@@ -197,11 +233,40 @@ _FLAT_ENV_BINDINGS: tuple[tuple[str, str], ...] = (
     ("BOB_HARNESS_ROUTER_BASE_URL", "router.base_url"),
     ("BOB_HARNESS_ROUTER_MODEL", "router.model"),
     ("BOB_HARNESS_WORKDIR", "agents.opencode.workdir_root"),
+    # P2 (plan §3.4): harness: capability group flat bindings. The int-valued
+    # entries ride pydantic's numeric coercion exactly like BOB_HARNESS_PORT.
+    ("BOB_HARNESS_MEMORY_ENABLED", "harness.memory.enabled"),
+    ("BOB_HARNESS_MEMORY_DIR", "harness.memory.dir"),
+    ("BOB_HARNESS_MEMORY_WORKSPACE", "harness.memory.workspace_root"),
+    ("BOB_HARNESS_MEMORY_AGENT_NAME", "harness.memory.agent_name"),
+    ("BOB_HARNESS_MEMORY_INJECT", "harness.memory.inject"),
+    ("BOB_HARNESS_MEMORY_MAX_TOKENS", "harness.memory.max_tokens"),
+    ("BOB_HARNESS_SKILLS_ENABLED", "harness.skills.enabled"),
+    ("BOB_HARNESS_SKILLS_READ_FILES", "harness.skills.read_files"),
+    ("BOB_HARNESS_SKILLS_MISSING", "harness.skills.missing_directories"),
+    ("BOB_HARNESS_ASK_USER_ENABLED", "harness.ask_user.enabled"),
+    ("BOB_HARNESS_ASK_USER_ANSWERER", "harness.ask_user.answerer"),
+    ("BOB_HARNESS_ASK_USER_TIMEOUT_S", "harness.ask_user.timeout_s"),
+    ("BOB_HARNESS_SUBAGENTS_ENABLED", "harness.subagents.enabled"),
+    ("BOB_HARNESS_SUBAGENTS_MAX_DEPTH", "harness.subagents.max_depth"),
+    ("BOB_HARNESS_DELEGATION_ENABLED", "harness.delegation.enabled"),
+    ("BOB_HARNESS_TASKS_RUNNER", "tasks.runner"),
 )
 
 # Flat env bindings carrying booleans: their raw string values are cast in
 # _read_flat_env_overrides ('true'/'1'/'yes'/'on' -> True, anything else False).
-_FLAT_ENV_BOOL_PATHS: frozenset[str] = frozenset({"server.behind_proxy"})
+_FLAT_ENV_BOOL_PATHS: frozenset[str] = frozenset(
+    {
+        "server.behind_proxy",
+        "harness.memory.enabled",
+        "harness.memory.inject",
+        "harness.skills.enabled",
+        "harness.skills.read_files",
+        "harness.ask_user.enabled",
+        "harness.subagents.enabled",
+        "harness.delegation.enabled",
+    }
+)
 
 _BOB_HARNESS_DISCORD_HOME_CHANNEL_ENV = "BOB_HARNESS_DISCORD_HOME_CHANNEL"
 _DISCORD_HOME_CHANNEL_ENV = "DISCORD_HOME_CHANNEL"
@@ -253,6 +318,29 @@ def _resolve_env_placeholders(node: Any, path: str = "") -> Any:
     return node
 
 
+# Int-valued flat env paths: the merged mapping stores raw strings (values are
+# only present when a BOB_HARNESS_* var is set), so pydantic must coerce them
+# ("8182" -> 8182) exactly as it did before this source existed.
+_FLAT_ENV_INT_PATHS: frozenset[str] = frozenset(
+    {
+        "server.port",
+        "harness.memory.max_tokens",
+        "harness.ask_user.timeout_s",
+        "harness.subagents.max_depth",
+    }
+)
+
+
+def _coerce_flat_env_types(dotted_path: str, value: Any) -> Any:
+    """Cast a raw flat-env string to its declared config type where needed."""
+    if dotted_path in _FLAT_ENV_INT_PATHS and isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            pass
+    return value
+
+
 def _read_flat_env_overrides() -> dict[str, Any]:
     """Collect flat ``BOB_HARNESS_*`` env overrides as a nested mapping.
 
@@ -274,10 +362,16 @@ def _read_flat_env_overrides() -> dict[str, Any]:
 
     for env_name, dotted_path in _FLAT_ENV_BINDINGS:
         value = os.environ.get(env_name)
-        if value:
-            if dotted_path in _FLAT_ENV_BOOL_PATHS:
-                value = value.strip().lower() in ("true", "1", "yes", "on")
-            set_path(dotted_path, value)
+        if value is None:
+            continue
+        if value == "" and dotted_path != "api_key":
+            # Empty-string values are treated as unset so e.g. an empty
+            # BOB_HARNESS_DISCORD_HOME_CHANNEL falls back — EXCEPT api_key:
+            # an explicitly empty key must reach the validator (fail fast).
+            continue
+        if dotted_path in _FLAT_ENV_BOOL_PATHS:
+            value = value.strip().lower() in ("true", "1", "yes", "on")
+        set_path(dotted_path, _coerce_flat_env_types(dotted_path, value))
 
     home_channel = os.environ.get(_BOB_HARNESS_DISCORD_HOME_CHANNEL_ENV) or os.environ.get(
         _DISCORD_HOME_CHANNEL_ENV
@@ -428,6 +522,11 @@ class TasksConfig(BaseModel):
     retries: int = 1
     gate_timeout_s: int = 86400
     max_desc_chars: int = 4000
+    # P2 (plan §3.4): dispatch runner for polled tasks — "analyzed" keeps the
+    # today-behavior (router-analyzed agent + profile → hermes/opencode CLI
+    # adapter); "executor" (P7's flip switch, unreachable until wired) routes
+    # the task run through the in-process executor adapter instead.
+    runner: Literal["analyzed", "executor"] = "analyzed"
 
 
 class SchedulerConfig(BaseModel):
@@ -492,9 +591,113 @@ class DiscordConfig(BaseModel):
     home_channel_id: str | None = None
 
 
+class HarnessMemoryCapabilityConfig(BaseModel):
+    """Executor ``Memory`` capability settings (plan §3.4, P2).
+
+    ``dir`` empty means ``<storage.data_dir>/memory`` — the SAME store the
+    ``MemoryEngine`` owns (D4); ``workspace_root`` empty means the per-run
+    workspace (task workdir / session workdir) is used for
+    ``LocalWorkspaceBackend`` instead of a fixed root.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = True
+    dir: str = ""
+    workspace_root: str = ""
+    agent_name: str = "executor"
+    inject: bool = True
+    max_tokens: int = 2000
+
+
+class HarnessSkillsCapabilityConfig(BaseModel):
+    """Executor ``Skills`` capability settings (plan §3.4, P2).
+
+    ``include``/``exclude`` are list-valued slug filters — YAML-only, no flat
+    env binding (precedent: config.py comment on list-valued keys).
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = True
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+    read_files: bool = False
+    missing_directories: Literal["error", "skip"] = "skip"
+
+
+class HarnessAskUserCapabilityConfig(BaseModel):
+    """Executor ``AskUser`` capability settings (plan §3.4, P2).
+
+    ``answerer``: ``deferred`` (D3 default: run parks via
+    ``DeferredToolRequests``; the TaskLoop answers on resume) wires
+    ``AskUser(answerer=None)``; ``inline`` wires an interactive Answerer with
+    ``timeout_s``; ``none`` omits the capability's answerer wiring.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = True
+    id: str = "ask_user"
+    answerer: Literal["deferred", "inline", "none"] = "deferred"
+    timeout_s: int | None = None
+
+
+class HarnessSubagentsCapabilityConfig(BaseModel):
+    """Executor nested ``SubAgents`` capability settings (plan §3.4, P2).
+
+    In-process only (D1): never wraps the hermes/opencode CLI adapters.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = True
+    max_depth: int = 3
+
+
+class HarnessDelegationCapabilityConfig(BaseModel):
+    """Executor ``delegate_run`` capability settings (plan §3.4, P2).
+
+    P2 ships the config surface only: the real custom ``AbstractCapability``
+    lands in P3 (D1). ``tool_name`` is YAML-only.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = True
+    tool_name: str = "delegate_run"
+
+
+class HarnessHarnessConfig(BaseModel):
+    """Executor agent capability-configuration group (plan §3.4, P2).
+
+    Nested under the top-level ``harness:`` YAML key (naming mirrors the plan
+    section). Every capability toggle ships ON; a disabled capability is
+    simply omitted from the executor agent's ``capabilities=[...]`` list — the
+    executor still functions (graceful degradation, asserted by the P2 tests).
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    memory: HarnessMemoryCapabilityConfig = Field(
+        default_factory=HarnessMemoryCapabilityConfig
+    )
+    skills: HarnessSkillsCapabilityConfig = Field(
+        default_factory=HarnessSkillsCapabilityConfig
+    )
+    ask_user: HarnessAskUserCapabilityConfig = Field(
+        default_factory=HarnessAskUserCapabilityConfig
+    )
+    subagents: HarnessSubagentsCapabilityConfig = Field(
+        default_factory=HarnessSubagentsCapabilityConfig
+    )
+    delegation: HarnessDelegationCapabilityConfig = Field(
+        default_factory=HarnessDelegationCapabilityConfig
+    )
+
+
 class StorageConfig(BaseModel):
     """On-disk storage settings (ARCHITECTURE.md section 4).
-
     Repo reconciliation (a): the default ``data_dir`` is ``/opt/data/bob-harness``
     (the design said ``/data/harness``; superseded); env override
     ``BOB_HARNESS_DATA_DIR``.
@@ -527,7 +730,13 @@ class HarnessConfig(BaseSettings):
 
     server: ServerConfig
     logfire: LogfireConfig
-    api_key: str
+    # P2: absent api_key is tolerated as None (in-process executor runs load
+    # configs from test/CI fixtures without a key); an EXPLICITLY EMPTY value
+    # (env ``BOB_HARNESS_API_KEY=''`` or YAML ``api_key: ""``) still fails
+    # fast via ``_require_api_key``, and the production template's
+    # ``${BOB_HARNESS_API_KEY}`` reference still fails fast at step 3 when the
+    # variable is unset.
+    api_key: str | None = None
     rate_limit: RateLimitConfig
     router: RouterConfig
     agents: AgentsConfig
@@ -537,11 +746,17 @@ class HarnessConfig(BaseSettings):
     memory: MemoryConfig
     discord: DiscordConfig
     storage: StorageConfig
+    # P2 (plan §3.4): executor agent capability group under the top-level
+    # ``harness:`` YAML key.
+    harness: HarnessHarnessConfig
 
     @model_validator(mode="after")
     def _require_api_key(self) -> HarnessConfig:
-        """Fail fast when api_key is empty after all resolution (plan R1)."""
-        if not (self.api_key or "").strip():
+        """Fail fast when api_key is EMPTY (plan R1; absent/None is tolerated
+        since P2 — the in-process executor loads fixture configs without a
+        key; empty-STRING values and unset ``${VAR}`` template still fail)."""
+        api_key = self.api_key
+        if isinstance(api_key, str) and not api_key.strip():
             raise ConfigError("api_key", _API_KEY_EMPTY_MESSAGE)
         return self
 
