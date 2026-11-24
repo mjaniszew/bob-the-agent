@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the Python harness (the orchestrator: FastAPI harness gateway on 127.0.0.1:8181, pydantic-AI router, Discord bot, task loop, scheduler) which delegates to the two Hermes profiles (`researcher`, `simple`) and OpenCode CLI via one-shot subprocesses (no coder profile; no legacy hermes gateway).
+Bob The Agent uses environment variables and YAML configuration files for customization. The system is built on the Hermes Agent framework with a single-container architecture: one `agent` container runs the Python bob-harness (the orchestrator: FastAPI bob-harness gateway on 127.0.0.1:8181, pydantic-AI router, Discord bot, task loop, scheduler) which delegates to the two Hermes profiles (`researcher`, `simple`) and OpenCode CLI via one-shot subprocesses (no coder profile; no legacy hermes gateway).
 
 ## Configuration Files
 
@@ -17,7 +17,7 @@ Main configuration file for environment variables.
 Shared Hermes Agent behavior configuration template located at `src/config/hermes.template.yaml`.
 
 **How it works** (at container startup, in `bootstrap.sh`):
-1. For each secondary profile (`researcher`, `simple`) at `/opt/data/profiles/{name}/config.yaml`:
+1. For each secondary profile (`researcher`, `simple`) at `/opt/data/hermes/profiles/{name}/config.yaml`:
    - If the config does not exist, `generate-config.sh` reads the YAML template and the profile's partial
    - If a partial exists for the profile, `merge-yaml.mjs` deep-merges them (arrays replaced, objects merged, partial wins)
    - If no partial exists, the template is used as-is
@@ -81,7 +81,7 @@ agent:
 
 **Researcher / simple profiles** (`src/agents/researcher|simple/hermes.partial.yml`): same wiring pattern and runtime knobs (`ollama_num_ctx`, `reasoning_effort`, `local_stream_stale_timeout`) — researcher uses `glm-5.3:cloud` with `ollama_num_ctx: 256000`; simple uses `glm-5.3-flash:cloud` with `ollama_num_ctx: 65536`. Note `agent.gateway_timeout` and `agent.api_max_retries` differ per profile: researcher 2700/5, simple 1800/5.
 
-**Coder profile removed:** The coder Hermes profile was removed in the harness PoC final phase. The harness invokes OpenCode directly; the researcher and simple profiles remain. See `tests/coder-agent.test.ts`, which now asserts the deletion (`src/agents/coder` must not reappear).
+**Coder profile removed:** The coder Hermes profile was removed in the bob-harness PoC final phase. bob-harness invokes OpenCode directly; the researcher and simple profiles remain. See `tests/coder-agent.test.ts`, which now asserts the deletion (`src/agents/coder` must not reappear).
 
 ### Runtime knobs worth knowing
 
@@ -101,17 +101,17 @@ agent:
 
 ### Per-profile .env
 
-Bootstrap writes a `.env` (chmod 600) into each secondary profile directory (`/opt/data/profiles/{name}/.env`) carrying the profile's secret scope (Ollama/SearXNG URLs, x-com/grok/AWS S3 keys). Hermes never inherits the root `.env` into profiles.
+Bootstrap writes a `.env` (chmod 600) into each secondary profile directory (`/opt/data/hermes/profiles/{name}/.env`) carrying the profile's secret scope (Ollama/SearXNG URLs, x-com/grok/AWS S3 keys). Hermes never inherits the root `.env` into profiles.
 
-### Harness config file (harness.template.yaml)
+### Harness config file (bob-harness.template.yaml)
 
-The Python harness has its **own** YAML config, separate from the Hermes templates above:
+The Python bob-harness has its **own** YAML config, separate from the Hermes templates above:
 
-- **Template:** `src/harness/harness.template.yaml` (server bind port 8181, `logfire`, `api_key`, `rate_limit`, `router`, `agents.hermes.default_profile`, scheduler jobs)
-- **Seeding:** `bootstrap.sh` copies it once to `/opt/data/harness/config.yaml` (`[ -f ... ] || cp` — a boot that died mid-seed reruns safely; user edits on the volume are never overwritten)
-- **Resolution:** compose sets `HARNESS_CONFIG=/opt/data/harness/config.yaml` so `load_config()` reads the seeded file. Without it the harness looks for `./config.yaml` in the CWD (`/app`), finds none, and silently falls back to built-in defaults — YAML-only settings are discarded. (Regression fixed in commit `ec2dd44`; `tests/harness-contracts.test.ts` asserts the seven `HARNESS_*` keys compose exposes, including `HARNESS_CONFIG`.)
-- **Precedence:** flat `HARNESS_*` env vars override the YAML values; everything else comes from the file
-- **Schema:** parsed into pydantic models in `src/harness/harness/config.py` (`HarnessConfig`, incl. `LogfireConfig`; unknown keys are rejected with `extra="forbid"`)
+- **Template:** `src/bob-harness/bob-harness.template.yaml` (server bind port 8181, `logfire`, `api_key`, `rate_limit`, `router`, `agents.hermes.default_profile`, scheduler jobs)
+- **Seeding:** `bootstrap.sh` copies it once to `/opt/data/bob-harness/config.yaml` (`[ -f ... ] || cp` — a boot that died mid-seed reruns safely; user edits on the volume are never overwritten)
+- **Resolution:** compose sets `BOB_HARNESS_CONFIG=/opt/data/bob-harness/config.yaml` so `load_config()` reads the seeded file. Without it the harness looks for `./config.yaml` in the CWD (`/app`), finds none, and silently falls back to built-in defaults — YAML-only settings are discarded. (Regression fixed in commit `ec2dd44`; `tests/harness-contracts.test.ts` asserts the seven `BOB_HARNESS_*` keys compose exposes, including `BOB_HARNESS_CONFIG`.)
+- **Precedence:** flat `BOB_HARNESS_*` env vars override the YAML values; everything else comes from the file
+- **Schema:** parsed into pydantic models in `src/bob-harness/harness/config.py` (`HarnessConfig`, incl. `LogfireConfig`; unknown keys are rejected with `extra="forbid"`)
 
 ### Agent Identity Files
 
@@ -124,7 +124,7 @@ Each profile directory carries exactly two files under `src/agents/{name}/`. `SO
 
 ### OpenCode Configuration (Coding Layer)
 
-OpenCode CLI is the coding engine invoked directly by the harness (it is not a Hermes profile), configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time with the deliberate pin `opencode-ai@1.18.32`.
+OpenCode CLI is the coding engine invoked directly by the bob-harness (it is not a Hermes profile), configured via a template that is environment-substituted at container startup. OpenCode CLI itself is installed at image build time with the deliberate pin `opencode-ai@1.18.32`.
 
 **Template file:** `src/config/opencode.template.jsonc`
 
@@ -134,7 +134,7 @@ At startup, `bootstrap.sh` generates the OpenCode config by substituting the tem
 |-------------|---------------|
 | `OLLAMA_BASE_URL_PLACEHOLDER` | Value of `OLLAMA_BASE_URL` env var |
 
-**Generated config location:** `/opt/data/.config/opencode/opencode.jsonc` (pinned by the `OPENCODE_CONFIG` compose env var)
+**Generated config location:** `/opt/data/opencode/opencode.jsonc` (pinned by the `OPENCODE_CONFIG` compose env var)
 
 The OpenCode config defines (see `src/config/opencode.template.jsonc` for the full template):
 - **Provider**: Ollama via the OpenAI-compatible endpoint, using GLM cloud models (GLM limits: context 512000, output 32000)
@@ -152,24 +152,24 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 | `OLLAMA_CONTEXT_LENGTH` | number | `65536` | Ollama server-side context length (compose default `65536`). Known tension: the researcher profile partial pins `ollama_num_ctx: 256000` (simple pins `65536`) — above this compose default. Both values are real; consider both when tuning. |
 | `HERMES_API_TIMEOUT` | number | `3600` | Hermes API read timeout in seconds, raised above Hermes' 900s default so long-running turns survive. |
 | `HERMES_UID` / `HERMES_GID` | number | - | Linux hosts: run the container with these UID/GID so the `./volumes/*` bind mounts are owned by your user |
-| `OPENCODE_CONFIG` | path | `/opt/data/.config/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
+| `OPENCODE_CONFIG` | path | `/opt/data/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
 | `USER_PROJECTS_FOLDER` | string | - | Host-side source override for the `/app/projects` bind mount |
-| `HARNESS_DISCORD_HOME_CHANNEL` | string | - | Discord home channel (numeric id) for harness notices with no originating thread (task state changes, gate questions); fallback env `DISCORD_HOME_CHANNEL`; unset = notices dropped with a rate-limited log |
+| `BOB_HARNESS_DISCORD_HOME_CHANNEL` | string | - | Discord home channel (numeric id) for harness notices with no originating thread (task state changes, gate questions); fallback env `DISCORD_HOME_CHANNEL`; unset = notices dropped with a rate-limited log |
 | `DISCORD_ALLOWED_USERS` / `DISCORD_ALLOWED_ROLES` | string | - | Optional comma/space-separated allowlists (user/role ids); unset/empty = allow-all (PoC single-user default) |
 
-### Harness (python orchestrator)
+### bob-harness (python orchestrator)
 
-These come from compose (`compose.yaml`) — `HARNESS_*` binds/overrides only; anything else stays YAML-only (see [Harness config file](#harness-config-file-harnesstemplateyaml)):
+These come from compose (`compose.yaml`) — `BOB_HARNESS_*` binds/overrides only; anything else stays YAML-only (see [Harness config file](#harness-config-file-harnesstemplateyaml)):
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `HARNESS_API_KEY` | string | - | Required; API key securing the harness gateway (`X-API-Key`); empty = fail-fast at boot (generate: `openssl rand -hex 32`) |
-| `HARNESS_CONFIG` | path | `/opt/data/harness/config.yaml` | In-container path of the harness YAML config (compose-fixed). Without it `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently falls back to built-in defaults** — every YAML-only setting (`logfire`, `rate_limit`, scheduler jobs) is discarded |
-| `HARNESS_ROUTER_BASE_URL` | string | `http://ollama:11434/v1` | OpenAI-compatible endpoint for the router brain (`base_url` bound from env; the `HARNESS_ROUTER_API_KEY` is deliberately NOT bound) |
-| `HARNESS_ROUTER_MODEL` | string | `glm-5.3-flash:cloud` | Router-brain model |
-| `HARNESS_DATA_DIR` | path | `/opt/data/harness` | Harness state root (in-container; fixed by compose) |
-| `HARNESS_WORKDIR` | path | `/app/projects` | Harness workdir root (in-container; fixed by compose) |
-| `LOGFIRE_TOKEN` | string | - | Optional Logfire ingest token for harness observability (see [Observability (Logfire)](#observability-logfire)); without a token telemetry is not exported to Logfire |
+| `BOB_HARNESS_API_KEY` | string | - | Required; API key securing the harness gateway (`X-API-Key`); empty = fail-fast at boot (generate: `openssl rand -hex 32`) |
+| `BOB_HARNESS_CONFIG` | path | `/opt/data/bob-harness/config.yaml` | In-container path of the harness YAML config (compose-fixed). Without it `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently falls back to built-in defaults** — every YAML-only setting (`logfire`, `rate_limit`, scheduler jobs) is discarded |
+| `BOB_HARNESS_ROUTER_BASE_URL` | string | `http://ollama:11434/v1` | OpenAI-compatible endpoint for the router brain (`base_url` bound from env; the `BOB_HARNESS_ROUTER_API_KEY` is deliberately NOT bound) |
+| `BOB_HARNESS_ROUTER_MODEL` | string | `glm-5.3-flash:cloud` | Router-brain model |
+| `BOB_HARNESS_DATA_DIR` | path | `/opt/data/bob-harness` | Harness state root (in-container; fixed by compose) |
+| `BOB_HARNESS_WORKDIR` | path | `/app/projects` | Harness workdir root (in-container; fixed by compose) |
+| `LOGFIRE_TOKEN` | string | - | Optional Logfire ingest token for bob-harness observability (see [Observability (Logfire)](#observability-logfire)); without a token telemetry is not exported to Logfire |
 
 ### Model Providers
 
@@ -208,12 +208,12 @@ Note: the skills that consume these variables are standalone — each carries it
 
 ### Service Architecture
 
-The compose file defines 4 services. The two Hermes profiles (`researcher`, `simple`) live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions those two profiles, seeds the harness state root, and execs the harness long-runner directly (task 22: `python -m harness.supervisor` with `PYTHONPATH=/app/harness` — the FastAPI harness gateway, API-key secured, listening on 0.0.0.0:8181; s6 stays PID 1, docker's `restart: unless-stopped` covers crashes; there is no supervisord layer and no legacy hermes gateway — a `02-harness-only` cont-init hook clears the persisted `gateway_state.json` each boot so the base image never auto-starts it):
+The compose file defines 4 services. The two Hermes profiles (`researcher`, `simple`) live in the single `agent` service (image `bob-the-agent:latest`); bootstrap provisions those two profiles, seeds the harness state root, and execs the harness long-runner directly (task 22: `python -m bob_harness.supervisor` with `PYTHONPATH=/app/bob-harness` — the FastAPI harness gateway, API-key secured, listening on 0.0.0.0:8181; s6 stays PID 1, docker's `restart: unless-stopped` covers crashes; there is no supervisord layer and no legacy hermes gateway — a `02-bob-harness-only` cont-init hook clears the persisted `gateway_state.json` each boot so the base image never auto-starts it):
 
 ```yaml
 services:
   ollama:          # LLM inference engine
-  agent:           # Single container: Hermes profiles researcher+simple + harness gateway (:8181) + OpenCode CLI
+  agent:           # Single container: Hermes profiles researcher+simple + bob-harness gateway (:8181) + OpenCode CLI
   searxng:         # Privacy-respecting metasearch engine
   valkey:          # Redis-compatible cache for SearXNG
 ```
@@ -240,7 +240,7 @@ agent:
 
 | Host Path | Container Path | Service | Purpose |
 |-----------|---------------|---------|---------|
-| `./volumes/agent` | `/opt/data` | agent | Single agent workspace: the two surviving profiles under `profiles/` plus the harness state root under `harness/` |
+| `./volumes/agent` | `/opt/data` | agent | Single agent workspace: each agent state in its own folder under `/opt/data`: `bob-harness/` (bob-harness state), `hermes/` (HERMES_HOME incl. profiles/) — each agent state in its own folder: `bob-harness/`, `hermes/profiles/`, `opencode/` |
 | `./volumes/results` | `/app/results` | agent | Final task output files |
 | `./volumes/projects` | `/app/projects` | agent | Shared project workspace (git repos, code) |
 | `ollama_data` | `/root/.ollama` | ollama | Downloaded models |
@@ -252,11 +252,11 @@ agent:
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
-| `8181` (loopback) | `8181` | agent — harness gateway (published as 127.0.0.1:8181:8181 only) |
+| `8181` (loopback) | `8181` | agent — bob-harness gateway (published as 127.0.0.1:8181:8181 only) |
 | `11434` | `11434` | Ollama API |
 | `8888` | `8888` | SearXNG |
 
-The agent healthcheck probes TCP 8181 via the shared `x-agent-healthcheck` anchor (compose.yaml lines 10-19; `start_period: 120s`), and the harness gateway exposes an unauthenticated `GET /healthz` returning exactly `{"ok": true}` (all other routes are API-key secured).
+The agent healthcheck probes TCP 8181 via the shared `x-agent-healthcheck` anchor (compose.yaml lines 10-19; `start_period: 120s`), and the bob-harness gateway exposes an unauthenticated `GET /healthz` returning exactly `{"ok": true}` (all other routes are API-key secured).
 
 ## Model Configuration
 
@@ -283,9 +283,9 @@ custom_providers:
 docker compose up -d --force-recreate agent
 ```
 
-### Harness Router + Profiles (task 22)
+### bob-harness Router + Profiles (task 22)
 
-The harness delegates only via provisioned hermes profiles — `hermes -p <profile> chat --oneshot`, never profile-less (the default profile has no inference provider). The router LLM picks the profile per route (`simple` for quick chat/simple tasks, `researcher` for research/analysis); when it omits one, the config default `agents.hermes.default_profile` (`simple`) applies — set in `src/harness/harness.template.yaml` (hermes agents line) and overridable in `/opt/data/harness/config.yaml`. The OpenCode adapter requires a workdir nested under `/app/projects`: task-inbox tasks carry their own `workdir`, chat/Discord/scheduled runs get `/app/projects/harness-sessions/<session-id>` (auto-created).
+bob-harness delegates only via provisioned hermes profiles — `hermes -p <profile> chat --oneshot`, never profile-less (the default profile has no inference provider). The router LLM picks the profile per route (`simple` for quick chat/simple tasks, `researcher` for research/analysis); when it omits one, the config default `agents.hermes.default_profile` (`simple`) applies — set in `src/bob-harness/bob-harness.template.yaml` (hermes agents line) and overridable in `/opt/data/bob-harness/config.yaml`. The OpenCode adapter requires a workdir nested under `/app/projects`: task-inbox tasks carry their own `workdir`, chat/Discord/scheduled runs get `/app/projects/bob-harness-sessions/<session-id>` (auto-created).
 
 ### Adding Models to Ollama
 
@@ -314,21 +314,21 @@ The system uses Ollama as a proxy for both local and cloud models. Cloud models 
 
 ## Observability (Logfire)
 
-The harness ships [Logfire](https://logfire.pydantic.dev) instrumentation (added Nov 2026, commits `d230759` + `ec2dd44`; dependency `logfire[system-metrics]>=6` in `src/harness/requirements.txt`, deliberately keeping the version cap style used by the rest of the requirements set).
+The harness ships [Logfire](https://logfire.pydantic.dev) instrumentation (added Nov 2026, commits `d230759` + `ec2dd44`; dependency `logfire[system-metrics]>=6` in `src/bob-harness/requirements.txt`, deliberately keeping the version cap style used by the rest of the requirements set).
 
 **Enablement is config-driven, in two parts:**
 
-- YAML: `logfire.enabled` — template default `true` in `src/harness/harness.template.yaml`, built-in default `false` when the key is absent (`config.py` `_BUILTIN_DEFAULTS`). The YAML also carries `logfire.environment` (`'local'`), parsed into `LogfireConfig`.
+- YAML: `logfire.enabled` — template default `true` in `src/bob-harness/bob-harness.template.yaml`, built-in default `false` when the key is absent (`config.py` `_BUILTIN_DEFAULTS`). The YAML also carries `logfire.environment` (`'local'`), parsed into `LogfireConfig`.
 - Env: `LOGFIRE_TOKEN` — compose passes it through; it is the ingest token and the only user-facing knob. Without a token, the instrumentation still initializes but nothing is exported to Logfire.
 
-**When `logfire.enabled: true`, the supervisor (`src/harness/harness/supervisor.py`) runs, exactly once per process:**
+**When `logfire.enabled: true`, the supervisor (`src/bob-harness/harness/supervisor.py`) runs, exactly once per process:**
 
 1. `logfire.configure(environment='local', service_name='bob-harness')` — note the supervisor currently pins `environment='local'` and does not read the YAML `logfire.environment` field
 2. `logfire.instrument_system_metrics()` — host/container system metrics (this is what the `[system-metrics]` extra is for)
 3. `logfire.instrument_httpx()` — spans for outbound HTTP calls
-4. `logfire.instrument_pydantic_ai()` — spans for the router-brain agent runs; the two agents are named (`name='route_agent'` / `name='analyze_agent'` in `src/harness/harness/router.py`) so traces are distinguishable in the Logfire UI
+4. `logfire.instrument_pydantic_ai()` — spans for the router-brain agent runs; the two agents are named (`name='route_agent'` / `name='analyze_agent'` in `src/bob-harness/harness/router.py`) so traces are distinguishable in the Logfire UI
 
-**Failure isolation:** the whole block is wrapped in `try/except` — a failed Logfire setup (e.g. a broken token or an offline collector) is logged as an error and **never aborts the harness boot**.
+**Failure isolation:** the whole block is wrapped in `try/except` — a failed Logfire setup (e.g. a broken token or an offline collector) is logged as an error and **never aborts the bob-harness boot**.
 
 Instrumentation lives only in the supervisor: `RouterBrain` no longer configures Logfire itself (commit `ec2dd44` moved it out so there is a single `configure()` call per process).
 
@@ -341,7 +341,7 @@ Instrumentation lives only in the supervisor: `RouterBrain` no longer configures
 
 ### Network Security
 
-- The harness gateway is published on loopback only (127.0.0.1:8181). Its API-key auth secures every route except the minimal unauthenticated `GET /healthz`; widen the publish only in front of a reverse proxy, and keep it off untrusted networks
+- The bob-harness gateway is published on loopback only (127.0.0.1:8181). Its API-key auth secures every route except the minimal unauthenticated `GET /healthz`; widen the publish only in front of a reverse proxy, and keep it off untrusted networks
 - Use Docker network isolation (services communicate on the internal `bob-the-agent-network`)
 
 ### API Keys

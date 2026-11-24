@@ -158,7 +158,7 @@
 1. Never run `hermes -p main ...` inside the container — the gateway already owns the `main` profile; delegate to the secondary profiles (`researcher`, `simple`, `coder`) instead
 2. If the lock is orphaned (e.g. after a crash), remove the stale lock file and restart:
    ```bash
-   docker exec bob-the-agent rm -f /opt/data/profiles/<name>/gateway.lock
+   docker exec bob-the-agent rm -f /opt/data/hermes/profiles/<name>/gateway.lock
    docker compose restart agent
    ```
 
@@ -190,18 +190,18 @@
    ```
 5. The one-time `config.yaml.pre-reconcile.bak` snapshot (taken before the first reconcile of a migrated config) can be restored if a reconcile went wrong
 
-#### Harness YAML-only Settings Ignored (logfire, rate limits, scheduler)
+#### bob-harness YAML-only Settings Ignored (logfire, rate limits, scheduler)
 
-**Symptoms**: the harness boots fine, but YAML-only settings in `/opt/data/harness/config.yaml` appear to have no effect (e.g. Logfire instrumentation not active despite `logfire.enabled: true`, rate limits/scheduler jobs back at default values)
+**Symptoms**: the harness boots fine, but YAML-only settings in `/opt/data/bob-harness/config.yaml` appear to have no effect (e.g. Logfire instrumentation not active despite `logfire.enabled: true`, rate limits/scheduler jobs back at default values)
 
-**Cause**: the container env is missing `HARNESS_CONFIG: /opt/data/harness/config.yaml`. Then `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently** falls back to built-in defaults — no hard error, every YAML-only setting is discarded. Only flat `HARNESS_*` env vars still apply. Fixed in commit `ec2dd44` via the compose env; older images may still lack it.
+**Cause**: the container env is missing `BOB_HARNESS_CONFIG: /opt/data/bob-harness/config.yaml`. Then `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently** falls back to built-in defaults — no hard error, every YAML-only setting is discarded. Only flat `BOB_HARNESS_*` env vars still apply. Fixed in commit `ec2dd44` via the compose env; older images may still lack it.
 
 **Solutions**:
 1. Verify the env is passed through:
    ```bash
-   docker exec bob-the-agent printenv HARNESS_CONFIG   # expect /opt/data/harness/config.yaml
+   docker exec bob-the-agent printenv BOB_HARNESS_CONFIG   # expect /opt/data/bob-harness/config.yaml
    ```
-2. Verify the harness actually logged a config load from that path at boot:
+2. Verify the bob-harness actually logged a config load from that path at boot:
    ```bash
    docker compose logs agent | grep -i "config"
    ```
@@ -212,11 +212,11 @@
 
 #### Logfire Not Exporting
 
-**Symptoms**: `logfire.enabled: true` in the harness config, "Logfire enabled" in the harness logs, but no traces appear in the Logfire UI
+**Symptoms**: `logfire.enabled: true` in the harness config, "Logfire enabled" in the bob-harness logs, but no traces appear in the Logfire UI
 
 **Solutions**:
 1. Check `LOGFIRE_TOKEN` is set in your `.env` (see `.env.template`) and reaches the container: `docker exec bob-the-agent printenv LOGFIRE_TOKEN` — the token is the ingest credential; without it nothing is exported
-2. Check for `Failed to configure Logfire:` errors in the harness logs — supervisor instrumentation is best-effort by design: it logs and continues rather than failing the boot
+2. Check for `Failed to configure Logfire:` errors in the bob-harness logs — supervisor instrumentation is best-effort by design: it logs and continues rather than failing the boot
 3. Traces from the router brain appear as agents named `route_agent` / `analyze_agent` (service name `bob-harness`); confirm you are looking at the right service in the Logfire UI
 
 #### Specific Profile Issues
@@ -259,7 +259,7 @@ ls -la volumes/agent/profiles/<name>/
 **Solutions**:
 1. Check if the config file exists:
    ```bash
-   docker exec bob-the-agent cat /opt/data/.config/opencode/opencode.jsonc
+   docker exec bob-the-agent cat /opt/data/opencode/opencode.jsonc
    ```
 2. Check if the template exists:
    ```bash
@@ -267,7 +267,7 @@ ls -la volumes/agent/profiles/<name>/
    ```
 3. Remove existing config and restart to force regeneration:
    ```bash
-   docker exec bob-the-agent rm -f /opt/data/.config/opencode/opencode.jsonc
+   docker exec bob-the-agent rm -f /opt/data/opencode/opencode.jsonc
    docker compose restart agent
    ```
 

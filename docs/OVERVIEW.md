@@ -4,15 +4,15 @@ This project purpose is to build containerized AI agent which can be run via Doc
 
 ## Architecture
 
-The project uses a **single-container architecture**. The orchestrator is a **custom Python harness** (thin, pydantic-AI based, `src/harness/`) replacing the former "main"-profile Hermes gateway for orchestration. One `agent` container runs:
+The project uses a **single-container architecture**. The orchestrator is a **custom Python bob-harness** (thin, pydantic-AI based, `src/bob-harness/`) replacing the former "main"-profile Hermes gateway for orchestration. One `agent` container runs:
 
-- **Python harness** — gateway/UI (`:8181`, API-key secured), pydantic-AI **router brain** (picks agent + hermes profile per turn/task with keyword fallbacks), **Discord bot** (single identity, harness-owned), **task loop** (inbox queue with gates) and **cron scheduler**
-- **Hermes profiles** (`/opt/data/profiles/`) — one-shot CLI workers invoked by the harness adapters, always with a provisioned profile (`hermes -p <profile>`):
+- **bob-harness** (Python) — gateway/UI (`:8181`, API-key secured), pydantic-AI **router brain** (picks agent + hermes profile per turn/task with keyword fallbacks), **Discord bot** (single identity, bob-harness-owned), **task loop** (inbox queue with gates) and **cron scheduler**
+- **Hermes profiles** (`/opt/data/hermes/profiles/`) — one-shot CLI workers invoked by the bob-harness adapters, always with a provisioned profile (`hermes -p <profile>`):
   - **researcher** — deep research and analysis specialist
   - **simple** — lightweight handler for simple tasks (the default chat fallback profile)
 - **OpenCode CLI** — the coding engine (`opencode run --format json` inside a validated workdir under `/app/projects`); there is no `coder` Hermes profile
 
-Ollama serves LLM inference (local + ollama.com cloud proxy) and SearXNG provides search. Bootstrap (`src/scripts/bootstrap.sh`) provisions the profiles and harness state, then execs the harness directly (`python -m harness.supervisor` — s6 stays PID 1; the legacy per-profile Hermes gateway is held down by the `02-harness-only` cont-init hook so the harness bot owns the Discord identity).
+Ollama serves LLM inference (local + ollama.com cloud proxy) and SearXNG provides search. Bootstrap (`src/scripts/bootstrap.sh`) provisions the profiles and bob-harness state, then execs bob-harness directly (`python -m bob_harness.supervisor` — s6 stays PID 1; the legacy per-profile Hermes gateway is held down by the `02-bob-harness-only` cont-init hook so the bob-harness bot owns the Discord identity).
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, container configuration, and data flow.
 

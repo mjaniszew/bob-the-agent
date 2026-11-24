@@ -70,7 +70,7 @@ The OpenCode template defines the following agents:
 | `code-reviewer` | `kimi-k2.7-code:cloud` | read-only: write/edit tools disabled |
 | `general`, `explore`, `scout` (subagents) | `glm-5.3-flash:cloud` | |
 
-OpenCode config is written at bootstrap to `/opt/data/.config/opencode/opencode.jsonc` (compose sets `OPENCODE_CONFIG` to that path).
+OpenCode config is written at bootstrap to `/opt/data/opencode/opencode.jsonc` (compose sets `OPENCODE_CONFIG` to that path).
 
 ## bootstrap.sh
 
@@ -80,7 +80,7 @@ At container start, the bootstrap script (`/app/scripts/bootstrap.sh`, the conta
 2. Copies `SOUL.md` + skills (skipping `node_modules`/`dist`)
 3. Writes the `profile.yaml` bot roster (`ui_meta.hermes-bots`) and per-profile `.env` (umask 077 then chmod 600)
 4. Best-effort **Bot Chat session** per profile (upstream Hermes issue 91260)
-5. Writes the OpenCode config **unconditionally** to `/opt/data/.config/opencode/opencode.jsonc`
+5. Writes the OpenCode config **unconditionally** to `/opt/data/opencode/opencode.jsonc`
 6. Best-effort `ollama pull` capped at 30 minutes, target = the template default `glm-5.3-flash:cloud` (a **cloud manifest** pull, not a ~1.6GB local download)
 
 ## Relevant Paths
@@ -90,7 +90,7 @@ At container start, the bootstrap script (`/app/scripts/bootstrap.sh`, the conta
 | `/app/scripts/bootstrap.sh` | Bootstrap script; container CMD |
 | `src/config/hermes.template.yaml` | Template holding the profile model set, `gateway.multiplex_profiles: true`, and the default ollama model |
 | `src/agents/{name}/` | Per-profile `SOUL.md` + `hermes.partial.yml` (only) |
-| `/opt/data/.config/opencode/opencode.jsonc` | OpenCode config written at bootstrap; `OPENCODE_CONFIG` points here |
+| `/opt/data/opencode/opencode.jsonc` | OpenCode config written at bootstrap; `OPENCODE_CONFIG` points here |
 
 ## Known Limitations
 

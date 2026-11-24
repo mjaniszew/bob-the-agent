@@ -1,18 +1,18 @@
 # Bob The Agent
 ![Bob The Agent](img/bob-logo-sm.png)
 
-A containerized autonomous agent that runs 24/7 via Docker Compose. A Python harness long-runner provides the FastAPI gateway, Discord bot, task loop and scheduler, while researcher/simple Hermes profiles and Ollama (LLM inference) run in the same stack.
+A containerized autonomous agent that runs 24/7 via Docker Compose. A Python bob-harness long-runner provides the FastAPI gateway, Discord bot, task loop and scheduler, while researcher/simple Hermes profiles and Ollama (LLM inference) run in the same stack.
 
 ## Features
 
-- **Multi-Agent Architecture** — Researcher and simple task agents as Hermes profiles alongside the harness in a single container
+- **Multi-Agent Architecture** — Researcher and simple task agents as Hermes profiles alongside the bob-harness long-runner in a single container
 - **Autonomous Operation** — Runs tasks without user interaction via Discord or CLI
 - **Local & Cloud Models** — Uses Ollama for both local and cloud model inference
 - **Web Search** — Built-in SearXNG metasearch engine (free, no API keys needed)
 - **Skills** — X.com search, Grok search, AWS S3, data extraction, math operations, profile delegation (task 22: fixed all four skills' broken frontmatter YAML — they now load)
 - **Discord Bot** — Chat with your agent through Discord
-- **Delegation** — Harness delegates specialized tasks to the researcher and simple profiles in-process (no messaging transport)
-- **Harness Long-Runner** — Python harness long-runner — FastAPI gateway on 8181, Discord bot, task loop, in-loop APScheduler; OpenCode invoked directly for coding tasks
+- **Delegation** — bob-harness delegates specialized tasks to the researcher and simple profiles in-process (no messaging transport)
+- **bob-harness Long-Runner** — Python long-runner — FastAPI gateway on 8181, Discord bot, task loop, in-loop APScheduler; OpenCode invoked directly for coding tasks
 - **Docker** — Easy deployment with Docker Compose
 
 ## Quick Start
@@ -80,7 +80,7 @@ docker exec bob-the-agent-ollama ollama pull kimi-k2.7-code:cloud
 # Check all containers are running
 docker compose ps
 
-# Check harness gateway health (API-key secured; loopback-bound by default)
+# Check bob-harness gateway health (API-key secured; loopback-bound by default)
 curl http://localhost:8181/
 
 # Check Ollama
@@ -96,7 +96,7 @@ Run the smoke script on the **Docker host** (not inside a container):
 ./scripts/host-smoke.sh --skip-build    # re-run without rebuilding the image
 ```
 
-It performs six checks: image build, `docker compose up -d`, a poll of `http://127.0.0.1:8181/` for up to ~35 minutes (first boot may pull/bootstrap a model), the `starting harness (python -m harness.supervisor)` startup marker in the container logs, an in-container `import harness`, and `docker compose ps` showing all four services Up. Record results in [tests/SMOKE_LOG.md](tests/SMOKE_LOG.md).
+It performs six checks: image build, `docker compose up -d`, a poll of `http://127.0.0.1:8181/` for up to ~35 minutes (first boot may pull/bootstrap a model), the `starting bob-harness (python -m bob_harness.supervisor)` startup marker in the container logs, an in-container `import bob_harness`, and `docker compose ps` showing all four services Up. Record results in [tests/SMOKE_LOG.md](tests/SMOKE_LOG.md).
 
 > The `poc` branch is a proof-of-concept. It is **not pushed to any remote** — all work lives on the local `poc` branch only.
 
@@ -130,7 +130,7 @@ See [Discord Setup](docs/DISCORD_SETUP.md) for detailed instructions.
 │  ┌─────┴──────────────────────────────────────────────┐         │
 │  │  agent (single container)                           │         │
 │  │                                                     │         │
-│  │  harness (:8181)                                    │         │
+│  │  bob-harness (:8181)                                    │         │
 │  │  FastAPI gateway + Discord bot                      │         │
 │  │  task loop + APScheduler                            │         │
 │  │                                                     │         │
@@ -155,20 +155,20 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed diagrams and documentat
 
 ### Environment Variables
 
-The harness gateway listens on `8181` (bound to `127.0.0.1` by default). It replaces the old main-profile `:8642` gateway; there is no `8080` gateway.
+The bob-harness gateway listens on `8181` (bound to `127.0.0.1` by default). It replaces the old main-profile `:8642` gateway; there is no `8080` gateway.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LOG_LEVEL` | Logging level | `info` |
 | `DISCORD_BOT_TOKEN` | Discord bot token | - |
 | `SEARXNG_BASE_URL` | SearXNG base url | `http://searxng:8888` |
-| `HARNESS_API_KEY` | Required; API key securing the harness gateway (fail-fast). Generate one with: `openssl rand -hex 32` | (unset = startup FATAL) |
-| `HARNESS_ROUTER_BASE_URL` | OpenAI-compatible router endpoint | `http://ollama:11434/v1` |
-| `HARNESS_ROUTER_MODEL` | Router model | `glm-5.3-flash:cloud` |
-| `HARNESS_DATA_DIR` | Harness state dir (in-container) | `/opt/data/harness` |
-| `HARNESS_WORKDIR` | Harness working directory (in-container) | `/app/projects` |
-| `HARNESS_DISCORD_HOME_CHANNEL` | Pinned Discord notices/home channel for the bot | (unset) |
-| `LOGFIRE_TOKEN` | Optional Logfire ingest token for harness observability (telemetry export token). Enablement is gated by `logfire.enabled` in the harness config (`/opt/data/harness/config.yaml`, template default `true`) | (unset = no remote export) |
+| `BOB_HARNESS_API_KEY` | Required; API key securing the bob-harness gateway (fail-fast). Generate one with: `openssl rand -hex 32` | (unset = startup FATAL) |
+| `BOB_HARNESS_ROUTER_BASE_URL` | OpenAI-compatible router endpoint | `http://ollama:11434/v1` |
+| `BOB_HARNESS_ROUTER_MODEL` | Router model | `glm-5.3-flash:cloud` |
+| `BOB_HARNESS_DATA_DIR` | bob-harness state dir (in-container) | `/opt/data/bob-harness` |
+| `BOB_HARNESS_WORKDIR` | bob-harness working directory (in-container) | `/app/projects` |
+| `BOB_HARNESS_DISCORD_HOME_CHANNEL` | Pinned Discord notices/home channel for the bot | (unset) |
+| `LOGFIRE_TOKEN` | Optional Logfire ingest token for bob-harness observability (telemetry export token). Enablement is gated by `logfire.enabled` in the bob-harness config (`/opt/data/bob-harness/config.yaml`, template default `true`) | (unset = no remote export) |
 | `USER_X_COM_API_TOKEN` | X.com API token | - |
 | `USER_XAI_SEARCH_API_KEY` | xAI API key for Grok search | - |
 | `USER_AWS_S3_BUCKET` | AWS S3 Bucket | - |
@@ -176,9 +176,9 @@ The harness gateway listens on `8181` (bound to `127.0.0.1` by default). It repl
 | `USER_AWS_S3_ACCESS_KEY_ID` | AWS Access Key | - |
 | `USER_AWS_S3_SECRET_ACCESS_KEY` | AWS Secret Key | - |
 
-> **Harness API key:** an empty `HARNESS_API_KEY` fails the harness at startup (`config.py` fail-fast; task 22: the harness is exec'd directly by bootstrap — there is no supervisord layer). Generate one with `openssl rand -hex 32` and put it in `.env`.
+> **bob-harness API key:** an empty `BOB_HARNESS_API_KEY` fails bob-harness at startup (`config.py` fail-fast; task 22: bob-harness is exec-ed directly by bootstrap — there is no supervisord layer). Generate one with `openssl rand -hex 32` and put it in `.env`. ⚠️ Task 23 renamed the env vars: if your existing `.env` uses the old `HARNESS_*` names, rename them (e.g. `HARNESS_API_KEY` → `BOB_HARNESS_API_KEY`) before the first boot on this image.
 
-> **Discord:** the bot requires BOTH privileged intents enabled in the Discord developer portal (Bot → Privileged Gateway Intents): **MESSAGE CONTENT INTENT** and **SERVER MEMBERS INTENT**. `discord_bot.py` requests both; without the portal-side toggles the connect fails with an actionable error in the harness logs. `DISCORD_ALLOWED_USERS`/`DISCORD_ALLOWED_ROLES` are the optional allowlists (unset = allow-all).
+> **Discord:** the bot requires BOTH privileged intents enabled in the Discord developer portal (Bot → Privileged Gateway Intents): **MESSAGE CONTENT INTENT** and **SERVER MEMBERS INTENT**. `discord_bot.py` requests both; without the portal-side toggles the connect fails with an actionable error in the bob-harness logs. `DISCORD_ALLOWED_USERS`/`DISCORD_ALLOWED_ROLES` are the optional allowlists (unset = allow-all).
 
 ### Agent Configuration
 
