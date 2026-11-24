@@ -29,17 +29,19 @@ describe('Dockerfile.hermes', () => {
     expect(dockerfileText()).toMatch(/npm install -g opencode-ai@1\.18\.32/);
   });
 
-  test('copies the harness package into the image', () => {
-    expect(dockerfileText()).toMatch(/COPY \.\/src\/harness\/ \/app\/harness\//);
+  test('copies the bob-harness package into the image (pre-rename paths gone)', () => {
+    const d = dockerfileText();
+    expect(d).toMatch(/COPY \.\/src\/bob-harness\/ \/app\/bob-harness\//);
+    expect(d).not.toMatch(/\/app\/harness|\/opt\/harness-venv|02-harness-only/);
   });
 
-  test('builds the harness venv from the runtime-only lock', () => {
-    // uv ships in the base image; supervisor comes from requirements.lock
+  test('builds the bob-harness venv from the runtime-only lock', () => {
+    // uv ships in the base image; the supervisor comes from requirements.lock
     // (3.13-era pin) and the venv must belong to the hermes user.
-    expect(dockerfileText()).toMatch(/uv venv \/opt\/harness-venv --python 3\.13/);
-    expect(dockerfileText()).toMatch(/uv pip install --python \/opt\/harness-venv\/bin\/python/);
-    expect(dockerfileText()).toMatch(/-r \/app\/harness\/requirements\.lock/);
-    expect(dockerfileText()).toMatch(/chown -R hermes:hermes \/opt\/harness-venv/);
+    expect(dockerfileText()).toMatch(/uv venv \/opt\/bob-harness-venv --python 3\.13/);
+    expect(dockerfileText()).toMatch(/uv pip install --python \/opt\/bob-harness-venv\/bin\/python/);
+    expect(dockerfileText()).toMatch(/-r \/app\/bob-harness\/requirements\.lock/);
+    expect(dockerfileText()).toMatch(/chown -R hermes:hermes \/opt\/bob-harness-venv/);
   });
 
   test('per-skill installs replace the tsc build layer', () => {
@@ -147,10 +149,16 @@ describe('compose.yaml single-agent architecture', () => {
     expect(composeText()).not.toMatch(/HERMES_YOLO_MODE/);
   });
 
-  test('agent sets OPENCODE_CONFIG at compose level (docker exec can verify it)', () => {
-    // Under /opt/data — the CMD is dropped to the `hermes` user by the image's
-    // main-wrapper (s6-setuidgid), so /root/.config is unwritable.
-    expect(agentBlock()).toMatch(/OPENCODE_CONFIG: \/opt\/data\/\.config\/opencode\/opencode\.jsonc/);
+  test('agent pins the per-agent folder split (hermes / opencode) at compose level', () => {
+    const b = agentBlock();
+    // Task 23: docker exec must see the pinned values, so they are set at
+    // compose level (image ENV cannot be overridden per-exec).
+    expect(b).toMatch(/HERMES_HOME: \/opt\/data\/hermes/);
+    expect(b).toMatch(/OPENCODE_CONFIG: \/opt\/data\/opencode\/opencode\.jsonc/);
+    expect(b).toMatch(/XDG_CONFIG_HOME: \/opt\/data\/opencode\/config/);
+    expect(b).toMatch(/XDG_DATA_HOME: \/opt\/data\/opencode\/data/);
+    expect(b).toMatch(/XDG_STATE_HOME: \/opt\/data\/opencode\/state/);
+    expect(b).toMatch(/XDG_CACHE_HOME: \/opt\/data\/opencode\/cache/);
   });
 
   test('agent depends on ollama and searxng, not nats', () => {
@@ -166,23 +174,26 @@ describe('compose.yaml single-agent architecture', () => {
     expect(c).not.toMatch(/8642/);
   });
 
-  test('agent env wires the HARNESS_* contract (dashboard-era keys gone)', () => {
+  test('agent env wires the BOB_HARNESS_* contract (dashboard-era keys gone)', () => {
     const b = agentBlock();
-    expect(b).toMatch(/HARNESS_API_KEY: \$\{HARNESS_API_KEY:-\}/);
-    expect(b).toMatch(/HARNESS_ROUTER_BASE_URL/);
-    expect(b).toMatch(/HARNESS_ROUTER_MODEL/);
-    expect(b).toMatch(/HARNESS_DATA_DIR: \/opt\/data\/harness/);
-    expect(b).toMatch(/HARNESS_WORKDIR: \/app\/projects/);
-    expect(b).toMatch(/HARNESS_DISCORD_HOME_CHANNEL/);
+    expect(b).toMatch(/BOB_HARNESS_API_KEY: \$\{BOB_HARNESS_API_KEY:-\}/);
+    expect(b).toMatch(/BOB_HARNESS_ROUTER_BASE_URL/);
+    expect(b).toMatch(/BOB_HARNESS_ROUTER_MODEL/);
+    expect(b).toMatch(/BOB_HARNESS_DATA_DIR: \/opt\/data\/bob-harness/);
+    expect(b).toMatch(/BOB_HARNESS_WORKDIR: \/app\/projects/);
+    expect(b).toMatch(/BOB_HARNESS_DISCORD_HOME_CHANNEL/);
+    // No pre-rename HARNESS_* names may remain (renamed at task 23). The
+    // lookbehind excludes the BOB_HARNESS_ prefix itself.
+    expect(composeText()).not.toMatch(/(?<![A-Z_])HARNESS_/);
     expect(composeText()).not.toMatch(/HERMES_DASHBOARD/);
     expect(composeText()).not.toMatch(/HERMES_API_TIMEOUT/);
   });
 
-  test('bootstrap execs supervisord (cross-file contract with the compose command)', () => {
+  test('bootstrap execs the bob-harness long-runner (cross-file contract with the compose command)', () => {
     // compose's command: ["/app/scripts/bootstrap.sh"] only makes sense for
-    // the R8 bootstrap whose final act is the harness long-runner exec.
+    // the bootstrap whose final act is the bob-harness long-runner exec.
     expect(fs.readFileSync(path.join(ROOT, 'src/scripts/bootstrap.sh'), 'utf8'))
-      .toMatch(/exec \/opt\/harness-venv\/bin\/supervisord/);
+      .toMatch(/exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor/);
   });
 });
 
@@ -214,11 +225,22 @@ describe('running stack (DOCKER_TESTS=1 only)', () => {
       require('child_process').execSync('bash -c "echo > /dev/tcp/localhost/8181"');
     });
 
-    test('profiles researcher/simple provisioned in /opt/data', () => {
+    test('profiles researcher/simple provisioned under the dedicated hermes folder', () => {
       const out = require('child_process').execSync(
-        'docker exec bob-the-agent ls /opt/data/profiles', { encoding: 'utf8' });
+        'docker exec bob-the-agent ls /opt/data/hermes/profiles', { encoding: 'utf8' });
       expect(out).toMatch(/researcher/);
       expect(out).toMatch(/simple/);
+    });
+
+    test('/opt/data carries the dedicated per-agent folders (task 23 split)', () => {
+      const out = require('child_process').execSync(
+        'docker exec bob-the-agent ls /opt/data', { encoding: 'utf8' });
+      expect(out).toMatch(/bob-harness/);
+      expect(out).toMatch(/hermes/);
+      expect(out).toMatch(/opencode/);
+      // Pre-rename scattered layout must not be recreated.
+      expect(out).not.toMatch(/profiles/);
+      expect(out).not.toMatch(/\bharness\b/);
     });
 
     testLive('in-process delegation smoke test (gateway multiplexes while -p simple runs)', () => {

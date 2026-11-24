@@ -69,7 +69,7 @@ describe('bootstrap.sh', () => {
     expect(src).toMatch(/api\/tags/);
     // Model pull must be settled before the harness execs (section 4 of 5).
     const pullAt = src.indexOf('api/pull');
-    const execAt = src.indexOf('exec /opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf');
+    const execAt = src.indexOf('exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor');
     expect(pullAt).toBeGreaterThanOrEqual(0);
     expect(execAt).toBeGreaterThan(pullAt);
   });
@@ -83,25 +83,31 @@ describe('bootstrap.sh', () => {
     expect(script()).not.toMatch(/PROFILE_NAMES="researcher simple coder"/);
   });
 
-  test('supervisord exec replaces the gateway exec', () => {
+  test('bob-harness long-runner exec replaces the gateway exec (no supervisord layer)', () => {
     const src = script();
-    // The bootstrap's final act is the harness long-runner (supervisord),
-    // not the hermes gateway.
-    expect(src).toMatch(/exec \/opt\/harness-venv\/bin\/supervisord -c \/app\/harness\/supervisord\.conf/);
+    // The bootstrap's final act is the bob-harness long-runner (task 22 removed
+    // the supervisord layer; task 23 renamed the package to bob_harness).
+    expect(src).toMatch(/^exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor$/m);
     expect(src).not.toContain('exec hermes gateway run');
     // The ollama model pull must be settled before the supervisor takes over.
     const pullAt = src.indexOf('api/pull');
-    const execAt = src.indexOf('exec /opt/harness-venv/bin/supervisord -c /app/harness/supervisord.conf');
+    const execAt = src.indexOf('exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor');
     expect(pullAt).toBeGreaterThanOrEqual(0);
     expect(execAt).toBeGreaterThan(pullAt);
   });
 
-  test('seeds the harness state root under $HERMES_HOME/harness (idempotent, first boot)', () => {
+  test('sets HERMES_HOME default to the dedicated hermes folder (task 23)', () => {
+    // The base image's image-ENV default stays /opt/data; bootstrap re-defaults
+    // to the dedicated folder so profile provisioning lands under it.
+    expect(script()).toMatch(/HERMES_HOME="\$\{HERMES_HOME:-\/opt\/data\/hermes\}"/);
+  });
+
+  test('seeds the bob-harness state root at /opt/data/bob-harness (idempotent, first boot)', () => {
     const src = script();
-    expect(src).toMatch(/H="\$HERMES_HOME\/harness"/);
+    expect(src).toMatch(/H="\/opt\/data\/bob-harness"/);
     expect(src).toMatch(/mkdir -p "\$H\/skills" "\$H\/memory" "\$H\/logs"/);
     // Config is template-copy-once (user edits on the volume are never overwritten).
-    expect(src).toMatch(/\[ -f "\$H\/config\.yaml" \] \|\| cp \/app\/harness\/harness\.template\.yaml "\$H\/config\.yaml"/);
+    expect(src).toMatch(/\[ -f "\$H\/config\.yaml" \] \|\| cp \/app\/bob-harness\/bob-harness\.template\.yaml "\$H\/config\.yaml"/);
     // Skills seed mirrors copy_skills' rm-then-fresh so the harness skill
     // index cannot go stale across boots.
     const rmAt = src.indexOf('rm -rf "$H/skills/$n"');
@@ -112,7 +118,7 @@ describe('bootstrap.sh', () => {
     expect(src).toMatch(/head -c 2200 "\$HERMES_HOME\/memories\/MEMORY\.md" > "\$H\/memory\/MEMORY\.md"/);
     // The seed block sits after the profile loop and before the OpenCode section.
     const loopAt = src.indexOf('for name in $PROFILE_NAMES');
-    const seedAt = src.indexOf('H="$HERMES_HOME/harness"');
+    const seedAt = src.indexOf('H="/opt/data/bob-harness"');
     const opencodeAt = src.indexOf('OPENCODE_TARGET=');
     expect(loopAt).toBeGreaterThanOrEqual(0);
     expect(opencodeAt).toBeGreaterThanOrEqual(0);
@@ -131,10 +137,27 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/OLLAMA_BASE_URL_PLACEHOLDER/);
   });
 
-  test('creates workspaces and execs the long-running harness last', () => {
+  test('seeds OpenCode config + XDG state under the dedicated opencode folder (task 23)', () => {
+    const src = script();
+    // OPENCODE_TARGET fallback: compose pins the same path (docker exec can
+    // verify it).
+    expect(src).toMatch(/OPENCODE_TARGET="\$\{OPENCODE_CONFIG:-\/opt\/data\/opencode\/opencode\.jsonc\}"/);
+    // The four XDG roots are pre-created so the CLI never hits a missing dir.
+    expect(src).toMatch(/mkdir -p \/opt\/data\/opencode\/config \/opt\/data\/opencode\/data \/opt\/data\/opencode\/state \/opt\/data\/opencode\/cache/);
+  });
+
+  test('runs the harness with the bob-harness PYTHONPATH + hermes home (env contract)', () => {
+    const src = script();
+    // Line-anchored so explanatory comments don't satisfy the assertion.
+    expect(src).toMatch(/^export PYTHONPATH="\/app\/bob-harness"$/m);
+    expect(src).toMatch(/^export HOME="\$\{HERMES_HOME:-\/opt\/data\/hermes\}"$/m);
+    expect(src).toMatch(/starting bob-harness \(python -m bob_harness\.supervisor\)/);
+  });
+
+  test('creates workspaces and execs the long-running bob-harness last', () => {
     // Line-anchored so explanatory comments don't satisfy the assertion.
     expect(script()).toMatch(/^mkdir -p \/app\/projects \/app\/results$/m);
-    expect(script()).toMatch(/exec \/opt\/harness-venv\/bin\/supervisord -c \/app\/harness\/supervisord\.conf/);
+    expect(script()).toMatch(/exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor/);
   });
 
   test('skill copies skip node_modules and dist (volume bloat guard)', () => {
