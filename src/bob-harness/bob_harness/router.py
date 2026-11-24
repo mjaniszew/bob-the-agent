@@ -59,7 +59,7 @@ import yaml
 from pydantic import BaseModel, ValidationError, field_validator
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UnexpectedModelBehavior
-from pydantic_ai.messages import RetryPromptPart
+from pydantic_ai.messages import RetryFeedbackPart, RetryPromptPart, UserPromptPart
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -151,6 +151,12 @@ _MIN_INPUT_KEEP = 400
 _SHORT_REASON_CAP = 120
 _SUMMARY_CAP = 480
 _LONG_SESSION_LIMIT = 25_000
+
+# pydantic-ai 2.x renders a validator-retry round on the model-facing wire as
+# a user-voice fenced prompt (see tests/test_router.py pin); _retry_notes must
+# accept it (raw string slice, no json quoting) plus the v2 history-side
+# RetryFeedbackPart, while keeping the v1 RetryPromptPart shapes (P1).
+_V2_VALIDATION_FENCE = "<pyai:validation_errors>"
 
 
 def _utc_now() -> str:
@@ -268,13 +274,29 @@ def _split_latency(total_ms: int, parts: int) -> list[int]:
 
 
 def _retry_notes(messages: Any) -> list[str]:
-    """Extract the validator-error snippets of every RetryPromptPart in order."""
+    """Extract validator-error snippets from retry turns, in part order.
+
+    Accepts BOTH the pydantic-ai 2.x part shapes and the 1.x legacy ones:
+    - RetryPromptPart (v1, kept green): json-dumps the content (str or list of
+      error details), sliced to the ledger cap.
+    - RetryFeedbackPart (2.x history shape): json-dumps the content list
+      (default=str), sliced to the ledger cap.
+    - UserPromptPart (2.x model-facing wire): when its str content carries the
+      fenced validation echo, the RAW string is taken (no json quoting),
+      sliced to the ledger cap. Plain user prompts yield nothing.
+    """
     notes: list[str] = []
     for message in messages:
         for part in getattr(message, "parts", None) or ():
-            if isinstance(part, RetryPromptPart):
+            if isinstance(part, (RetryPromptPart, RetryFeedbackPart)):
                 snippet = json.dumps(part.content, default=str)
                 notes.append(snippet[:_SHORT_REASON_CAP])
+            elif (
+                isinstance(part, UserPromptPart)
+                and isinstance(part.content, str)
+                and _V2_VALIDATION_FENCE in part.content
+            ):
+                notes.append(part.content[:_SHORT_REASON_CAP])
     return notes
 
 
