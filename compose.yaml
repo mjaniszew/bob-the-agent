@@ -78,7 +78,16 @@ services:
       # in the dedicated /opt/data/hermes folder — overrides the base image's
       # image-ENV default (/opt/data) for the whole process tree incl. docker exec.
       HERMES_HOME: /opt/data/hermes
-      OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
+      # Task 23 folder split: opencode config AND XDG state/data/cache live in
+      # the dedicated /opt/data/opencode folder (previously the config hid in
+      # /opt/data/.config/opencode and state leaked into XDG defaults under
+      # HOME). The bob-harness opencode adapter forwards XDG_* to opencode
+      # children only — hermes children keep their narrow allowlist.
+      OPENCODE_CONFIG: /opt/data/opencode/opencode.jsonc
+      XDG_CONFIG_HOME: /opt/data/opencode/config
+      XDG_DATA_HOME: /opt/data/opencode/data
+      XDG_STATE_HOME: /opt/data/opencode/state
+      XDG_CACHE_HOME: /opt/data/opencode/cache
       # bob-harness (thin Python orchestrator) — API key required (fail-fast if empty);
       # router defaults to the same ollama OpenAI-compatible endpoint the profiles
       # use; home channel is the pinned Discord notices channel (Q4).

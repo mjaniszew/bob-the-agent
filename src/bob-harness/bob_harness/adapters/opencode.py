@@ -54,7 +54,8 @@ Design contract / live facts (probes recorded 2026-11-12, see
   — BOTH an ``error`` event and a nonzero exit map to ``failed``; only the
   first failure is emitted (one terminal failed event max per run).
 - Child env: same strict allowlist helper as hermes (:func:`base.build_child_env`)
-  but with ``OPENCODE_*`` keys in the keep-prefixes (config passthrough);
+  but with ``OPENCODE_*`` and ``XDG_*`` keys in the keep-prefixes (config +
+  state-folder passthrough, task 23);
   ``BOB_HARNESS_*`` (incl. ``BOB_HARNESS_API_KEY`` / ``BOB_HARNESS_ROUTER_*``) can never
   pass (M-3). Spawn: ``cwd=workdir``, ``start_new_session=True``,
   ``stdin=DEVNULL``, stderr PIPE (accumulated; tail reported on failures).
@@ -223,7 +224,12 @@ class OpencodeAdapter:
                 Path(workdir).mkdir(parents=True, exist_ok=True)
                 preseed_opencode_json(workdir)
                 env = build_child_env(
-                    dict(os.environ), keep_prefixes=("OPENCODE_",)
+                    dict(os.environ),
+                    # Task 23: opencode config + XDG state live under
+                    # /opt/data/opencode (compose-pinned OPENCODE_CONFIG +
+                    # XDG_*); the XDG redirects must reach this child while
+                    # hermes children keep their narrow allowlist.
+                    keep_prefixes=("OPENCODE_", "XDG_"),
                 )
                 proc = await self._spawn(argv, workdir, env)
                 stderr_task = asyncio.create_task(read_stream(proc.stderr))

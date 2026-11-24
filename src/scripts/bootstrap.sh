@@ -115,13 +115,15 @@ done
 # itself be absent.
 [ -f "$H/memory/MEMORY.md" ] || head -c 2200 "$HERMES_HOME/memories/MEMORY.md" > "$H/memory/MEMORY.md" 2>/dev/null || true
 
-# ---- 3. OpenCode CLI config (coder two-layer) -----------------------------
+# ---- 3. OpenCode CLI config + state folders (task 23) ---------------------
 # Path is fixed by compose env (OPENCODE_CONFIG) so docker exec can verify it —
 # docker exec does NOT see exports performed inside this process.
 # NOTE: this script runs as the `hermes` user (main-wrapper.sh drops
-# privileges via s6-setuidgid) with HOME=/opt/data — never write under /root.
-OPENCODE_TARGET="${OPENCODE_CONFIG:-/opt/data/.config/opencode/opencode.jsonc}"
+# privileges via s6-setuidgid) with HOME=HERMES_HOME — never write under /root.
+OPENCODE_TARGET="${OPENCODE_CONFIG:-/opt/data/opencode/opencode.jsonc}"
 mkdir -p "$(dirname "$OPENCODE_TARGET")"
+# Pre-create the XDG roots compose pins — the CLI never hits a missing dir.
+mkdir -p /opt/data/opencode/config /opt/data/opencode/data /opt/data/opencode/state /opt/data/opencode/cache
 sed -e "s|OLLAMA_BASE_URL_PLACEHOLDER|${OLLAMA_BASE_URL:-http://ollama:11434}|g" \
     "/app/config/opencode.template.jsonc" > "$OPENCODE_TARGET"
 

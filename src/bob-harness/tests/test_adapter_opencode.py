@@ -566,6 +566,26 @@ def test_build_child_env_keeps_opencode_prefix_and_denies_harness() -> None:
         assert denied not in env
 
 
+def test_build_child_env_keeps_xdg_prefixes_for_opencode_children() -> None:
+    # Task 23: opencode's config + state live under /opt/data/opencode and are
+    # routed via XDG_* — the compose-level values must reach the opencode child
+    # while harness secrets stay denied.
+    base_env = {
+        "PATH": "/bin",
+        "HOME": "/x",
+        "TERM": "xterm",
+        "XDG_CONFIG_HOME": "/opt/data/opencode/config",
+        "XDG_DATA_HOME": "/opt/data/opencode/data",
+        "XDG_STATE_HOME": "/opt/data/opencode/state",
+        "XDG_CACHE_HOME": "/opt/data/opencode/cache",
+        "BOB_HARNESS_API_KEY": "secret",
+    }
+    env = build_child_env(base_env, keep_prefixes=("OPENCODE_", "XDG_"))
+    for prefix in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
+        assert env[prefix] == base_env[prefix]
+    assert "BOB_HARNESS_API_KEY" not in env
+
+
 async def test_spawn_env_forwards_opencode_keys(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -574,10 +594,12 @@ async def test_spawn_env_forwards_opencode_keys(
     workdir = _workdir(tmp_path, "envfwd")
     monkeypatch.setenv("OPENCODE_CONFIG", "/oc/config.json")
     monkeypatch.setenv("BOB_HARNESS_API_KEY", "topsecret")
+    monkeypatch.setenv("XDG_DATA_HOME", "/opt/data/opencode/data")
     calls = install_fake_start_process(monkeypatch, FakeProc([], b"", 0))
     _ = [event async for event in adapter.run(RunSpec(prompt="go", workdir=workdir))]
     env = calls[0]["env"]
     assert env["OPENCODE_CONFIG"] == "/oc/config.json"
+    assert env["XDG_DATA_HOME"] == "/opt/data/opencode/data"
     assert not any(key.startswith("BOB_HARNESS_") for key in env)
 
 
