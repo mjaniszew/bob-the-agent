@@ -188,3 +188,195 @@ def test_scheduler_config_env_allowlist_default_and_override() -> None:
     assert model.env_allowlist == []
     override = SchedulerConfig(env_allowlist=["FOO"])
     assert override.env_allowlist == ["FOO"]
+
+
+# ---------------------------------------------------------------------------
+# P2: harness: capability-configuration group + flat env bindings + runner
+# ---------------------------------------------------------------------------
+
+
+def test_harness_group_defaults(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Part 1 §3.4 harness: YAML block parses into HarnessHarnessConfig."""
+    from bob_harness.config import HarnessHarnessConfig
+
+    monkeypatch.chdir(tmp_path)
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        """\
+harness:
+  memory:
+    enabled: false
+    dir: /data/mem
+    workspace_root: /data/mem-ws
+    agent_name: custom-executor
+    inject: false
+    max_tokens: 1000
+  skills:
+    enabled: false
+    include: [alpha]
+    exclude: [beta]
+    read_files: true
+    missing_directories: error
+  ask_user:
+    enabled: false
+    id: ask
+    answerer: inline
+    timeout_s: 30
+  subagents:
+    enabled: false
+    max_depth: 2
+  delegation:
+    enabled: false
+    tool_name: delegate
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(str(config_file))
+    g = cfg.harness
+    assert isinstance(g, HarnessHarnessConfig)
+    assert g.memory.enabled is False
+    assert g.memory.dir == "/data/mem"
+    assert g.memory.workspace_root == "/data/mem-ws"
+    assert g.memory.agent_name == "custom-executor"
+    assert g.memory.inject is False
+    assert g.memory.max_tokens == 1000
+    assert g.skills.enabled is False
+    assert g.skills.include == ["alpha"]
+    assert g.skills.exclude == ["beta"]
+    assert g.skills.read_files is True
+    assert g.skills.missing_directories == "error"
+    assert g.ask_user.enabled is False
+    assert g.ask_user.id == "ask"
+    assert g.ask_user.answerer == "inline"
+    assert g.ask_user.timeout_s == 30
+    assert g.subagents.enabled is False
+    assert g.subagents.max_depth == 2
+    assert g.delegation.enabled is False
+    assert g.delegation.tool_name == "delegate"
+    # tasks.runner: Literal["analyzed","executor"], default "analyzed" (P7).
+    assert cfg.tasks.runner == "analyzed"
+
+
+def test_harness_group_yaml_defaults(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shipped defaults (no YAML): every §3.4 toggle parses at enabled:true."""
+    monkeypatch.chdir(tmp_path)
+    cfg = load_config(None)
+    g = cfg.harness
+    assert g.memory.enabled is True
+    assert g.memory.dir == ""
+    assert g.memory.workspace_root == ""
+    assert g.memory.agent_name == "executor"
+    assert g.memory.inject is True
+    assert g.memory.max_tokens == 2000
+    assert g.skills.enabled is True
+    assert g.skills.include == []
+    assert g.skills.exclude == []
+    assert g.skills.read_files is False
+    assert g.skills.missing_directories == "skip"
+    assert g.ask_user.enabled is True
+    assert g.ask_user.id == "ask_user"
+    assert g.ask_user.answerer == "deferred"
+    assert g.ask_user.timeout_s is None
+    assert g.subagents.enabled is True
+    assert g.subagents.max_depth == 3
+    assert g.delegation.enabled is True
+    assert g.delegation.tool_name == "delegate_run"
+
+
+def test_new_flat_env_bindings(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 15 §3.4 flat env names map through _FLAT_ENV_BINDINGS."""
+
+    def _binding(env_var: str) -> str:
+        from bob_harness.config import _FLAT_ENV_BINDINGS
+
+        for name, dotted in _FLAT_ENV_BINDINGS:
+            if name == env_var:
+                return dotted
+        raise AssertionError(f"{env_var} not in _FLAT_ENV_BINDINGS")
+
+    expected = {
+        "BOB_HARNESS_MEMORY_ENABLED": "harness.memory.enabled",
+        "BOB_HARNESS_MEMORY_DIR": "harness.memory.dir",
+        "BOB_HARNESS_MEMORY_WORKSPACE": "harness.memory.workspace_root",
+        "BOB_HARNESS_MEMORY_AGENT_NAME": "harness.memory.agent_name",
+        "BOB_HARNESS_MEMORY_INJECT": "harness.memory.inject",
+        "BOB_HARNESS_MEMORY_MAX_TOKENS": "harness.memory.max_tokens",
+        "BOB_HARNESS_SKILLS_ENABLED": "harness.skills.enabled",
+        "BOB_HARNESS_SKILLS_READ_FILES": "harness.skills.read_files",
+        "BOB_HARNESS_SKILLS_MISSING": "harness.skills.missing_directories",
+        "BOB_HARNESS_ASK_USER_ENABLED": "harness.ask_user.enabled",
+        "BOB_HARNESS_ASK_USER_ANSWERER": "harness.ask_user.answerer",
+        "BOB_HARNESS_ASK_USER_TIMEOUT_S": "harness.ask_user.timeout_s",
+        "BOB_HARNESS_SUBAGENTS_ENABLED": "harness.subagents.enabled",
+        "BOB_HARNESS_SUBAGENTS_MAX_DEPTH": "harness.subagents.max_depth",
+        "BOB_HARNESS_DELEGATION_ENABLED": "harness.delegation.enabled",
+    }
+    for env_var, dotted in expected.items():
+        assert _binding(env_var) == dotted
+    # And they BIND live: env beats YAML/defaults for one representative path.
+    monkeypatch.setenv("BOB_HARNESS_MEMORY_ENABLED", "false")
+    monkeypatch.setenv("BOB_HARNESS_MEMORY_AGENT_NAME", "env-executor")
+    cfg = load_config(None)
+    assert cfg.harness.memory.enabled is False
+    assert cfg.harness.memory.agent_name == "env-executor"
+
+
+def test_unknown_env_forbidden(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """extra="forbid" stays intact: untouched nested keys still fail loudly."""
+    monkeypatch.chdir(tmp_path)
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "harness:\n  memory:\n    not_a_real_key: 1\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigValidationError) as excinfo:
+        load_config(str(config_file))
+    assert "not_a_real_key" in str(excinfo.value)
+    # Deeply unknown top-level groups still forbidden too.
+    config_file.write_text("harness:\n  bogus_group: {}\n", encoding="utf-8")
+    with pytest.raises(ConfigValidationError) as excinfo:
+        load_config(str(config_file))
+    assert "bogus_group" in str(excinfo.value)
+
+
+def test_tasks_runner_env_binding(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BOB_HARNESS_TASKS_RUNNER maps to tasks.runner (P7's flip switch)."""
+    monkeypatch.setenv("BOB_HARNESS_TASKS_RUNNER", "executor")
+    cfg = load_config(None)
+    assert cfg.tasks.runner == "executor"
+    monkeypatch.setenv("BOB_HARNESS_TASKS_RUNNER", "analyzed")
+    cfg = load_config(None)
+    assert cfg.tasks.runner == "analyzed"
+
+
+def test_tasks_runner_rejects_unknown(
+    tmp_volume: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """tasks.runner is a Literal: unknown values fail validation."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("tasks:\n  runner: bogus\n", encoding="utf-8")
+    with pytest.raises(ConfigValidationError) as excinfo:
+        load_config(str(config_file))
+    assert "runner" in str(excinfo.value)
