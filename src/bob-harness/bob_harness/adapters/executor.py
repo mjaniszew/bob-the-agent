@@ -136,9 +136,9 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
     from pydantic_ai_harness.sub_agents import SubAgents
 
     if group.memory.enabled:
-        memory_dir = group.memory.dir or str(Path(cfg.storage.data_dir) / "memory")
-        workspace_root = group.memory.workspace_root or workdir or cfg.storage.data_dir
-        store = FileMemoryStore(memory_dir, workspace=LocalWorkspaceBackend(workspace_root))
+        memory_dir = Path(group.memory.dir or str(Path(cfg.storage.data_dir) / "memory"))
+        memory_dir.mkdir(parents=True, exist_ok=True)  # shared store root (D4)
+        store = FileMemoryStore(".", workspace=LocalWorkspaceBackend(memory_dir))
         capabilities.append(
             Memory(
                 store=store,

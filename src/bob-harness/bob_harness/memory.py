@@ -8,6 +8,23 @@ name to its budget key in ``cfg.memory.budgets``). Memory files are CURATED
 content, not append-only logs: budgets are enforced at write time and every
 rewrite is a full-content operation.
 
+Since the pydantic-ai v2 migration (plan D4) the THREE canonical files live
+in ONE :class:`pydantic_ai_harness.memory.FileMemoryStore` shared with the
+harness ``Memory`` capability: the store is rooted at the same
+``<storage.data_dir>/memory`` directory
+(``FileMemoryStore('.', workspace=LocalWorkspaceBackend(...))`` — the store
+requires an explicit ``workspace=`` outside a ``Memory`` run, else
+``UserError``). Writes go through :meth:`MemoryEngine._persist_file` /
+:meth:`MemoryEngine._append_file` (read-observe-then-write with the store's
+SHA-256 content versions for torn-tail/staged-replace safety), and reads
+through :meth:`MemoryEngine._read_store`; every byte that reached disk before
+the migration still reaches disk byte-identically. Engine-side policy is
+unchanged: fenced-edit parsing, audit rows and digest projections stay here,
+and the router/gateway keep consuming :meth:`MemoryEngine.digest` — no store
+imports outside this module. Fenced edits arriving from a RUNNING event loop
+are applied on a private daemon-thread loop (:func:`_run_coro`), so the
+engine's synchronous surface is unchanged for every caller.
+
 Agents self-maintain memory by emitting fenced ``MEMORY_EDIT`` blocks
 (parsed by :mod:`bob_harness.blocks`); this module validates and applies them
 with Hermes' memory-tool semantics:
@@ -53,6 +70,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,7 +80,7 @@ from typing import Any
 from bob_harness.blocks import Block
 from bob_harness.config import HarnessConfig
 from bob_harness.errors import MemoryBudgetError
-from bob_harness.persist import JsonlWriter, append_text
+from bob_harness.persist import JsonlWriter
 
 __all__ = [
     "ApplyResult",
@@ -70,6 +89,14 @@ __all__ = [
 
 # Module logger (pattern: bob_harness.session_manager).
 _LOG = logging.getLogger("bob_harness.memory")
+
+# D4: the shared FileMemoryStore's canonical store paths (registry-KEY-relative
+# names below the store root) for the three curatable files.
+_STORE_PATHS: dict[str, str] = {
+    "MEMORY": "MEMORY.md",
+    "USER": "USER.md",
+    "lessons": "lessons.md",
+}
 
 # Registry key -> (filename, budget key in cfg.memory.budgets); module constant.
 _FILES: dict[str, tuple[str, str]] = {
@@ -140,6 +167,39 @@ def _atomic_write_text(path: Path, text: str) -> None:
         os.close(dir_fd)
 
 
+def _run_coro(coro: Any) -> Any:
+    """Run ``coro`` to completion from SYNC context on a private daemon-thread
+    event loop (the engine's sync surface never blocks a foreign loop and the
+    thread never keeps the process alive)."""
+    if threading.current_thread().name == "bob-harness-memory-store":
+        raise RuntimeError("re-entrant memory store I/O on the private store loop")
+    outcome: list[tuple[bool, Any]] = []
+    done = threading.Event()
+
+    def _worker() -> None:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            outcome.append((True, loop.run_until_complete(coro)))
+        except BaseException as exc:  # noqa: BLE001 — relayed to the caller below
+            outcome.append((False, exc))
+        finally:
+            with suppress(BaseException):  # best-effort loop teardown
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+            done.set()
+
+    thread = threading.Thread(
+        target=_worker, name="bob-harness-memory-store", daemon=True
+    )
+    thread.start()
+    done.wait()
+    ok, value = outcome[0]
+    if not ok:
+        raise value
+    return value
+
+
 @dataclass(frozen=True)
 class ApplyResult:
     """Outcome of one attempted ``MEMORY_EDIT`` application.
@@ -182,6 +242,21 @@ class MemoryEngine:
         self._audit_writer = JsonlWriter(
             Path(cfg.storage.data_dir) / "state" / "memory_audit.jsonl"
         )
+        # D4: ONE FileMemoryStore shared with the harness ``Memory`` capability.
+        # The engine keeps the canonical three files inside the SAME store
+        # root; store I/O routes through :meth:`_persist_file`/:meth:`_read`
+        # (sync wrappers over the async store via :func:`_run_coro`). The
+        # capability's own ``workspace`` binding does not apply here: the
+        # engine binds the directory directly with ``LocalWorkspaceBackend``
+        # (verified contract: ``FileMemoryStore(dir)`` outside a Memory run
+        # needs ``workspace=``, else ``UserError``).
+        from pydantic_ai.workspaces import LocalWorkspaceBackend
+        from pydantic_ai_harness.memory import FileMemoryStore
+
+        self._root.mkdir(parents=True, exist_ok=True)
+        self._store = FileMemoryStore(
+            ".", workspace=LocalWorkspaceBackend(self._root)
+        )
 
     # ------------------------------------------------------------------
     # Reading (never truncated — budgets apply to writes only)
@@ -203,6 +278,69 @@ class MemoryEngine:
         """Char budget of ``file`` from ``cfg.memory.budgets``."""
         return int(getattr(self._cfg.memory.budgets, self._resolve(file)[1]))
 
+    def _store_path(self, file: str) -> str:
+        """Canonical store path for a registry key; unknown key -> ValueError."""
+        if file not in _STORE_PATHS:
+            raise ValueError(f"unknown file '{file}' (see bob_harness.memory._FILES)")
+        return _STORE_PATHS[file]
+
+    def _read_store(self, file: str) -> str:
+        """Whole-file read through the shared store (``""`` when missing).
+
+        The store reports truncation via ``MemoryFile.truncated``; the engine
+        always passes unlimited budgets so reads are never truncated (budgets
+        apply to writes only — module contract).
+        """
+
+        async def _go() -> Any:
+            return await self._store.read(self._store_path(file), max_chars=1_000_000)
+
+        mfile = _run_coro(_go())
+        return "" if mfile is None else mfile.content
+
+    def _persist_file(self, file: str, text: str) -> str:
+        """Durably rewrite a canonical file THROUGH the shared store.
+
+        The torn-tail safety and staged-replace durability of the old
+        ``_atomic_write_text`` come from the store's staged ``mv`` (verified
+        0.73.0). Read-observe-then-write: ``expected_version`` is the version
+        observed in the SAME store call chain. Returns the store-reported
+        version (SHA-256 hex of ``text``).
+        """
+
+        async def _go() -> str:
+            current = await self._store.read(self._store_path(file), max_chars=1_000_000)
+            expected = None if current is None else current.version
+            mutation = await self._store.write(
+                self._store_path(file), text, expected_version=expected
+            )
+            assert mutation.version is not None  # non-None content -> non-None version
+            return mutation.version
+
+        return _run_coro(_go())
+
+    def _append_file(self, file: str, delta: str) -> str:
+        """Durably APPEND ``delta`` to a canonical file through the shared store.
+
+        The store has no append primitive, so this is the read-merge-write
+        rewrite that preserves the historical append byte-contract (the result
+        is byte-identical to ``append_text``; races are serialized by the
+        store's internal lock — one-writer-per-directory as before). Returns
+        the store-reported post-write version.
+        """
+
+        async def _go() -> str:
+            current = await self._store.read(self._store_path(file), max_chars=1_000_000)
+            before = "" if current is None else current.content
+            expected = None if current is None else current.version
+            mutation = await self._store.write(
+                self._store_path(file), before + delta, expected_version=expected
+            )
+            assert mutation.version is not None
+            return mutation.version
+
+        return _run_coro(_go())
+
     def load(self, file: str) -> str:
         """Return the whole file text (``""`` when the file is missing).
 
@@ -210,9 +348,15 @@ class MemoryEngine:
         empty memory, not an error.
         """
         try:
-            return self._path(file).read_text(encoding="utf-8")
-        except FileNotFoundError:
-            return ""
+            return self._read_store(file)
+        except ValueError:
+            raise
+        except Exception:  # noqa: BLE001 - store-unavailable fallback (parity with v1)
+            _LOG.warning("memory store read failed; falling back to plain file read")
+            try:
+                return self._path(file).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                return ""
 
     def fits(self, file: str, content: str) -> bool:
         """Whether ``content`` fits ``file``'s char budget (D4)."""
@@ -290,7 +434,6 @@ class MemoryEngine:
             reason = "missing content"
             self._audit(file_audit, op_audit, False, 0, 0, reason)
             return ApplyResult(False, file_audit, op_audit, 0, 0, reason)
-        path = self._path(file)
         before = self.load(file)
         bullet = f"- {content}"
         if bullet in before.split("\n"):
@@ -298,7 +441,8 @@ class MemoryEngine:
             # no memory.updated (content did not change — R3 variance).
             self._audit(file_audit, op_audit, True, len(before), len(before), "duplicate")
             return ApplyResult(True, file, "add", len(before), len(before), "duplicate")
-        # Add is a pure append (never a rewrite) — the persist.py append contract.
+        # Add historically was a pure append (persist.py append contract); on
+        # the shared store it is the byte-identical read-merge-write (D4).
         boundary = "" if (not before or before.endswith("\n")) else "\n"
         delta = boundary + bullet + "\n"
         post_len = len(before) + len(delta)
@@ -306,12 +450,12 @@ class MemoryEngine:
         if post_len > budget:
             self._audit_overflow(file_audit, op_audit, len(before), post_len)
             raise MemoryBudgetError(_FILES[file][0], budget, post_len)
-        append_text(path, delta)
+        self._append_file(file, delta)
         self._audit(file_audit, op_audit, True, len(before), post_len, None)
         _emit(self._bus, "memory.updated", {"file": file, "op": "add"})
         return ApplyResult(True, file, "add", len(before), post_len, None)
 
-    # -- op: replace / remove (single rewrite through _atomic_write_text) --
+    # -- op: replace / remove (single rewrite through the shared store) --
     def _apply_replace(self, file: str, file_audit: str, op_audit: str, pattern: Any,
                        content: Any) -> ApplyResult:
         """Replace the FIRST pattern-containing line by ``content`` (multi-line)."""
@@ -362,12 +506,12 @@ class MemoryEngine:
     # -- shared commit / audit plumbing --------------------------------
     def _commit(self, file: str, file_audit: str, op_audit: str, op: str, before: str,
                 post: str) -> ApplyResult:
-        """Budget-check, atomically rewrite, audit and emit for a rewrite op."""
+        """Budget-check, store-persist, audit and emit for a rewrite op."""
         after_len = len(post)
         if len(post) > self._budget(file):
             self._audit_overflow(file_audit, op_audit, len(before), after_len)
             raise MemoryBudgetError(_FILES[file][0], self._budget(file), after_len)
-        _atomic_write_text(self._path(file), post)
+        self._persist_file(file, post)
         self._audit(file_audit, op_audit, True, len(before), after_len, None)
         _emit(self._bus, "memory.updated", {"file": file, "op": op})
         return ApplyResult(True, file, op, len(before), after_len, None)

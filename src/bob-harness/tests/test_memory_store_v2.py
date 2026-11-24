@@ -27,15 +27,14 @@ from pathlib import Path
 
 import pytest
 from pydantic_ai import UserError
-from pydantic_ai_harness.memory import FileMemoryStore
 from pydantic_ai.workspaces import LocalWorkspaceBackend
+from pydantic_ai_harness.memory import FileMemoryStore
 
 from bob_harness.blocks import parse_blocks
 from bob_harness.config import load_config
 from bob_harness.errors import MemoryBudgetError
 from bob_harness.memory import MemoryEngine
 from bob_harness.persist import read_jsonl
-
 
 # ---------------------------------------------------------------------------
 # helpers
