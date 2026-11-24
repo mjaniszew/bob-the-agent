@@ -67,7 +67,9 @@ describe('container wiring contracts', () => {
     expect(b).toMatch(/PROFILE_NAMES="researcher simple"/);
     expect(b).toMatch(/exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor/);
     expect(b).not.toContain('exec hermes gateway run');
-    expect(b).not.toMatch(/supervisord/);
+    // No supervisord usage (the "supervisord was removed" historical comment
+    // is fine; an invocation is not).
+    expect(b).not.toMatch(/supervisord\.conf|exec .*supervisord|supervisorctl/);
     // Per-profile Bot Chat provisioning survives the gateway->harness rework.
     expect(b).toContain('Bot Chat');
     // Harness state root + first-boot seeds live in the dedicated folder.
@@ -112,7 +114,7 @@ describe('bob-harness config + adapter contracts', () => {
 
 describe('bob-harness long-runner contract (supervisord removed at task 22)', () => {
   test('the bootstrap final exec is the bob-harness supervisor (no supervisord layer)', () => {
-    const b = bootstrapText();
+    const b = read('src/scripts/bootstrap.sh');
     expect(b).toMatch(/^log "starting bob-harness \(python -m bob_harness\.supervisor\)"/m);
     expect(b).toMatch(/^export PYTHONPATH="\/app\/bob-harness"$/m);
     expect(b).toMatch(/^exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor$/m);
@@ -120,10 +122,13 @@ describe('bob-harness long-runner contract (supervisord removed at task 22)', ()
 
   test('pre-rename layouts are gone and cannot drift back', () => {
     // supervisord.conf was deleted at task 21/22; the old package dir must not
-    // resurrect after the task 23 rename.
+    // resurrect after the task 23 rename. Lookbehinds keep the new names
+    // (/app/bob-harness, /opt/bob-harness-venv, bob-harness.template.yaml)
+    // from false-matching these guards.
     expect(fs.existsSync(path.join(ROOT, 'src/harness/supervisord.conf'))).toBe(false);
     expect(fs.existsSync(path.join(ROOT, 'src/harness'))).toBe(false);
-    expect(read('src/scripts/bootstrap.sh')).not.toMatch(/\/app\/harness|opt\/harness-venv|harness\.template\.yaml/);
+    expect(read('src/scripts/bootstrap.sh'))
+      .not.toMatch(/(?<![a-z-])(\/app\/harness|opt\/harness-venv|harness\.template\.yaml)(?![a-z-])/);
   });
 });
 

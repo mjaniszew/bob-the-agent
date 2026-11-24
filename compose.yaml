@@ -50,15 +50,15 @@ services:
           memory: 1G
 
   # ===========================================
-  # Hermes Agent - single agent + Python harness long-runner
-  # (profiles: researcher, simple; harness runs the gateway, bot, tasks, scheduler)
+  # Hermes Agent - single agent + Python bob-harness long-runner
+  # (profiles: researcher, simple; bob-harness runs the gateway, bot, tasks, scheduler)
   # ===========================================
   agent:
     image: *agent-image
     container_name: bob-the-agent
     command: ["/app/scripts/bootstrap.sh"]
     ports:
-      # Harness gateway (API-key secured; replaces the hermes gateway + dashboard).
+      # bob-harness gateway (API-key secured; replaces the hermes gateway + dashboard).
       # Loopback default; widen to "8181:8181" when a reverse proxy exists.
       - "127.0.0.1:8181:8181"
     environment:
@@ -75,22 +75,22 @@ services:
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
-      # Harness (thin Python orchestrator) — API key required (fail-fast if empty);
+      # bob-harness (thin Python orchestrator) — API key required (fail-fast if empty);
       # router defaults to the same ollama OpenAI-compatible endpoint the profiles
       # use; home channel is the pinned Discord notices channel (Q4).
-      HARNESS_API_KEY: ${HARNESS_API_KEY:-}
-      # Point the harness at the config bootstrap.sh seeds onto the volume
-      # ($HERMES_HOME/harness/config.yaml). Without it, load_config() looks for
+      BOB_HARNESS_API_KEY: ${BOB_HARNESS_API_KEY:-}
+      # Point bob-harness at the config bootstrap.sh seeds onto the volume
+      # (/opt/data/bob-harness/config.yaml). Without it, load_config() looks for
       # ./config.yaml in the CWD (/app) which does not exist and silently falls
       # back to built-in defaults — every YAML-only setting (logfire.enabled,
-      # scheduler jobs, rate limits) would be discarded. Only HARNESS_* flat
+      # scheduler jobs, rate limits) would be discarded. Only BOB_HARNESS_* flat
       # env vars (above) still override the YAML.
-      HARNESS_CONFIG: /opt/data/harness/config.yaml
-      HARNESS_ROUTER_BASE_URL: ${HARNESS_ROUTER_BASE_URL:-http://ollama:11434/v1}
-      HARNESS_ROUTER_MODEL: ${HARNESS_ROUTER_MODEL:-glm-5.3-flash:cloud}
-      HARNESS_DATA_DIR: /opt/data/harness
-      HARNESS_WORKDIR: /app/projects
-      HARNESS_DISCORD_HOME_CHANNEL: ${HARNESS_DISCORD_HOME_CHANNEL:-}
+      BOB_HARNESS_CONFIG: /opt/data/bob-harness/config.yaml
+      BOB_HARNESS_ROUTER_BASE_URL: ${BOB_HARNESS_ROUTER_BASE_URL:-http://ollama:11434/v1}
+      BOB_HARNESS_ROUTER_MODEL: ${BOB_HARNESS_ROUTER_MODEL:-glm-5.3-flash:cloud}
+      BOB_HARNESS_DATA_DIR: /opt/data/bob-harness
+      BOB_HARNESS_WORKDIR: /app/projects
+      BOB_HARNESS_DISCORD_HOME_CHANNEL: ${BOB_HARNESS_DISCORD_HOME_CHANNEL:-}
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.

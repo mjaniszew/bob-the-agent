@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Bob the Agent — single-container bootstrap.
 # Provisions the two surviving Hermes profiles (researcher, simple), seeds the
-# Python harness state, then execs the harness (python -m harness.supervisor).
+# Python bob-harness state, then execs it (python -m bob_harness.supervisor).
 # s6-overlay stays PID 1 (image entrypoint entrypoint-dispatch.sh execs /init,
 # which runs this script as its main program via main-wrapper.sh — dropped to
-# the `hermes` user, HOME=/opt/data, hermes venv already on PATH).
+# the `hermes` user, HOME=HERMES_HOME, hermes venv already on PATH).
 set -euo pipefail
 
 HERMES_HOME="${HERMES_HOME:-/opt/data}"
@@ -87,16 +87,18 @@ for name in $PROFILE_NAMES; do
     log "WARN: could not create Bot Chat session for $name"
 done
 
-# ---- 2b. Harness state root + first-boot seeds (idempotent) -----------------
-# Harness state root + first-boot seeds (idempotent, never overwrites user files).
-# All harness state lives under the existing /opt/data bind (no new volume).
-H="$HERMES_HOME/harness"
+# ---- 2b. bob-harness state root + first-boot seeds (idempotent) ------------
+# bob-harness state root + first-boot seeds (idempotent, never overwrites user
+# files). All bob-harness state lives in its dedicated folder under the
+# existing /opt/data bind (no new volume); the path is a literal so the state
+# root is independent of HERMES_HOME (task 23 folder split).
+H="/opt/data/bob-harness"
 mkdir -p "$H/skills" "$H/memory" "$H/logs"
 # Config: template-copy-once — a boot that died mid-seed reruns safely; user
 # edits on the volume are never overwritten.
-[ -f "$H/config.yaml" ] || cp /app/harness/harness.template.yaml "$H/config.yaml"
+[ -f "$H/config.yaml" ] || cp /app/bob-harness/bob-harness.template.yaml "$H/config.yaml"
 # Skills seed: remove-and-replace every skill SHIPPED in /app/skills (mirrors the
-# per-profile rm-then-fresh copy_skills so the harness index cannot go stale);
+# per-profile rm-then-fresh copy_skills so the bob-harness index cannot go stale);
 # volume-created skills are preserved. Skip the same heavy dirs as copy_skills.
 for d in "$SKILLS_SRC"/*/; do
   [ -d "$d" ] || continue
@@ -107,9 +109,9 @@ for d in "$SKILLS_SRC"/*/; do
   rm -rf "$H/skills/$n"
   cp -r "$d" "$H/skills/$n"
 done
-# Memory continuity (best-effort): seed the harness MEMORY.md from the legacy
+# Memory continuity (best-effort): seed the bob-harness MEMORY.md from the legacy
 # main-profile memories file, pre-truncated to the 2,200-char budget. Never
-# overwrites a user-curated harness file; $HERMES_HOME/memories/MEMORY.md may
+# overwrites a user-curated bob-harness file; $HERMES_HOME/memories/MEMORY.md may
 # itself be absent.
 [ -f "$H/memory/MEMORY.md" ] || head -c 2200 "$HERMES_HOME/memories/MEMORY.md" > "$H/memory/MEMORY.md" 2>/dev/null || true
 
@@ -168,15 +170,15 @@ mkdir -p /app/projects /app/results
 # a child of the already-running s6. Task 22: supervisord was removed — as the
 # unprivileged hermes user it could not REOPEN the root-owned container stdout
 # pipe (stdout_logfile=/dev/fd/1 → EACCES making dispatchers → FATAL loop, the
-# harness never launched). Exec-ing the harness directly keeps stdout inherited
-# (write-only fds need no reopen), so `docker logs` shows all harness output;
+# harness never launched). Exec-ing bob-harness directly keeps stdout inherited
+# (write-only fds need no reopen), so `docker logs` shows all bob-harness output;
 # uvicorn handles SIGTERM (docker stop) gracefully, and compose's
 # restart: unless-stopped covers crashes. Bootstrap is idempotent, so a
 # container restart re-runs provisioning safely before exec-ing again.
-# NOTE: the harness child CLIs (hermes/opencode) resolve via PATH (hermes venv
+# NOTE: the bob-harness child CLIs (hermes/opencode) resolve via PATH (hermes venv
 # is already on PATH from main-wrapper) and OPENCODE_*/HERMES_HOME env below.
-log "starting harness (python -m harness.supervisor)"
-export PYTHONPATH="/app/harness"
+log "starting bob-harness (python -m bob_harness.supervisor)"
+export PYTHONPATH="/app/bob-harness"
 export PYTHONUNBUFFERED=1
-export HOME="${HERMES_HOME:-/opt/data}"
-exec /opt/harness-venv/bin/python -m harness.supervisor
+export HOME="${HERMES_HOME:-/opt/data/hermes}"
+exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor
