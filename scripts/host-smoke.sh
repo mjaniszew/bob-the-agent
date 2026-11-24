@@ -105,7 +105,10 @@ fi
 if ! docker compose exec -T agent test -x /opt/bob-harness-venv/bin/python; then
   fail "5/6" "in-container bob-harness import" "/opt/bob-harness-venv/bin/python is missing"
 fi
-import_out="$(docker compose exec -T agent /opt/bob-harness-venv/bin/python \
+# Task 23: the importable package lives at /app/bob-harness/bob_harness (repo
+# dir bob-harness, PEP-8 import name bob_harness) — run from that dir so
+# python -c resolves it, mirroring bootstrap's PYTHONPATH=/app/bob-harness.
+import_out="$(docker compose exec -T -w /app/bob-harness agent /opt/bob-harness-venv/bin/python \
   -c 'import bob_harness; print(bob_harness.__name__)' 2>&1 || true)"
 if printf '%s\n' "$import_out" | grep -qx 'bob_harness'; then
   pass "5/6" "in-container bob-harness import (bob_harness.__name__ == 'bob_harness')"
