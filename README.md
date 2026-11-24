@@ -168,6 +168,7 @@ The harness gateway listens on `8181` (bound to `127.0.0.1` by default). It repl
 | `HARNESS_DATA_DIR` | Harness state dir (in-container) | `/opt/data/harness` |
 | `HARNESS_WORKDIR` | Harness working directory (in-container) | `/app/projects` |
 | `HARNESS_DISCORD_HOME_CHANNEL` | Pinned Discord notices/home channel for the bot | (unset) |
+| `LOGFIRE_TOKEN` | Optional Logfire ingest token for harness observability (telemetry export token). Enablement is gated by `logfire.enabled` in the harness config (`/opt/data/harness/config.yaml`, template default `true`) | (unset = no remote export) |
 | `USER_X_COM_API_TOKEN` | X.com API token | - |
 | `USER_XAI_SEARCH_API_KEY` | xAI API key for Grok search | - |
 | `USER_AWS_S3_BUCKET` | AWS S3 Bucket | - |

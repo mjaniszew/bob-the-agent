@@ -190,6 +190,35 @@
    ```
 5. The one-time `config.yaml.pre-reconcile.bak` snapshot (taken before the first reconcile of a migrated config) can be restored if a reconcile went wrong
 
+#### Harness YAML-only Settings Ignored (logfire, rate limits, scheduler)
+
+**Symptoms**: the harness boots fine, but YAML-only settings in `/opt/data/harness/config.yaml` appear to have no effect (e.g. Logfire instrumentation not active despite `logfire.enabled: true`, rate limits/scheduler jobs back at default values)
+
+**Cause**: the container env is missing `HARNESS_CONFIG: /opt/data/harness/config.yaml`. Then `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently** falls back to built-in defaults — no hard error, every YAML-only setting is discarded. Only flat `HARNESS_*` env vars still apply. Fixed in commit `ec2dd44` via the compose env; older images may still lack it.
+
+**Solutions**:
+1. Verify the env is passed through:
+   ```bash
+   docker exec bob-the-agent printenv HARNESS_CONFIG   # expect /opt/data/harness/config.yaml
+   ```
+2. Verify the harness actually logged a config load from that path at boot:
+   ```bash
+   docker compose logs agent | grep -i "config"
+   ```
+3. Recreate the container after updating `compose.yaml` (env changes need a recreate, not a restart):
+   ```bash
+   docker compose up -d --force-recreate agent
+   ```
+
+#### Logfire Not Exporting
+
+**Symptoms**: `logfire.enabled: true` in the harness config, "Logfire enabled" in the harness logs, but no traces appear in the Logfire UI
+
+**Solutions**:
+1. Check `LOGFIRE_TOKEN` is set in your `.env` (see `.env.template`) and reaches the container: `docker exec bob-the-agent printenv LOGFIRE_TOKEN` — the token is the ingest credential; without it nothing is exported
+2. Check for `Failed to configure Logfire:` errors in the harness logs — supervisor instrumentation is best-effort by design: it logs and continues rather than failing the boot
+3. Traces from the router brain appear as agents named `route_agent` / `analyze_agent` (service name `bob-harness`); confirm you are looking at the right service in the Logfire UI
+
 #### Specific Profile Issues
 
 All profiles run in the single `agent` container. For profile-specific errors, check the container logs and the profile's own logs:

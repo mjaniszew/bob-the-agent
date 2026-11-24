@@ -103,6 +103,16 @@ agent:
 
 Bootstrap writes a `.env` (chmod 600) into each secondary profile directory (`/opt/data/profiles/{name}/.env`) carrying the profile's secret scope (Ollama/SearXNG URLs, x-com/grok/AWS S3 keys). Hermes never inherits the root `.env` into profiles.
 
+### Harness config file (harness.template.yaml)
+
+The Python harness has its **own** YAML config, separate from the Hermes templates above:
+
+- **Template:** `src/harness/harness.template.yaml` (server bind port 8181, `logfire`, `api_key`, `rate_limit`, `router`, `agents.hermes.default_profile`, scheduler jobs)
+- **Seeding:** `bootstrap.sh` copies it once to `/opt/data/harness/config.yaml` (`[ -f ... ] || cp` — a boot that died mid-seed reruns safely; user edits on the volume are never overwritten)
+- **Resolution:** compose sets `HARNESS_CONFIG=/opt/data/harness/config.yaml` so `load_config()` reads the seeded file. Without it the harness looks for `./config.yaml` in the CWD (`/app`), finds none, and silently falls back to built-in defaults — YAML-only settings are discarded. (Regression fixed in commit `ec2dd44`; `tests/harness-contracts.test.ts` asserts the seven `HARNESS_*` keys compose exposes, including `HARNESS_CONFIG`.)
+- **Precedence:** flat `HARNESS_*` env vars override the YAML values; everything else comes from the file
+- **Schema:** parsed into pydantic models in `src/harness/harness/config.py` (`HarnessConfig`, incl. `LogfireConfig`; unknown keys are rejected with `extra="forbid"`)
+
 ### Agent Identity Files
 
 Each profile directory carries exactly two files under `src/agents/{name}/`. `SOUL.md` is copied into the profile's workspace at startup; the partial is merged into the profile's `config.yaml` by `generate-config.sh` (see [Configuration Files](#configuration-files)):
@@ -144,9 +154,22 @@ The OpenCode config defines (see `src/config/opencode.template.jsonc` for the fu
 | `HERMES_UID` / `HERMES_GID` | number | - | Linux hosts: run the container with these UID/GID so the `./volumes/*` bind mounts are owned by your user |
 | `OPENCODE_CONFIG` | path | `/opt/data/.config/opencode/opencode.jsonc` | Where bootstrap writes the generated OpenCode config |
 | `USER_PROJECTS_FOLDER` | string | - | Host-side source override for the `/app/projects` bind mount |
-
 | `HARNESS_DISCORD_HOME_CHANNEL` | string | - | Discord home channel (numeric id) for harness notices with no originating thread (task state changes, gate questions); fallback env `DISCORD_HOME_CHANNEL`; unset = notices dropped with a rate-limited log |
 | `DISCORD_ALLOWED_USERS` / `DISCORD_ALLOWED_ROLES` | string | - | Optional comma/space-separated allowlists (user/role ids); unset/empty = allow-all (PoC single-user default) |
+
+### Harness (python orchestrator)
+
+These come from compose (`compose.yaml`) — `HARNESS_*` binds/overrides only; anything else stays YAML-only (see [Harness config file](#harness-config-file-harnesstemplateyaml)):
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `HARNESS_API_KEY` | string | - | Required; API key securing the harness gateway (`X-API-Key`); empty = fail-fast at boot (generate: `openssl rand -hex 32`) |
+| `HARNESS_CONFIG` | path | `/opt/data/harness/config.yaml` | In-container path of the harness YAML config (compose-fixed). Without it `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently falls back to built-in defaults** — every YAML-only setting (`logfire`, `rate_limit`, scheduler jobs) is discarded |
+| `HARNESS_ROUTER_BASE_URL` | string | `http://ollama:11434/v1` | OpenAI-compatible endpoint for the router brain (`base_url` bound from env; the `HARNESS_ROUTER_API_KEY` is deliberately NOT bound) |
+| `HARNESS_ROUTER_MODEL` | string | `glm-5.3-flash:cloud` | Router-brain model |
+| `HARNESS_DATA_DIR` | path | `/opt/data/harness` | Harness state root (in-container; fixed by compose) |
+| `HARNESS_WORKDIR` | path | `/app/projects` | Harness workdir root (in-container; fixed by compose) |
+| `LOGFIRE_TOKEN` | string | - | Optional Logfire ingest token for harness observability (see [Observability (Logfire)](#observability-logfire)); without a token telemetry is not exported to Logfire |
 
 ### Model Providers
 
@@ -288,6 +311,26 @@ The system uses Ollama as a proxy for both local and cloud models. Cloud models 
    ```
 
 3. Reference in profile partials as shown above. Note the local ollama container cannot serve `:cloud` models until it is signed in.
+
+## Observability (Logfire)
+
+The harness ships [Logfire](https://logfire.pydantic.dev) instrumentation (added Nov 2026, commits `d230759` + `ec2dd44`; dependency `logfire[system-metrics]>=6` in `src/harness/requirements.txt`, deliberately keeping the version cap style used by the rest of the requirements set).
+
+**Enablement is config-driven, in two parts:**
+
+- YAML: `logfire.enabled` — template default `true` in `src/harness/harness.template.yaml`, built-in default `false` when the key is absent (`config.py` `_BUILTIN_DEFAULTS`). The YAML also carries `logfire.environment` (`'local'`), parsed into `LogfireConfig`.
+- Env: `LOGFIRE_TOKEN` — compose passes it through; it is the ingest token and the only user-facing knob. Without a token, the instrumentation still initializes but nothing is exported to Logfire.
+
+**When `logfire.enabled: true`, the supervisor (`src/harness/harness/supervisor.py`) runs, exactly once per process:**
+
+1. `logfire.configure(environment='local', service_name='bob-harness')` — note the supervisor currently pins `environment='local'` and does not read the YAML `logfire.environment` field
+2. `logfire.instrument_system_metrics()` — host/container system metrics (this is what the `[system-metrics]` extra is for)
+3. `logfire.instrument_httpx()` — spans for outbound HTTP calls
+4. `logfire.instrument_pydantic_ai()` — spans for the router-brain agent runs; the two agents are named (`name='route_agent'` / `name='analyze_agent'` in `src/harness/harness/router.py`) so traces are distinguishable in the Logfire UI
+
+**Failure isolation:** the whole block is wrapped in `try/except` — a failed Logfire setup (e.g. a broken token or an offline collector) is logged as an error and **never aborts the harness boot**.
+
+Instrumentation lives only in the supervisor: `RouterBrain` no longer configures Logfire itself (commit `ec2dd44` moved it out so there is a single `configure()` call per process).
 
 ## Security Considerations
 

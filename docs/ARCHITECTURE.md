@@ -164,6 +164,8 @@ The container runs s6 as PID 1 and uses `/app/scripts/bootstrap.sh` as the conta
 
 Bootstrap is idempotent — a container restart re-runs provisioning safely before exec-ing the harness again.
 
+The harness config seeded in step 4 is pointed at via the compose env `HARNESS_CONFIG: /opt/data/harness/config.yaml`. Without it `load_config()` looks for `./config.yaml` in the CWD (`/app`), finds none, and **silently falls back to built-in defaults** — every YAML-only setting (`logfire.enabled`, `rate_limit`, scheduler jobs) is discarded while flat `HARNESS_*` env overrides still apply. Regression fixed in commit `ec2dd44`; `tests/harness-contracts.test.ts` asserts the seven `HARNESS_*` keys compose exposes, `HARNESS_CONFIG` included. See [Configuration Guide](./CONFIGURATION.md) for the file/precedence description and the [Observability (Logfire)](./CONFIGURATION.md#observability-logfire) section.
+
 ### Key Files
 
 | File | Purpose |
@@ -172,6 +174,7 @@ Bootstrap is idempotent — a container restart re-runs provisioning safely befo
 | `src/agents/{name}/hermes.partial.yml` | Per-profile config overrides (e.g. per-request Ollama context via `ollama_num_ctx`) |
 | `src/agents/{name}/SOUL.md` | Agent personality and behavioral instructions |
 | `src/config/opencode.template.jsonc` | OpenCode CLI config template (env-substituted at startup) |
+| `src/harness/harness.template.yaml` | Harness config template (server bind, `logfire`, `rate_limit`, `router`, `agents.hermes.default_profile`); seeded once to `/opt/data/harness/config.yaml` by bootstrap, pointed at via `HARNESS_CONFIG` |
 | `src/scripts/bootstrap.sh` | Container command: provisions profiles + harness state, then execs `python -m harness.supervisor` |
 | `src/scripts/generate-config.sh` | Config generation orchestrator |
 | `src/scripts/merge-yaml.mjs` | YAML deep-merge utility (partial wins on overlapping keys) |
@@ -324,6 +327,7 @@ See `.env.template` for all configurable variables:
 | `HERMES_API_TIMEOUT` | No | Hermes API read timeout in seconds (default: 3600) |
 | `HERMES_UID` / `HERMES_GID` | No | Linux hosts: run the container with these UID/GID so `./volumes/*` bind mounts are owned by your user |
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |
+| `LOGFIRE_TOKEN` | No | Logfire ingest token — remote export token for the harness's built-in Logfire instrumentation (pydantic-AI router/analyze agent spans, httpx, system metrics; service name `bob-harness`). Gated by `logfire.enabled` in the harness YAML (template default `true`); unset = no remote export |
 
 ## Related Documentation
 
