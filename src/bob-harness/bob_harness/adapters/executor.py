@@ -98,12 +98,18 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
     Every toggle OFF ⇒ ``[]`` (graceful degradation: the executor runs
     capability-free). Toggle-ON wiring per plan §3.2/§3.4:
 
-    - ``memory``: ``Memory(store=FileMemoryStore(dir, workspace=...),
-      agent_name=..., inject_memory=..., max_tokens=...)``; ``dir=''`` →
-      ``<storage.data_dir>/memory`` (shared with ``MemoryEngine``, D4);
-      ``workspace_root=''`` → per-run workdir (the ``workdir`` arg, else
-      ``storage.data_dir``). ``FileMemoryStore`` REQUIRES ``workspace=``
-      (verified 0.73.0: ``UserError`` otherwise).
+    - ``memory``: ``Memory(store=FileMemoryStore('.', workspace=
+      LocalWorkspaceBackend(<shared memory dir>)), agent_name=...,
+      inject_memory=..., max_tokens=...)``; ``dir=''`` →
+      ``<storage.data_dir>/memory`` — the SAME root the ``MemoryEngine``
+      persists through (D4: ONE shared store). The directory is created at
+      assembly time (store roots must exist, verified 0.73.0:
+      ``WorkspaceUnavailableError`` otherwise) and the store is bound
+      ``'.'`` + explicit ``workspace=`` (absolute-dir 0.73.0 form fires a
+      ``HarnessDeprecationWarning``); ``FileMemoryStore`` REQUIRES
+      ``workspace=`` outside a ``Memory`` run (verified: ``UserError``).
+      The separate ``workspace_root`` config key is intentionally unused
+      here: the memory root IS the store workspace (engine parity).
     - ``skills``: ``Skills(directories=[<storage.data_dir>/skills], ...)``
       with the include/exclude slug filters and ``read_files``; missing skill
       directories are tolerated per ``missing_directories`` (lazy ctor: no
