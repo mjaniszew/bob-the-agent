@@ -2,7 +2,7 @@
 # host-smoke.sh — smoke-verify the bob-the-agent compose stack from the Docker HOST.
 #
 # Runs on the user's Docker HOST (NOT inside a container). Requires Docker and
-# docker compose v2. Verifies the harness gateway on 127.0.0.1:8181 end to end:
+# docker compose v2. Verifies the bob-harness gateway on 127.0.0.1:8181 end to end:
 # image build, stack start, gateway HTTP 200, startup marker in container logs,
 # in-container harness import, and all four compose services Up.
 #
@@ -43,7 +43,7 @@ echo "== bob-the-agent host smoke =="
 echo "working dir: $(pwd)"
 
 # Report key variable NAMES only — never their values (no .env reads here).
-for var in HARNESS_API_KEY DISCORD_BOT_TOKEN; do
+for var in BOB_HARNESS_API_KEY DISCORD_BOT_TOKEN; do
   if [ -n "${!var:-}" ]; then
     echo "using ${var}=<set>"
   else
@@ -92,25 +92,25 @@ while :; do
 done
 
 logs="$(docker compose logs agent 2>/dev/null | tail -50 || true)"
-if ! printf '%s\n' "$logs" | grep -qF 'starting harness (python -m harness.supervisor)'; then
+if ! printf '%s\n' "$logs" | grep -qF 'starting bob-harness (python -m bob_harness.supervisor)'; then
   logs="$(docker logs bob-the-agent 2>/dev/null | tail -50 || true)"
 fi
-if printf '%s\n' "$logs" | grep -qF 'starting harness (python -m harness.supervisor)'; then
-  pass "4/6" "container logs contain 'starting harness (python -m harness.supervisor)'"
+if printf '%s\n' "$logs" | grep -qF 'starting bob-harness (python -m bob_harness.supervisor)'; then
+  pass "4/6" "container logs contain 'starting bob-harness (python -m bob_harness.supervisor)'"
 else
-  fail "4/6" "container logs contain 'starting harness (python -m harness.supervisor)'" \
+  fail "4/6" "container logs contain 'starting bob-harness (python -m bob_harness.supervisor)'" \
     "marker not found in the last 50 log lines"
 fi
 
-if ! docker compose exec -T agent test -x /opt/harness-venv/bin/python; then
-  fail "5/6" "in-container harness import" "/opt/harness-venv/bin/python is missing"
+if ! docker compose exec -T agent test -x /opt/bob-harness-venv/bin/python; then
+  fail "5/6" "in-container bob-harness import" "/opt/bob-harness-venv/bin/python is missing"
 fi
-import_out="$(docker compose exec -T agent /opt/harness-venv/bin/python \
-  -c 'import harness; print(harness.__name__)' 2>&1 || true)"
-if printf '%s\n' "$import_out" | grep -qx 'harness'; then
-  pass "5/6" "in-container harness import (harness.__name__ == 'harness')"
+import_out="$(docker compose exec -T agent /opt/bob-harness-venv/bin/python \
+  -c 'import bob_harness; print(bob_harness.__name__)' 2>&1 || true)"
+if printf '%s\n' "$import_out" | grep -qx 'bob_harness'; then
+  pass "5/6" "in-container bob-harness import (bob_harness.__name__ == 'bob_harness')"
 else
-  fail "5/6" "in-container harness import" \
+  fail "5/6" "in-container bob-harness import" \
     "unexpected output: $(printf '%s' "$import_out" | tr '\n' ' ')"
 fi
 
