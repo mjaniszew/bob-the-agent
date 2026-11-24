@@ -242,8 +242,10 @@ async def test_missing_directories_skip_on_fresh_tree(tmp_path: Path) -> None:
     assert [e.kind for e in events] == ["started", "final"]
     assert events[-1].final_text == "fresh-ok"
 
-    # ... and the bare capability boots empty over an EXISTING but empty root
-    (data / "skills").mkdir()  # existing-but-empty library root
+    # ... and the bare capability boots empty over the root the glue created
+    # at assembly (D4-precedent behavior: workspace roots must exist, so the
+    # mount creates <data>/skills when absent)
+    assert (data / "skills").is_dir()
     workdir = tmp_path / "run-ws"
     workdir.mkdir()
     catalogs: list[str] = []

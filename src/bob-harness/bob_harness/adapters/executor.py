@@ -64,6 +64,7 @@ from bob_harness.config import (
     HarnessConfig,
     effective_router_settings,
 )
+from bob_harness.skills import skills_root
 
 __all__ = [
     "SESSION_REF_PREFIX",
@@ -156,12 +157,20 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
         )
 
     if group.skills.enabled:
+        skills_dir = skills_root(cfg)
+        # The mount binds its OWN workspace backend (D5 glue, verified 0.73.0):
+        # absolute library directories resolve INSIDE ``workspace=`` so a run
+        # needs no workspace of its own for the skill catalog, and the root is
+        # created here because workspace roots MUST exist (0.73.0 raises
+        # WorkspaceUnavailableError otherwise; D4 memory-glue precedent).
+        skills_dir.mkdir(parents=True, exist_ok=True)
         capabilities.append(
             Skills(
-                directories=[Path(cfg.storage.data_dir) / "skills"],
+                directories=[skills_dir],
+                workspace=LocalWorkspaceBackend(skills_dir),
+                missing_directories=group.skills.missing_directories,
                 include=group.skills.include or None,
                 exclude=group.skills.exclude or None,
-                missing_directories=group.skills.missing_directories,
                 read_files=group.skills.read_files,
             )
         )

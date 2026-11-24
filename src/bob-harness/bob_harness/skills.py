@@ -52,6 +52,7 @@ __all__ = [
     "SKILL_BODY_MAX_CHARS",
     "TRUNCATION_MARKER",
     "SkillsEngine",
+    "skills_root",
 ]
 
 # Module logger (pattern: bob_harness.memory); deterministic skips warn here.
@@ -72,6 +73,20 @@ _INDEX_DESCRIPTION_CAP = 57
 
 # Slug rule (breakdown section 5): lowercase, [^a-z0-9]+ -> "-", strip dashes.
 _SLUG_RE = re.compile(r"[^a-z0-9-]+")
+
+
+def skills_root(cfg: HarnessConfig) -> Path:
+    """THE skills root: ``<storage.data_dir> / 'skills'`` — the single shared
+    derivation for the engine (:class:`SkillsEngine`, which owns index/capture)
+    and the executor's harness ``Skills`` capability mount (D5 type-share
+    glue: both sides see the same folders).
+
+    Derived from ``data_dir`` on purpose: there is NO ``storage.skills_dir``
+    config key (``extra=\"forbid\"``); the R1 supervisor seeds ``INDEX.md``
+    at exactly this path.
+    """
+    return Path(cfg.storage.data_dir) / "skills"
+
 
 CAPTURE_PROMPT_TEMPLATE = """\
 Distill this session into SKILL.md for skill '<name>'.
@@ -169,8 +184,9 @@ class SkillsEngine:
     def __init__(self, cfg: HarnessConfig, bus: Any | None = None) -> None:
         self._cfg = cfg
         self._bus = bus
-        # Derived from data_dir on purpose: NO storage.skills_dir config key.
-        self._root = Path(cfg.storage.data_dir) / "skills"
+        # THE shared skills root (D5 glue: same derivation as the executor's
+        # harness ``Skills`` capability mount).
+        self._root = skills_root(cfg)
 
     # ------------------------------------------------------------------
     # Level 1: the generated INDEX.md
