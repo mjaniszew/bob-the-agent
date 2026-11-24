@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import types
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,6 +11,9 @@ from pathlib import Path
 import pytest
 
 from bob_harness.config import HarnessConfig, load_config
+
+# P0: silence the pydantic-ai v2 import banner before any pydantic-ai import - plan risk row 10
+os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 
 _CONFIG_ENV_VARS = (
     "BOB_HARNESS_CONFIG",

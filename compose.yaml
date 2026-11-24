@@ -104,6 +104,8 @@ services:
       BOB_HARNESS_DATA_DIR: /opt/data/bob-harness
       BOB_HARNESS_WORKDIR: /app/projects
       BOB_HARNESS_DISCORD_HOME_CHANNEL: ${BOB_HARNESS_DISCORD_HOME_CHANNEL:-}
+      # silence pydantic-ai v2 import banner - plan risk row 10
+      PYDANTIC_AI_NO_BANNER: "1"
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.

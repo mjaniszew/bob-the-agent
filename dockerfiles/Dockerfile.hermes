@@ -9,6 +9,8 @@ FROM nousresearch/hermes-agent:v2026.9.14
 
 # Environment setup
 ENV NODE_COMPILE_CACHE=/var/tmp/node-compile-cache
+# silence pydantic-ai v2 import banner - plan risk row 10
+ENV PYDANTIC_AI_NO_BANNER=1
 
 # Create node compile cache directory (chowned: CMD runs as the hermes user)
 RUN mkdir -p /var/tmp/node-compile-cache && chown hermes:hermes /var/tmp/node-compile-cache
