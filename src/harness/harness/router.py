@@ -62,6 +62,7 @@ from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError, UnexpectedMode
 from pydantic_ai.messages import RetryPromptPart
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+import logfire
 
 from harness.config import HarnessConfig, effective_router_settings
 from harness.memory import MemoryEngine
@@ -468,6 +469,15 @@ class RouterBrain:
         self._ledger_path = Path(cfg.storage.data_dir) / "state" / "router_ledger.jsonl"
         self._ledger = JsonlWriter(self._ledger_path)
 
+        # Logifre setup
+        try:
+            if cfg.logfire.enabled is True and cfg.logfire.environment is not None:
+                _LOG.info("Logifre enabled")
+                logfire.configure(environment=cfg.logfire.environment)
+                logfire.instrument_pydantic_ai()
+        except Exception as e:
+            _LOG.error("Failed to configure Logifre: %s", e)
+
     # ------------------------------------------------------------------
     # Lazy agent construction
     # ------------------------------------------------------------------
@@ -476,6 +486,7 @@ class RouterBrain:
         if self._route_agent is None:
             self._route_agent = Agent(
                 model=self._model,
+                name='route_agent',
                 output_type=Route,
                 model_settings=self._model_settings,
                 retries=self._retries,
@@ -487,6 +498,7 @@ class RouterBrain:
         if self._analyze_agent is None:
             self._analyze_agent = Agent(
                 model=self._model,
+                name='analyze_agent',
                 output_type=Analysis,
                 model_settings=self._model_settings,
                 retries=self._retries,

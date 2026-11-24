@@ -27,6 +27,7 @@ import os
 import pathlib
 import sys
 from typing import Any
+import logfire
 
 import harness.persist
 from harness.bus import Bus
@@ -172,6 +173,19 @@ rate limits see the real client; left untouched when False."""
     # successful start (and unbinds it in the shutdown finally).
     sink_holder: dict[str, Any] = {"sink": None}
 
+    # Logifre setup
+    try:
+        if cfg.logfire.enabled is True:
+            logging.getLogger("harness.supervisor").info("Logifre enabled")
+            logfire.configure(
+                environment='local',
+                service_name='bob-harness',
+            )
+            logfire.instrument_system_metrics()
+            logfire.instrument_httpx()
+    except Exception as e:
+        logging.getLogger("harness.supervisor").error("Failed to configure Logifre: %s", e)
+
     async def _scheduler_demand_sink(payload: dict) -> None:
         sink = sink_holder.get("sink")
         if sink is None:
@@ -216,6 +230,7 @@ rate limits see the real client; left untouched when False."""
             scheduler_ = None
     bot: Any | None = None
     bot = await _start_bot(cfg, bus, manager)
+
     import inspect
 
     from harness.gateway.app import create_app
@@ -285,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--config", default=None, help="path to the YAML config file")
     args = parser.parse_args(argv)
+
     try:
         cfg = load_config(args.config)
     except (ConfigError, ConfigLoadError) as exc:

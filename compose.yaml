@@ -63,15 +63,15 @@ services:
       - "127.0.0.1:8181:8181"
     environment:
       <<: *agent-env
-      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
-      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
-      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
-      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
-      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
-      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
+      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN:-}
+      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY:-}
+      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET:-}
+      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION:-}
+      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID:-}
+      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY:-}
       HERMES_UID: ${HERMES_UID:-}
       HERMES_GID: ${HERMES_GID:-}
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
@@ -84,6 +84,7 @@ services:
       HARNESS_DATA_DIR: /opt/data/harness
       HARNESS_WORKDIR: /app/projects
       HARNESS_DISCORD_HOME_CHANNEL: ${HARNESS_DISCORD_HOME_CHANNEL:-}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
     volumes:

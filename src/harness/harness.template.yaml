@@ -2,6 +2,9 @@
 # Seeded once to the volume by bootstrap; user-editable; HARNESS_* env vars override (D12).
 
 server: {host: "0.0.0.0", port: 8181}          # Q1: gateway port 8181
+logfire: 
+  enabled: true
+  environment: 'local'
 api_key: "${HARNESS_API_KEY}"                  # resolved from env, never stored plaintext; load fails fast when unset
 rate_limit: {per_minute: 30, stream_per_minute: 600}
 router: {provider: openai-compatible, base_url: "http://ollama:11434/v1", model: "glm-5.3-flash:cloud", api_key: null}   # Q3: ollama; env binds base_url/model only (HARNESS_ROUTER_API_KEY is NOT bound, see config.py)

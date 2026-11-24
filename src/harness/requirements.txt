@@ -3,6 +3,7 @@
 # dependency-bump phase, never mid-phase. Install needs PyPI reachability; test execution stays offline.
 pydantic>=2,<3
 pydantic-ai>=1,<2            # DELIBERATE <2 cap: pydantic-ai v2 breaks the schema-retry pattern (round-1 m7). Do not "upgrade".
+logfire[system-metrics]>=6
 fastapi>=0.118,<1
 uvicorn[standard]>=0.30
 pyyaml>=6.0.2

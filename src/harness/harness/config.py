@@ -114,6 +114,10 @@ _API_KEY_EMPTY_MESSAGE = (
 # environment (HARNESS_API_KEY) or YAML.
 _BUILTIN_DEFAULTS: dict[str, Any] = {
     "server": {"host": "0.0.0.0", "port": 8181},  # reconciliation (c): port 8181 (Q1)
+    "logfire": {
+        "enabled": False,
+        "environment": None
+    },
     "rate_limit": {"per_minute": 30, "stream_per_minute": 600},
     "router": {
         "provider": "openai-compatible",  # reconciliation (b): Q3, zai row superseded
@@ -315,6 +319,14 @@ class ServerConfig(BaseModel):
     # proxy so rate limits key on the real client (default False = no change).
     behind_proxy: bool = False
 
+class LogfireConfig(BaseModel):
+    """Logfire configuration"""
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
+
+    enabled: bool = False
+    environment: str | None = None
+
 
 class RateLimitConfig(BaseModel):
     """Request rate-limit settings (ARCHITECTURE.md section 4)."""
@@ -514,6 +526,7 @@ class HarnessConfig(BaseSettings):
     )
 
     server: ServerConfig
+    logfire: LogfireConfig
     api_key: str
     rate_limit: RateLimitConfig
     router: RouterConfig
