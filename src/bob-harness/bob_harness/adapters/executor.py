@@ -35,8 +35,8 @@ Capabilities (:func:`assemble_capabilities`) are driven entirely by the
 ``cfg.harness.*`` toggles (plan §3.4): memory → ``Memory`` +
 ``FileMemoryStore`` (D4: shared with ``MemoryEngine``), skills → ``Skills``,
 ask_user → ``AskUser`` (D3 deferred wiring), subagents → ``SubAgents``
-(in-process only, D1), and delegation → config surface only in P2 (the real
-``delegate_run`` custom capability lands in P3). Every toggle OFF ⇒ ``[]``
+(in-process only, D1), and delegation → ``DelegationCapability`` (the
+``delegate_run`` custom capability over the real CLI adapters, D1). Every toggle OFF ⇒ ``[]``
 and the executor still runs (graceful degradation, asserted by the P2 tests).
 
 The executor NEVER touches :func:`bob_harness.adapters.base.start_process` or
@@ -113,9 +113,9 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
       TaskLoop gate answers on resume, P6).
     - ``subagents``: ``SubAgents(agents=[], max_depth=...)`` — in-process
       only (D1); P3+ populates nested helper agents (never hermes/opencode).
-    - ``delegation``: P2 ships the config surface only — the real
-      ``delegate_run`` custom capability (D1) is implemented in P3 and adds
-      nothing to this list yet.
+    - ``delegation``: ``DelegationCapability`` (the ``delegate_run`` custom
+      capability, D1) over the REAL hermes/opencode registry adapters —
+      never a ``SubAgents`` entry for either CLI.
     """
     group = cfg.harness
     if not (
@@ -125,8 +125,8 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
         or group.subagents.enabled
         or group.delegation.enabled
     ):
-        # Delegation's real capability lands in P3 (D1); in P2 its toggle
-        # contributes no capability object, so an all-off group yields [].
+        # Every toggle off — incl. delegation since P3 (D1) — contributes no
+        # capability object, so an all-off group yields [].
         return []
 
     capabilities: list[Any] = []
@@ -167,6 +167,20 @@ def assemble_capabilities(cfg: HarnessConfig, workdir: str | Path | None = None)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             capabilities.append(SubAgents(agents=[], max_depth=group.subagents.max_depth))
+
+    if group.delegation.enabled:
+        from bob_harness.adapters import get as adapters_get
+        from bob_harness.delegation import DelegationCapability
+
+        capabilities.append(
+            DelegationCapability(
+                registry={
+                    name: adapters_get(name, cfg)
+                    for name in ("hermes", "opencode")
+                },
+                cfg=cfg,
+            )
+        )
 
     return capabilities
 

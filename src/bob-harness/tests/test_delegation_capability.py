@@ -253,9 +253,22 @@ def test_capability_registers_on_v2_agent(delegation_module: Any, tmp_path: Any)
         capabilities=[cap],
     )
     toolsets = getattr(agent, "toolsets", [])
-    assert any("delegate_run" in getattr(ts, "tools", {}) for ts in toolsets), (
-        "delegate_run not bound on the agent toolsets"
-    )
+
+    def _tool_names(ts: Any) -> set[str]:
+        tools = getattr(ts, "tools", None)
+        names = set(tools.keys()) if isinstance(tools, dict) else set()
+        for inner in [getattr(ts, "toolsets", None), getattr(ts, "wrapped", None)]:
+            if isinstance(inner, (list, tuple)):
+                for child in inner:
+                    names |= _tool_names(child)
+            elif inner is not None:
+                names |= _tool_names(inner)
+        return names
+
+    bound = set()
+    for ts in toolsets:
+        bound |= _tool_names(ts)
+    assert "delegate_run" in bound, "delegate_run not bound on the agent toolsets"
 
 
 async def test_invalid_agent_target_rejected(delegation_module: Any, tmp_path: Any) -> None:
