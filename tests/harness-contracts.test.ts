@@ -146,21 +146,29 @@ describe('main profile removed', () => {
 });
 
 describe('HARNESS_* env names (single source of truth)', () => {
-  test('compose agent env exposes exactly the six HARNESS_ keys', () => {
+  test('compose agent env exposes exactly the seven HARNESS_ keys', () => {
     const compose = yaml.load(read('compose.yaml')) as any;
     const env = compose.services.agent.environment;
     const harnessKeys = Object.keys(env).filter((k) => k.startsWith('HARNESS_')).sort();
     expect(harnessKeys).toEqual([
       'HARNESS_API_KEY',
+      'HARNESS_CONFIG',
       'HARNESS_DATA_DIR',
       'HARNESS_DISCORD_HOME_CHANNEL',
       'HARNESS_ROUTER_BASE_URL',
       'HARNESS_ROUTER_MODEL',
       'HARNESS_WORKDIR',
     ]);
-    // No extra HARNESS_* keys, and no dashboard-era HERMES_ keys in the agent env.
+    // HARNESS_CONFIG must point at the config bootstrap.sh seeds onto the
+    // volume (bootstrap.sh "$HERMES_HOME/harness/config.yaml") — without it
+    // load_config() finds no ./config.yaml in the CWD (/app) and silently
+    // falls back to built-in defaults, discarding every YAML-only setting
+    // (e.g. logfire.enabled).
+    expect(env.HARNESS_CONFIG).toBe('/opt/data/harness/config.yaml');
+    // No extra HARNESS_* keys beyond the seven above, and no dashboard-era
+    // HERMES_ keys in the agent env.
     const banned = Object.keys(env).filter(
-      (k) => /^HARNESS_(?!API_KEY|DATA_DIR|DISCORD_HOME_CHANNEL|ROUTER_BASE_URL|ROUTER_MODEL|WORKDIR)/.test(k) ||
+      (k) => /^(?!HARNESS_(API_KEY|CONFIG|DATA_DIR|DISCORD_HOME_CHANNEL|ROUTER_BASE_URL|ROUTER_MODEL|WORKDIR)$)HARNESS_/.test(k) ||
              /^HERMES_(DASHBOARD|API_TIMEOUT)/.test(k));
     expect(banned).toEqual([]);
   });

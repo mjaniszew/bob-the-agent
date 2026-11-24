@@ -183,6 +183,7 @@ rate limits see the real client; left untouched when False."""
             )
             logfire.instrument_system_metrics()
             logfire.instrument_httpx()
+            logfire.instrument_pydantic_ai()
     except Exception as e:
         logging.getLogger("harness.supervisor").error("Failed to configure Logifre: %s", e)
 

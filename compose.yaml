@@ -79,6 +79,13 @@ services:
       # router defaults to the same ollama OpenAI-compatible endpoint the profiles
       # use; home channel is the pinned Discord notices channel (Q4).
       HARNESS_API_KEY: ${HARNESS_API_KEY:-}
+      # Point the harness at the config bootstrap.sh seeds onto the volume
+      # ($HERMES_HOME/harness/config.yaml). Without it, load_config() looks for
+      # ./config.yaml in the CWD (/app) which does not exist and silently falls
+      # back to built-in defaults — every YAML-only setting (logfire.enabled,
+      # scheduler jobs, rate limits) would be discarded. Only HARNESS_* flat
+      # env vars (above) still override the YAML.
+      HARNESS_CONFIG: /opt/data/harness/config.yaml
       HARNESS_ROUTER_BASE_URL: ${HARNESS_ROUTER_BASE_URL:-http://ollama:11434/v1}
       HARNESS_ROUTER_MODEL: ${HARNESS_ROUTER_MODEL:-glm-5.3-flash:cloud}
       HARNESS_DATA_DIR: /opt/data/harness
