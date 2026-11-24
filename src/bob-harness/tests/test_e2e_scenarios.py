@@ -57,7 +57,7 @@ from bob_harness.tasks import TaskStore
 from tests.mocks.discord_fakes import FakeBotClient, FakeMember, FakeUser, make_message
 from tests.mocks.router_model import make_fake_model
 
-API_KEY = "test-key-123"  # conftest tmp_volume feeds HARNESS_API_KEY with this
+API_KEY = "test-key-123"  # conftest tmp_volume feeds BOB_HARNESS_API_KEY with this
 HEADERS = {"X-API-Key": API_KEY}
 
 # Torn-tail fragment: identical to the F6/F17 replay recipe in test_replay.py.

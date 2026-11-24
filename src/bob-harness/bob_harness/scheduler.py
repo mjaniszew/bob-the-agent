@@ -868,10 +868,10 @@ class SchedulerEngine:
         names = [str(name) for name in (self._cfg.scheduler.env_allowlist or []) if str(name)]
         extra: dict[str, str] = {}
         for name in names:
-            if name.startswith("HARNESS_"):
+            if name.startswith("BOB_HARNESS_"):
                 if name in os.environ:
                     _LOG.warning(
-                        "scheduler: run_script env_allowlist entry %r matches the HARNESS_*"
+                        "scheduler: run_script env_allowlist entry %r matches the BOB_HARNESS_*"
                         " deny prefix (config-authoring bug); not passed through",
                         name,
                     )

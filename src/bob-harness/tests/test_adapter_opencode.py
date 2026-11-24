@@ -207,8 +207,8 @@ def test_workdir_must_live_under_configured_root(
 ) -> None:
     """Default-root adapter (^/app/projects/): /tmp/x rejected; nested ok;
     a custom workdir_root adapter builds its regex dynamically."""
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key")
-    monkeypatch.delenv("HARNESS_WORKDIR", raising=False)
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key")
+    monkeypatch.delenv("BOB_HARNESS_WORKDIR", raising=False)
     default_adapter = OpencodeAdapter(load_config())
     with pytest.raises(ValueError, match="not under opencode workdir_root"):
         default_adapter._validate_workdir(RunSpec(prompt="x", workdir="/tmp/x"))
@@ -236,7 +236,7 @@ def test_workdir_traversal_normalized_before_root_match(
     ``/app/projects/../../etc/passwd`` (== /etc/passwd) is REJECTED; a ``..``
     that stays under the root is normalized and accepted as the resolved
     path; the exact configured root itself is rejected too."""
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key")
     default_adapter = OpencodeAdapter(load_config())
     with pytest.raises(ValueError, match="not under opencode workdir_root"):
         default_adapter._validate_workdir(
@@ -554,15 +554,15 @@ def test_build_child_env_keeps_opencode_prefix_and_denies_harness() -> None:
         "TERM": "xterm",
         "OPENCODE_CONFIG": "/oc/config.json",
         "OPENCODE_API": "oc-secret",
-        "HARNESS_API_KEY": "secret",
-        "HARNESS_ROUTER_MODEL": "glm-x",
+        "BOB_HARNESS_API_KEY": "secret",
+        "BOB_HARNESS_ROUTER_MODEL": "glm-x",
     }
     env = build_child_env(base_env, keep_prefixes=("OPENCODE_",))
     assert env["OPENCODE_CONFIG"] == "/oc/config.json"
     assert env["OPENCODE_API"] == "oc-secret"
     for kept in ("PATH", "HOME", "TERM"):
         assert env[kept] == base_env[kept]
-    for denied in ("HARNESS_API_KEY", "HARNESS_ROUTER_MODEL"):
+    for denied in ("BOB_HARNESS_API_KEY", "BOB_HARNESS_ROUTER_MODEL"):
         assert denied not in env
 
 
@@ -573,12 +573,12 @@ async def test_spawn_env_forwards_opencode_keys(
     adapter = _adapter(tmp_path)
     workdir = _workdir(tmp_path, "envfwd")
     monkeypatch.setenv("OPENCODE_CONFIG", "/oc/config.json")
-    monkeypatch.setenv("HARNESS_API_KEY", "topsecret")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "topsecret")
     calls = install_fake_start_process(monkeypatch, FakeProc([], b"", 0))
     _ = [event async for event in adapter.run(RunSpec(prompt="go", workdir=workdir))]
     env = calls[0]["env"]
     assert env["OPENCODE_CONFIG"] == "/oc/config.json"
-    assert not any(key.startswith("HARNESS_") for key in env)
+    assert not any(key.startswith("BOB_HARNESS_") for key in env)
 
 
 # --- session id helper ------------------------------------------------------
@@ -599,8 +599,8 @@ def test_registry_and_full_config_ctor_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key")
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "led"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "led"))
     adapter = get("opencode", load_config())
     assert isinstance(adapter, OpencodeAdapter)
     with pytest.raises(ValueError, match="persist_dir"):
@@ -612,8 +612,8 @@ def test_registry_and_full_config_ctor_path(
 
 @pytest.mark.smoke
 async def test_live_opencode_run(tmp_path: Path) -> None:
-    if os.environ.get("HARNESS_SMOKE_OPENCODE") != "1":
-        pytest.skip("manual: real opencode CLI (set HARNESS_SMOKE_OPENCODE=1)")
+    if os.environ.get("BOB_HARNESS_SMOKE_OPENCODE") != "1":
+        pytest.skip("manual: real opencode CLI (set BOB_HARNESS_SMOKE_OPENCODE=1)")
     adapter = OpencodeAdapter(load_config(), persist_dir=tmp_path)
     events = [
         event

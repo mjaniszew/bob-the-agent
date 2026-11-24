@@ -24,7 +24,7 @@ _CHECK_LINES = ("check: memory ok", "check: sessions ok", "check: skills ok", "c
 
 def _write_check_config(tmp_path: pathlib.Path) -> pathlib.Path:
     config_file = tmp_path / "config.yaml"
-    config_file.write_text('api_key: "${HARNESS_API_KEY}"\n', encoding="utf-8")
+    config_file.write_text('api_key: "${BOB_HARNESS_API_KEY}"\n', encoding="utf-8")
     return config_file
 
 
@@ -66,13 +66,13 @@ def test_check_missing_api_key(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.delenv("HARNESS_API_KEY", raising=False)
+    monkeypatch.delenv("BOB_HARNESS_API_KEY", raising=False)
     config_file = _write_check_config(tmp_path)
     exit_code = main(["--check", "--config", str(config_file)])
     assert exit_code == 2
     captured = capsys.readouterr()
     assert "config error" in captured.err
-    assert "HARNESS_API_KEY" in captured.err
+    assert "BOB_HARNESS_API_KEY" in captured.err
     assert captured.out == ""
 
 
@@ -115,7 +115,7 @@ def test_serve_smoke(
     tmp_volume: pathlib.Path,
     tmp_path: pathlib.Path,
 ) -> None:
-    if os.environ.get("HARNESS_SMOKE_SUPERVISOR") != "1":
+    if os.environ.get("BOB_HARNESS_SMOKE_SUPERVISOR") != "1":
         pytest.skip("manual: uvicorn boot")
     exit_code = main(["--check", "--config", str(_write_check_config(tmp_path))])
     assert exit_code == 0

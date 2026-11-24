@@ -7,11 +7,11 @@ environment) into a validated :class:`HarnessConfig`.
 Resolution order (applied in exactly this order):
 
 1. **YAML file** — ``load_config(path)`` uses ``path`` when given, else the
-   file named by ``$HARNESS_CONFIG`` when that env var is set, else
+   file named by ``$BOB_HARNESS_CONFIG`` when that env var is set, else
    ``./config.yaml``. An explicitly configured file (``path`` arg or
-   ``$HARNESS_CONFIG``) that does not exist or contains invalid YAML raises
+   ``$BOB_HARNESS_CONFIG``) that does not exist or contains invalid YAML raises
    :class:`~bob_harness.errors.ConfigLoadError` naming the path (plus the YAML
-   error line/column when available). If ``$HARNESS_CONFIG`` is unset and
+   error line/column when available). If ``$BOB_HARNESS_CONFIG`` is unset and
    ``./config.yaml`` is absent, the built-in defaults are used and no YAML
    file is required at all.
 2. **Deep merge** — the YAML mapping (if any) is deep-merged onto the
@@ -21,17 +21,17 @@ Resolution order (applied in exactly this order):
    scanned recursively for ``${NAME}`` placeholders and each is replaced from
    ``os.environ``. Referencing an unset or empty variable fails fast with
    :class:`~bob_harness.errors.ConfigError` naming the config key, e.g.
-   ``api_key references ${HARNESS_API_KEY} which is unset``. Resolution
+   ``api_key references ${BOB_HARNESS_API_KEY} which is unset``. Resolution
    happens after the YAML merge, and before env overrides and before model
    validation.
 4. **Env overrides** — applied via pydantic-settings
-   (``env_prefix="HARNESS_"``) using the nested-settings source
-   :class:`_FlatEnvSource`: ``HARNESS_HOST`` -> ``server.host``,
-   ``HARNESS_PORT`` -> ``server.port``, ``HARNESS_API_KEY`` -> ``api_key``,
-   ``HARNESS_DATA_DIR`` -> ``storage.data_dir``,
-   ``HARNESS_ROUTER_BASE_URL`` -> ``router.base_url``,
-   ``HARNESS_ROUTER_MODEL`` -> ``router.model``, ``HARNESS_WORKDIR`` ->
-   ``agents.opencode.workdir_root``, and ``HARNESS_DISCORD_HOME_CHANNEL`` ->
+   (``env_prefix="BOB_HARNESS_"``) using the nested-settings source
+   :class:`_FlatEnvSource`: ``BOB_HARNESS_HOST`` -> ``server.host``,
+   ``BOB_HARNESS_PORT`` -> ``server.port``, ``BOB_HARNESS_API_KEY`` -> ``api_key``,
+   ``BOB_HARNESS_DATA_DIR`` -> ``storage.data_dir``,
+   ``BOB_HARNESS_ROUTER_BASE_URL`` -> ``router.base_url``,
+   ``BOB_HARNESS_ROUTER_MODEL`` -> ``router.model``, ``BOB_HARNESS_WORKDIR`` ->
+   ``agents.opencode.workdir_root``, and ``BOB_HARNESS_DISCORD_HOME_CHANNEL`` ->
    ``discord.home_channel_id`` with fallback to plain ``DISCORD_HOME_CHANNEL``
    when the former is unset. Every other nested value comes from the
    YAML/defaults merge (not from the environment).
@@ -43,8 +43,8 @@ Resolution order (applied in exactly this order):
 Repo reconciliations baked into the defaults below (superseding the original
 ARCHITECTURE.md design values):
 
-(a) ``storage.data_dir`` defaults to ``/opt/data/harness`` (design said
-    ``/data/harness`` — superseded); overridable via ``HARNESS_DATA_DIR``.
+(a) ``storage.data_dir`` defaults to ``/opt/data/bob-harness`` (design said
+    ``/data/harness`` — superseded); overridable via ``BOB_HARNESS_DATA_DIR``.
 (b) ``router`` defaults to the ``openai-compatible`` provider pointed at the
     ollama gateway (``http://ollama:11434/v1``, model
     ``glm-5.3-flash:cloud``) — user decision Q3; the design's zai row is
@@ -53,7 +53,7 @@ ARCHITECTURE.md design values):
     8080 is superseded).
 (d) ``discord.home_channel_id`` (user decision Q4): Discord notices without
     an originating thread go to the home channel; env
-    ``HARNESS_DISCORD_HOME_CHANNEL`` (fallback ``DISCORD_HOME_CHANNEL``).
+    ``BOB_HARNESS_DISCORD_HOME_CHANNEL`` (fallback ``DISCORD_HOME_CHANNEL``).
 
 No side effects on import (no ``__main__`` block; only constants are defined
 at module load).
@@ -100,18 +100,18 @@ __all__ = [
 _VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 _DEFAULT_CONFIG_FILE = "config.yaml"
-_HARNESS_CONFIG_ENV = "HARNESS_CONFIG"
+_BOB_HARNESS_CONFIG_ENV = "BOB_HARNESS_CONFIG"
 
 # Belt-and-braces guard message raised when api_key is missing/empty after all
 # resolution (YAML ${VAR} templates, env overrides, validator pass).
 _API_KEY_EMPTY_MESSAGE = (
-    "HARNESS_API_KEY is empty: set it in the environment (openssl rand -hex 32) or in config"
+    "BOB_HARNESS_API_KEY is empty: set it in the environment (openssl rand -hex 32) or in config"
 )
 
 # Built-in defaults for every model field (ARCHITECTURE.md section 4, per the
 # repo reconciliations (a)-(d) documented in the module docstring). ``api_key``
 # is intentionally absent: it has no usable default and must come from the
-# environment (HARNESS_API_KEY) or YAML.
+# environment (BOB_HARNESS_API_KEY) or YAML.
 _BUILTIN_DEFAULTS: dict[str, Any] = {
     "server": {"host": "0.0.0.0", "port": 8181},  # reconciliation (c): port 8181 (Q1)
     "logfire": {
@@ -183,27 +183,27 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "allowlist": {"allow_users": [], "allow_roles": []},
         "home_channel_id": None,  # reconciliation (d): Q4 home channel
     },
-    "storage": {"data_dir": "/opt/data/harness"},  # reconciliation (a): /data/harness superseded
+    "storage": {"data_dir": "/opt/data/bob-harness"},  # reconciliation (a): /data/harness superseded
 }
 
 # Flat env var -> dotted config path bindings for resolution step 4.
-# HARNESS_DISCORD_HOME_CHANNEL is handled separately (DISCORD_HOME_CHANNEL fallback).
+# BOB_HARNESS_DISCORD_HOME_CHANNEL is handled separately (DISCORD_HOME_CHANNEL fallback).
 _FLAT_ENV_BINDINGS: tuple[tuple[str, str], ...] = (
-    ("HARNESS_HOST", "server.host"),
-    ("HARNESS_PORT", "server.port"),
-    ("HARNESS_BEHIND_PROXY", "server.behind_proxy"),
-    ("HARNESS_API_KEY", "api_key"),
-    ("HARNESS_DATA_DIR", "storage.data_dir"),
-    ("HARNESS_ROUTER_BASE_URL", "router.base_url"),
-    ("HARNESS_ROUTER_MODEL", "router.model"),
-    ("HARNESS_WORKDIR", "agents.opencode.workdir_root"),
+    ("BOB_HARNESS_HOST", "server.host"),
+    ("BOB_HARNESS_PORT", "server.port"),
+    ("BOB_HARNESS_BEHIND_PROXY", "server.behind_proxy"),
+    ("BOB_HARNESS_API_KEY", "api_key"),
+    ("BOB_HARNESS_DATA_DIR", "storage.data_dir"),
+    ("BOB_HARNESS_ROUTER_BASE_URL", "router.base_url"),
+    ("BOB_HARNESS_ROUTER_MODEL", "router.model"),
+    ("BOB_HARNESS_WORKDIR", "agents.opencode.workdir_root"),
 )
 
 # Flat env bindings carrying booleans: their raw string values are cast in
 # _read_flat_env_overrides ('true'/'1'/'yes'/'on' -> True, anything else False).
 _FLAT_ENV_BOOL_PATHS: frozenset[str] = frozenset({"server.behind_proxy"})
 
-_HARNESS_DISCORD_HOME_CHANNEL_ENV = "HARNESS_DISCORD_HOME_CHANNEL"
+_BOB_HARNESS_DISCORD_HOME_CHANNEL_ENV = "BOB_HARNESS_DISCORD_HOME_CHANNEL"
 _DISCORD_HOME_CHANNEL_ENV = "DISCORD_HOME_CHANNEL"
 
 
@@ -226,7 +226,7 @@ def _resolve_env_placeholders(node: Any, path: str = "") -> Any:
     Each placeholder is replaced from ``os.environ``. Fail-fast (plan R1): a
     referenced variable that is unset or empty raises
     :class:`ConfigError` naming the config key path, e.g.
-    ``api_key references ${HARNESS_API_KEY} which is unset``.
+    ``api_key references ${BOB_HARNESS_API_KEY} which is unset``.
     """
     if isinstance(node, dict):
         return {
@@ -254,10 +254,10 @@ def _resolve_env_placeholders(node: Any, path: str = "") -> Any:
 
 
 def _read_flat_env_overrides() -> dict[str, Any]:
-    """Collect flat ``HARNESS_*`` env overrides as a nested mapping.
+    """Collect flat ``BOB_HARNESS_*`` env overrides as a nested mapping.
 
     Empty-string values are treated as unset, so e.g. an empty
-    ``HARNESS_DISCORD_HOME_CHANNEL`` falls back to ``DISCORD_HOME_CHANNEL``.
+    ``BOB_HARNESS_DISCORD_HOME_CHANNEL`` falls back to ``DISCORD_HOME_CHANNEL``.
     """
     overrides: dict[str, Any] = {}
 
@@ -279,7 +279,7 @@ def _read_flat_env_overrides() -> dict[str, Any]:
                 value = value.strip().lower() in ("true", "1", "yes", "on")
             set_path(dotted_path, value)
 
-    home_channel = os.environ.get(_HARNESS_DISCORD_HOME_CHANNEL_ENV) or os.environ.get(
+    home_channel = os.environ.get(_BOB_HARNESS_DISCORD_HOME_CHANNEL_ENV) or os.environ.get(
         _DISCORD_HOME_CHANNEL_ENV
     )
     if home_channel:
@@ -289,10 +289,10 @@ def _read_flat_env_overrides() -> dict[str, Any]:
 
 
 class _FlatEnvSource(PydanticBaseSettingsSource):
-    """pydantic-settings source binding flat ``HARNESS_*`` env vars to nested paths.
+    """pydantic-settings source binding flat ``BOB_HARNESS_*`` env vars to nested paths.
 
     Resolution step 4: nested model fields bind from flat env names (e.g.
-    ``HARNESS_HOST`` -> ``server.host``) rather than nested-delimiter names,
+    ``BOB_HARNESS_HOST`` -> ``server.host``) rather than nested-delimiter names,
     while every other nested value comes from the YAML/defaults merge. The
     source is returned as the first (highest-priority) entry of
     ``HarnessConfig.settings_customise_sources`` so env always overrides YAML.
@@ -343,7 +343,7 @@ class RouterConfig(BaseModel):
     Repo reconciliation (b), user decision Q3: provider is the generic
     ``openai-compatible`` gateway pointed at ollama by default (the design's
     zai row is superseded); ``base_url``/``model`` are env-overridable via
-    ``HARNESS_ROUTER_BASE_URL`` / ``HARNESS_ROUTER_MODEL``.
+    ``BOB_HARNESS_ROUTER_BASE_URL`` / ``BOB_HARNESS_ROUTER_MODEL``.
     """
 
     model_config = ConfigDict(extra="forbid", validate_assignment=False)
@@ -394,7 +394,7 @@ class OpencodeAgentsConfig(BaseModel):
     # Repo reconciliation per plan section 10: 120m parity (the design said 900;
     # superseded).
     timeout_s: int = 7200
-    workdir_root: str = "/app/projects"  # env override: HARNESS_WORKDIR
+    workdir_root: str = "/app/projects"  # env override: BOB_HARNESS_WORKDIR
     auto_approve: bool = True
 
 
@@ -442,7 +442,7 @@ class SchedulerConfig(BaseModel):
     script_timeout_s: int = 600
     # Allowlist of NON-HARNESS env var names the scheduler copies from the
     # supervisor env into the run_script child env via build_child_env extra=
-    # (list-valued: YAML-only, no flat env binding). A HARNESS_* name here is
+    # (list-valued: YAML-only, no flat env binding). A BOB_HARNESS_* name here is
     # NOT pre-filtered: build_child_env itself denies the prefix and raises,
     # which the run_script handler surfaces as an error outcome.
     env_allowlist: list[str] = Field(default_factory=list)
@@ -487,7 +487,7 @@ class DiscordConfig(BaseModel):
     chunk_chars: int = 1900
     allowlist: DiscordAllowlist = Field(default_factory=DiscordAllowlist)
     # Repo reconciliation (d), user decision Q4: notices with no originating
-    # thread go to the home channel; env HARNESS_DISCORD_HOME_CHANNEL (fallback
+    # thread go to the home channel; env BOB_HARNESS_DISCORD_HOME_CHANNEL (fallback
     # DISCORD_HOME_CHANNEL).
     home_channel_id: str | None = None
 
@@ -495,32 +495,32 @@ class DiscordConfig(BaseModel):
 class StorageConfig(BaseModel):
     """On-disk storage settings (ARCHITECTURE.md section 4).
 
-    Repo reconciliation (a): the default ``data_dir`` is ``/opt/data/harness``
+    Repo reconciliation (a): the default ``data_dir`` is ``/opt/data/bob-harness``
     (the design said ``/data/harness``; superseded); env override
-    ``HARNESS_DATA_DIR``.
+    ``BOB_HARNESS_DATA_DIR``.
     """
 
     model_config = ConfigDict(extra="forbid", validate_assignment=False)
 
-    data_dir: str = "/opt/data/harness"
+    data_dir: str = "/opt/data/bob-harness"
 
 
 class HarnessConfig(BaseSettings):
     """Top-level harness configuration (ARCHITECTURE.md section 4).
 
     The only BaseSettings model in the tree: it exists so a nested-settings
-    source (:class:`_FlatEnvSource`) can bind flat ``HARNESS_*`` env vars onto
+    source (:class:`_FlatEnvSource`) can bind flat ``BOB_HARNESS_*`` env vars onto
     nested fields (resolution step 4 in the module docstring).
 
-    ``api_key`` has NO usable default: with no YAML and no ``HARNESS_API_KEY``
+    ``api_key`` has NO usable default: with no YAML and no ``BOB_HARNESS_API_KEY``
     env, :func:`load_config` must fail — a missing key surfaces as a pydantic
     missing-field error which is translated to ``ConfigError`` naming
-    ``HARNESS_API_KEY``, and an explicitly empty key (e.g. ``api_key: ""`` in
+    ``BOB_HARNESS_API_KEY``, and an explicitly empty key (e.g. ``api_key: ""`` in
     YAML) is rejected by the belt-and-braces ``_require_api_key`` validator.
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="HARNESS_",
+        env_prefix="BOB_HARNESS_",
         extra="forbid",
         validate_assignment=False,
     )
@@ -554,7 +554,7 @@ class HarnessConfig(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Flat ``HARNESS_*`` env overrides win over the YAML/defaults init kwargs."""
+        """Flat ``BOB_HARNESS_*`` env overrides win over the YAML/defaults init kwargs."""
         return (_FlatEnvSource(settings_cls), init_settings)
 
 
@@ -597,13 +597,13 @@ def _wrap_validation_error(exc: ValidationError) -> ConfigError:
         loc = ".".join(str(part) for part in err.get("loc", ()))
         err_type = str(err.get("type", ""))
         msg = str(err.get("msg", ""))
-        # api_key missing entirely -> the canonical empty-HARNESS_API_KEY error.
+        # api_key missing entirely -> the canonical empty-BOB_HARNESS_API_KEY error.
         if err_type == "missing" and loc == "api_key":
             return ConfigError("api_key", _API_KEY_EMPTY_MESSAGE)
         # Belt-and-braces: ConfigError raised by the api_key model_validator only
         # propagates unwrapped if pydantic does not wrap it; detect the wrapped
         # form too.
-        if err_type == "value_error" and "HARNESS_API_KEY" in msg and "empty" in msg:
+        if err_type == "value_error" and "BOB_HARNESS_API_KEY" in msg and "empty" in msg:
             return ConfigError("api_key", msg.removeprefix("Value error, "))
         if err_type == "extra_forbidden":
             where = loc or "<top-level>"
@@ -622,7 +622,7 @@ def load_config(path: str | None = None) -> HarnessConfig:
 
     Args:
         path: explicit YAML config file path; when omitted the loader falls
-            back to ``$HARNESS_CONFIG``, then ``./config.yaml``, then just the
+            back to ``$BOB_HARNESS_CONFIG``, then ``./config.yaml``, then just the
             built-in defaults (see resolution step 1 in the module docstring).
 
     Returns:
@@ -637,11 +637,11 @@ def load_config(path: str | None = None) -> HarnessConfig:
         ConfigValidationError: merged values failed model validation
             (also a ``ValueError``), e.g. unknown keys under ``extra="forbid"``.
     """
-    config_path = path or os.environ.get(_HARNESS_CONFIG_ENV) or _DEFAULT_CONFIG_FILE
-    if path is not None or os.environ.get(_HARNESS_CONFIG_ENV) or os.path.isfile(config_path):
+    config_path = path or os.environ.get(_BOB_HARNESS_CONFIG_ENV) or _DEFAULT_CONFIG_FILE
+    if path is not None or os.environ.get(_BOB_HARNESS_CONFIG_ENV) or os.path.isfile(config_path):
         yaml_values = _load_yaml_mapping(config_path)
     else:
-        # No $HARNESS_CONFIG and no ./config.yaml -> built-in defaults, no file needed.
+        # No $BOB_HARNESS_CONFIG and no ./config.yaml -> built-in defaults, no file needed.
         yaml_values = {}
 
     # Step 2: deep-merge the YAML onto the built-in defaults.
@@ -650,7 +650,7 @@ def load_config(path: str | None = None) -> HarnessConfig:
     resolved = _resolve_env_placeholders(merged)
 
     try:
-        # Steps 4 + 5: flat HARNESS_* env overrides (pydantic-settings source) then
+        # Steps 4 + 5: flat BOB_HARNESS_* env overrides (pydantic-settings source) then
         # model validation with extra="forbid".
         return HarnessConfig(**resolved)
     except ConfigError:

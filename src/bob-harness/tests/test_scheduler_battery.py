@@ -50,7 +50,7 @@ from bob_harness.taskloop import TaskLoop
 from bob_harness.tasks import TaskDir, TaskStore
 from tests.mocks.router_model import make_fake_model
 
-API_KEY = "test-key-123"  # conftest tmp_volume feeds HARNESS_API_KEY with this
+API_KEY = "test-key-123"  # conftest tmp_volume feeds BOB_HARNESS_API_KEY with this
 HEADERS = {"X-API-Key": API_KEY}
 
 # The env-dump job script for row 3 (wrapper FILE, apostrophe-free double
@@ -251,7 +251,7 @@ async def test_battery_run_script_e2e_fakeclock(tmp_volume, cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Row 3a: HARNESS_API_KEY denied, allowlisted env passes through (design
+# Row 3a: BOB_HARNESS_API_KEY denied, allowlisted env passes through (design
 # contract: cfg.scheduler.env_allowlist copies the named supervisor env vars
 # into the run_script child env via build_child_env extra=)
 # ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ async def test_battery_run_script_bob_harness_key_denied(
     script = tmp_volume / "dump_env_pass.py"
     tmp_volume.mkdir(parents=True, exist_ok=True)
     script.write_text(_SCRIPT_DUMP_ENV, encoding="utf-8")
-    monkeypatch.setenv("HARNESS_API_KEY", "sentinel-battery-key")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "sentinel-battery-key")
     monkeypatch.setenv("R11_MARKER", "v1")
     monkeypatch.setenv("R11_OUTFILE", str(outfile))
     cfg = cfg.model_copy(
@@ -295,7 +295,7 @@ async def test_battery_run_script_bob_harness_key_denied(
     assert rows[0]["outcome"] == "fired"
     assert "sentinel-battery-key" not in json.dumps(rows[0])  # secret never in the ledger
     keys = ast.literal_eval(outfile.read_text(encoding="utf-8"))
-    assert "HARNESS_API_KEY" not in keys
+    assert "BOB_HARNESS_API_KEY" not in keys
     assert "R11_OUTFILE" in keys and "R11_MARKER" in keys  # allowlisted -> passthrough
 
 
@@ -311,7 +311,7 @@ async def test_battery_run_script_env_allowlist_not_passed(
     script = tmp_volume / "dump_env_deny.py"
     tmp_volume.mkdir(parents=True, exist_ok=True)
     script.write_text(_SCRIPT_DUMP_ENV, encoding="utf-8")
-    monkeypatch.setenv("HARNESS_API_KEY", "sentinel-battery-key")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "sentinel-battery-key")
     monkeypatch.setenv("R11_MARKER", "v1")
     monkeypatch.setenv("R11_OUTFILE", str(outfile))
     cfg = cfg.model_copy(

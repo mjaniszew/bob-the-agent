@@ -64,7 +64,7 @@ _STATUS_MAX = 1900  # Discord message ceiling the /status report targets
 _ROUTE_CHUNK_CHARS = 1900  # chunk_chars fallback mirror == cfg.discord.chunk_chars default
 _NOTICE_DROP_LOG_INTERVAL_S = 60.0
 _FIRST_CONNECT_GRACE_S = 15.0
-_HOME_CHANNEL_ENVS: tuple[str, ...] = ("HARNESS_DISCORD_HOME_CHANNEL", "DISCORD_HOME_CHANNEL")
+_HOME_CHANNEL_ENVS: tuple[str, ...] = ("BOB_HARNESS_DISCORD_HOME_CHANNEL", "DISCORD_HOME_CHANNEL")
 GATE_ANSWER_PATTERN: re.Pattern[str] = re.compile(r"^answer\s+T(\S+)\s+(.+)$")
 HOME_CHANNEL_ENVS = _HOME_CHANNEL_ENVS
 _ALLOWED_STATES = frozenset({"created", "idle", "failed", "routing"})

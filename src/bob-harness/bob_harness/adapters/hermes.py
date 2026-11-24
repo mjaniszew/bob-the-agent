@@ -26,7 +26,7 @@ Design contract / live facts (probes recorded 2026-11-12; see
   defaulting to ``os.environ.get("HERMES_HOME", "/opt/data")``).
 - Child env allowlist (M-3): only ``PATH``/``HOME``/``TERM``/``HERMES_HOME``
   plus optional profile ``.env`` passthrough keys from the ctor; nothing
-  matching ``HARNESS_*`` can ever pass (see ``base.build_child_env``).
+  matching ``BOB_HARNESS_*`` can ever pass (see ``base.build_child_env``).
 - Spawn: ``cwd=spec.workdir`` when set (harness cwd otherwise),
   ``start_new_session=True`` (killpg watchdog), ``stdin=DEVNULL``, stdout/stderr
   PIPE; stderr is accumulated in memory and its last 500 chars are reported in
@@ -201,7 +201,7 @@ class HermesAdapter:
         config keys exist for the hermes ``-t`` / ``--reasoning`` flags (they
         are omitted from argv when ``None``). ``profile_env`` optionally adds
         child-env passthrough keys (profile ``.env`` values; default none,
-        ``HARNESS_*`` keys rejected by the env builder).
+        ``BOB_HARNESS_*`` keys rejected by the env builder).
         """
         if isinstance(config, HarnessConfig):
             agents_cfg = config.agents.hermes

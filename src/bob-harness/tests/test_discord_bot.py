@@ -482,7 +482,7 @@ async def test_home_channel_notice(
 ) -> None:
     _bot, bus, _manager, _adapter, client = await _make_bot(cfg, monkeypatch, chunk_ms=1.0)
     home = client.text_channel(6700)
-    monkeypatch.setenv("HARNESS_DISCORD_HOME_CHANNEL", str(home.id))
+    monkeypatch.setenv("BOB_HARNESS_DISCORD_HOME_CHANNEL", str(home.id))
     await bus.publish("gate.opened", {"task_id": "T9", "question": "need the prod URL?"})
     await bus.publish("task.state", {"task_id": "TA2", "old": "inbox", "new": "running"})
     await settle(0.001)
@@ -490,7 +490,7 @@ async def test_home_channel_notice(
         "⏸ task T9: need the prod URL?",
         "↻ task TA2: inbox → running",
     ]
-    monkeypatch.delenv("HARNESS_DISCORD_HOME_CHANNEL")
+    monkeypatch.delenv("BOB_HARNESS_DISCORD_HOME_CHANNEL")
     with caplog.at_level(logging.INFO, logger="bob_harness.gateway.discord"):
         await bus.publish("gate.notify", {"task_id": "T9", "question": "again?", "kind": "open"})
         await settle(0.001)

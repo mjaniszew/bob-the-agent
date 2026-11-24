@@ -66,10 +66,10 @@ def test_build_child_env_allowlist_denies_harness_prefix() -> None:
         "HOME": "/root",
         "TERM": "xterm",
         "LANG": "C.UTF-8",
-        "HARNESS_API_KEY": "secret",
-        "HARNESS_ROUTER_BASE_URL": "http://router.example",
-        "HARNESS_ROUTER_MODEL": "glm-x",
-        "HARNESS_ROUTER_API_KEY": "router-secret",
+        "BOB_HARNESS_API_KEY": "secret",
+        "BOB_HARNESS_ROUTER_BASE_URL": "http://router.example",
+        "BOB_HARNESS_ROUTER_MODEL": "glm-x",
+        "BOB_HARNESS_ROUTER_API_KEY": "router-secret",
     }
     env = build_child_env(poisoned, {"HERMES_HOME": "/opt/data"})
     assert env["PATH"] == "/bin"
@@ -77,10 +77,10 @@ def test_build_child_env_allowlist_denies_harness_prefix() -> None:
     assert env["TERM"] == "xterm"
     assert env["HERMES_HOME"] == "/opt/data"
     for denied in (
-        "HARNESS_API_KEY",
-        "HARNESS_ROUTER_BASE_URL",
-        "HARNESS_ROUTER_MODEL",
-        "HARNESS_ROUTER_API_KEY",
+        "BOB_HARNESS_API_KEY",
+        "BOB_HARNESS_ROUTER_BASE_URL",
+        "BOB_HARNESS_ROUTER_MODEL",
+        "BOB_HARNESS_ROUTER_API_KEY",
         "LANG",
     ):
         assert denied not in env
@@ -90,8 +90,8 @@ def test_build_child_env_keep_prefixes_and_passthrough_guard() -> None:
     base_env = {"PATH": "/bin", "HOME": "/x", "OPENCODE_API": "oc", "OTHER": "v"}
     env = build_child_env(base_env, keep_prefixes=("OPENCODE_",))
     assert env == {"PATH": "/bin", "HOME": "/x", "OPENCODE_API": "oc"}
-    with pytest.raises(AssertionError, match="HARNESS_"):
-        build_child_env({"PATH": "/bin"}, {"HARNESS_BAD": "1"})
+    with pytest.raises(AssertionError, match="BOB_HARNESS_"):
+        build_child_env({"PATH": "/bin"}, {"BOB_HARNESS_BAD": "1"})
 
 
 async def test_start_process_captured_kwargs(

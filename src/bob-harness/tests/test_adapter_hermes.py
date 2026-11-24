@@ -199,17 +199,17 @@ async def test_model_resolves_spec_over_config(
 
 
 def test_build_child_env_m3_negative() -> None:
-    """HARNESS_API_KEY/ROUTER_* are all absent even when present in base env."""
+    """BOB_HARNESS_API_KEY/ROUTER_* are all absent even when present in base env."""
     poisoned = dict(os.environ)
     poisoned.update(
         {
             "PATH": "/bin",
             "HOME": "/root",
             "TERM": "xterm",
-            "HARNESS_API_KEY": "secret",
-            "HARNESS_ROUTER_BASE_URL": "http://router.example",
-            "HARNESS_ROUTER_MODEL": "glm-x",
-            "HARNESS_ROUTER_API_KEY": "router-secret",
+            "BOB_HARNESS_API_KEY": "secret",
+            "BOB_HARNESS_ROUTER_BASE_URL": "http://router.example",
+            "BOB_HARNESS_ROUTER_MODEL": "glm-x",
+            "BOB_HARNESS_ROUTER_API_KEY": "router-secret",
         }
     )
     env = build_child_env(
@@ -222,10 +222,10 @@ def test_build_child_env_m3_negative() -> None:
         if kept in os.environ:
             assert env[kept] == poisoned[kept]
     for denied in (
-        "HARNESS_API_KEY",
-        "HARNESS_ROUTER_BASE_URL",
-        "HARNESS_ROUTER_MODEL",
-        "HARNESS_ROUTER_API_KEY",
+        "BOB_HARNESS_API_KEY",
+        "BOB_HARNESS_ROUTER_BASE_URL",
+        "BOB_HARNESS_ROUTER_MODEL",
+        "BOB_HARNESS_ROUTER_API_KEY",
     ):
         assert denied not in env
 
@@ -235,8 +235,8 @@ async def test_spawn_env_allowlist_and_profile_passthrough(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The real _spawn path: allowlisted base env + HERMES_HOME + profile_env."""
-    monkeypatch.setenv("HARNESS_API_KEY", "topsecret")
-    monkeypatch.setenv("HARNESS_ROUTER_MODEL", "glm-x")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "topsecret")
+    monkeypatch.setenv("BOB_HARNESS_ROUTER_MODEL", "glm-x")
     monkeypatch.setenv("HERMES_HOME", "/opt/data")
     monkeypatch.setenv("R4_ENV_SHOULD_NOT_PASS", "1")
     adapter = HermesAdapter(
@@ -253,7 +253,7 @@ async def test_spawn_env_allowlist_and_profile_passthrough(
         if kept in os.environ:
             assert env[kept] == os.environ[kept]
     assert "R4_ENV_SHOULD_NOT_PASS" not in env
-    assert not any(key.startswith("HARNESS_") for key in env)
+    assert not any(key.startswith("BOB_HARNESS_") for key in env)
 
 
 def test_registry_and_full_config_ctor_path(
@@ -263,8 +263,8 @@ def test_registry_and_full_config_ctor_path(
     """get('hermes', cfg) returns a HermesAdapter built from a full config
     (ledger rooted at storage.data_dir); the bare sub-config path needs an
     explicit persist_dir."""
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key")
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "led"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "led"))
     adapter = get("hermes", load_config())
     assert isinstance(adapter, HermesAdapter)
     assert isinstance(_adapter(tmp_path), HermesAdapter)
@@ -550,8 +550,8 @@ async def test_prompt_travels_via_query_file(
 
 @pytest.mark.smoke
 async def test_live_hermes_oneshot(tmp_path: Path) -> None:
-    if os.environ.get("HARNESS_SMOKE_HERMES") != "1":
-        pytest.skip("manual: real hermes CLI (set HARNESS_SMOKE_HERMES=1)")
+    if os.environ.get("BOB_HARNESS_SMOKE_HERMES") != "1":
+        pytest.skip("manual: real hermes CLI (set BOB_HARNESS_SMOKE_HERMES=1)")
     adapter = HermesAdapter(
         HermesAgentsConfig(
             profile_timeouts={"simple": 300},

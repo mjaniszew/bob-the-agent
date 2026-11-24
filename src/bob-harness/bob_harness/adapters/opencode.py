@@ -55,7 +55,7 @@ Design contract / live facts (probes recorded 2026-11-12, see
   first failure is emitted (one terminal failed event max per run).
 - Child env: same strict allowlist helper as hermes (:func:`base.build_child_env`)
   but with ``OPENCODE_*`` keys in the keep-prefixes (config passthrough);
-  ``HARNESS_*`` (incl. ``HARNESS_API_KEY`` / ``HARNESS_ROUTER_*``) can never
+  ``BOB_HARNESS_*`` (incl. ``BOB_HARNESS_API_KEY`` / ``BOB_HARNESS_ROUTER_*``) can never
   pass (M-3). Spawn: ``cwd=workdir``, ``start_new_session=True``,
   ``stdin=DEVNULL``, stderr PIPE (accumulated; tail reported on failures).
 - ctor takes the full :class:`~bob_harness.config.HarnessConfig` or the

@@ -23,9 +23,9 @@ Phase R4 contract shipped by this module:
   ``killpg`` (:func:`kill_process_group`), used by the timeout watchdog and by
   early-consumer abandonment (GeneratorExit) cleanup.
 - :func:`build_child_env` — the strict child-env allowlist builder. Children
-  must never see harness-internal secrets: anything matching ``HARNESS_*`` is
+  must never see harness-internal secrets: anything matching ``BOB_HARNESS_*`` is
   always denied (the base env is *filtered* down to the allowlist, and any
-  ``HARNESS_*`` key in the extra/passthrough map is an assertion failure).
+  ``BOB_HARNESS_*`` key in the extra/passthrough map is an assertion failure).
 
 No side effects on import (no ``__main__`` block; only definitions).
 """
@@ -63,7 +63,7 @@ EVENT_KINDS: frozenset[str] = frozenset(
 )
 
 # Harness-internal env prefix that must never leak into a child process.
-ENV_DENY_PREFIX = "HARNESS_"
+ENV_DENY_PREFIX = "BOB_HARNESS_"
 
 # Base-env keys a child CLI may inherit (everything else is dropped).
 DEFAULT_ENV_KEEP: tuple[str, ...] = ("PATH", "HOME", "TERM")
@@ -206,12 +206,12 @@ def build_child_env(
     hermes adapter calls this with ``keep=("PATH", "HOME", "TERM",
     "HERMES_HOME")``.
 
-    Nothing matching the ``HARNESS_*`` deny prefix can ever be in the result:
-    ``HARNESS_*`` keys are dropped from ``base_env`` (harness settings and
-    secrets such as ``HARNESS_API_KEY``, ``HARNESS_ROUTER_*`` never reach a
-    child CLI) and a ``HARNESS_*`` key inside ``extra`` trips an AssertionError
+    Nothing matching the ``BOB_HARNESS_*`` deny prefix can ever be in the result:
+    ``BOB_HARNESS_*`` keys are dropped from ``base_env`` (harness settings and
+    secrets such as ``BOB_HARNESS_API_KEY``, ``BOB_HARNESS_ROUTER_*`` never reach a
+    child CLI) and a ``BOB_HARNESS_*`` key inside ``extra`` trips an AssertionError
     (belt-and-braces against bad passthrough maps). The final mapping is
-    asserted HARNESS_-free before returning (plan M-3).
+    asserted BOB_HARNESS_-free before returning (plan M-3).
     """
     result: dict[str, str] = {}
     for key, value in base_env.items():
@@ -221,10 +221,10 @@ def build_child_env(
             result[key] = value
     for key, value in (extra or {}).items():
         if key.startswith(ENV_DENY_PREFIX):
-            raise AssertionError(f"build_child_env: refusing HARNESS_* passthrough key {key!r}")
+            raise AssertionError(f"build_child_env: refusing BOB_HARNESS_* passthrough key {key!r}")
         result[key] = value
     leaked = [key for key in result if key.startswith(ENV_DENY_PREFIX)]
-    assert not leaked, f"build_child_env: HARNESS_* leaked into child env: {leaked}"
+    assert not leaked, f"build_child_env: BOB_HARNESS_* leaked into child env: {leaked}"
     return result
 
 

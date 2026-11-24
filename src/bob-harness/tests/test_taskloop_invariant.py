@@ -33,7 +33,7 @@ from tests.mocks.router_model import make_fake_model
 
 _T1 = "ABA23456"
 
-_API_KEY = "test-key-123"  # conftest tmp_volume feeds HARNESS_API_KEY with this
+_API_KEY = "test-key-123"  # conftest tmp_volume feeds BOB_HARNESS_API_KEY with this
 _HEADERS = {"X-API-Key": _API_KEY}
 
 

@@ -24,31 +24,31 @@ def test_server_config_field_accepts_true() -> None:
 
 
 def test_env_override_true(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.setenv("HARNESS_BEHIND_PROXY", "1")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.setenv("BOB_HARNESS_BEHIND_PROXY", "1")
     config = load_config()
     assert config.server.behind_proxy is True
 
 
 def test_env_override_true_words(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.setenv("HARNESS_BEHIND_PROXY", "yes")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.setenv("BOB_HARNESS_BEHIND_PROXY", "yes")
     assert load_config().server.behind_proxy is True
 
 
 def test_env_override_false_word(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.setenv("HARNESS_BEHIND_PROXY", "false")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.setenv("BOB_HARNESS_BEHIND_PROXY", "false")
     assert load_config().server.behind_proxy is False
 
 
 def test_env_default_false(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.delenv("HARNESS_BEHIND_PROXY", raising=False)
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.delenv("BOB_HARNESS_BEHIND_PROXY", raising=False)
     assert load_config().server.behind_proxy is False
 
 
@@ -70,9 +70,9 @@ class _FakeServer:
 
 
 def test_serve_passes_proxy_headers_when_behind_proxy(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.setenv("HARNESS_BEHIND_PROXY", "1")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.setenv("BOB_HARNESS_BEHIND_PROXY", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "stub-key")
     from bob_harness.supervisor import _serve
 
@@ -87,9 +87,9 @@ def test_serve_passes_proxy_headers_when_behind_proxy(tmp_path, monkeypatch) -> 
 
 
 def test_serve_leaves_uvicorn_default_without_behind_proxy(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(tmp_path / "harness"))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
-    monkeypatch.delenv("HARNESS_BEHIND_PROXY", raising=False)
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(tmp_path / "harness"))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
+    monkeypatch.delenv("BOB_HARNESS_BEHIND_PROXY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "stub-key")
     from bob_harness.supervisor import _serve
 

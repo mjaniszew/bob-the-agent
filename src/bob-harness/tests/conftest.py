@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the harness test suite."""
+"""Shared pytest fixtures for the bob-harness test suite."""
 
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ import pytest
 from bob_harness.config import HarnessConfig, load_config
 
 _CONFIG_ENV_VARS = (
-    "HARNESS_CONFIG",
-    "HARNESS_API_KEY",
-    "HARNESS_HOST",
-    "HARNESS_PORT",
-    "HARNESS_DATA_DIR",
-    "HARNESS_ROUTER_BASE_URL",
-    "HARNESS_ROUTER_MODEL",
-    "HARNESS_WORKDIR",
-    "HARNESS_ROUTER_API_KEY",
-    "HARNESS_DISCORD_HOME_CHANNEL",
+    "BOB_HARNESS_CONFIG",
+    "BOB_HARNESS_API_KEY",
+    "BOB_HARNESS_HOST",
+    "BOB_HARNESS_PORT",
+    "BOB_HARNESS_DATA_DIR",
+    "BOB_HARNESS_ROUTER_BASE_URL",
+    "BOB_HARNESS_ROUTER_MODEL",
+    "BOB_HARNESS_WORKDIR",
+    "BOB_HARNESS_ROUTER_API_KEY",
+    "BOB_HARNESS_DISCORD_HOME_CHANNEL",
     "DISCORD_HOME_CHANNEL",
     "DISCORD_BOT_TOKEN",
     "DISCORD_ALLOWED_USERS",
@@ -38,9 +38,9 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.fixture
 def tmp_volume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    volume = tmp_path / "harness"
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(volume))
-    monkeypatch.setenv("HARNESS_API_KEY", "test-key-123")
+    volume = tmp_path / "bob-harness"
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(volume))
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "test-key-123")
     return volume
 
 

@@ -69,11 +69,11 @@ def test_env_override_wins(
         f"storage:\n  data_dir: '{yaml_data_dir}'\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("HARNESS_PORT", "8182")
-    monkeypatch.setenv("HARNESS_DATA_DIR", str(env_data_dir))
-    monkeypatch.setenv("HARNESS_ROUTER_MODEL", "env-model:latest")
-    monkeypatch.setenv("HARNESS_WORKDIR", str(tmp_path / "projects"))
-    monkeypatch.setenv("HARNESS_DISCORD_HOME_CHANNEL", "424242")
+    monkeypatch.setenv("BOB_HARNESS_PORT", "8182")
+    monkeypatch.setenv("BOB_HARNESS_DATA_DIR", str(env_data_dir))
+    monkeypatch.setenv("BOB_HARNESS_ROUTER_MODEL", "env-model:latest")
+    monkeypatch.setenv("BOB_HARNESS_WORKDIR", str(tmp_path / "projects"))
+    monkeypatch.setenv("BOB_HARNESS_DISCORD_HOME_CHANNEL", "424242")
     cfg = load_config(str(config_file))
     assert cfg.server.port == 8182
     assert cfg.storage.data_dir == str(env_data_dir)
@@ -113,7 +113,7 @@ def test_var_resolution(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("HARNESS_API_KEY", raising=False)
+    monkeypatch.delenv("BOB_HARNESS_API_KEY", raising=False)
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
         'api_key: "${MY_TOKEN}"\nrouter:\n  base_url: "http://${OLLAMA_HOST}/v1"\n',
@@ -142,12 +142,12 @@ def test_unresolved_var_fail_fast(
 
 
 def test_empty_env_api_key_fails_fast(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HARNESS_API_KEY", "")
+    monkeypatch.setenv("BOB_HARNESS_API_KEY", "")
     monkeypatch.chdir(tmp_path)
     with pytest.raises(ConfigError) as excinfo:
         load_config()
     message = str(excinfo.value)
-    assert "HARNESS_API_KEY" in message
+    assert "BOB_HARNESS_API_KEY" in message
     assert "empty" in message
 
 
@@ -157,7 +157,7 @@ def test_empty_yaml_api_key_fails_fast(tmp_path: pathlib.Path) -> None:
     with pytest.raises(ConfigError) as excinfo:
         load_config(str(config_file))
     message = str(excinfo.value)
-    assert "HARNESS_API_KEY" in message
+    assert "BOB_HARNESS_API_KEY" in message
     assert "empty" in message
 
 
