@@ -11,7 +11,7 @@ prints the footer block, but has still recorded the session.
 
 - Store file: `$HERMES_HOME/profiles/<profile>/state.db`
 - In the PoC container (`HERMES_HOME=/opt/data`, see adapter docstring):
-  `/opt/data/profiles/<profile>/state.db`
+  `/opt/data/hermes/profiles/<profile>/state.db`
 - `state.db` is a standard SQLite database file.
 
 ## Query
@@ -43,5 +43,5 @@ sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
 
 Live probe session `20261112_223916_4f2531` (one-shot `simple` profile run,
 `--run-budget 60`) appeared both in the `Session:` stdout line and as the
-newest row of `/opt/data/profiles/simple/state.db` (`sessions.id`) when peeked
+newest row of `/opt/data/hermes/profiles/simple/state.db` (`sessions.id`) when peeked
 the same way.

@@ -71,11 +71,11 @@ def test_build_child_env_allowlist_denies_harness_prefix() -> None:
         "BOB_HARNESS_ROUTER_MODEL": "glm-x",
         "BOB_HARNESS_ROUTER_API_KEY": "router-secret",
     }
-    env = build_child_env(poisoned, {"HERMES_HOME": "/opt/data"})
+    env = build_child_env(poisoned, {"HERMES_HOME": "/opt/data/hermes"})
     assert env["PATH"] == "/bin"
     assert env["HOME"] == "/root"
     assert env["TERM"] == "xterm"
-    assert env["HERMES_HOME"] == "/opt/data"
+    assert env["HERMES_HOME"] == "/opt/data/hermes"
     for denied in (
         "BOB_HARNESS_API_KEY",
         "BOB_HARNESS_ROUTER_BASE_URL",

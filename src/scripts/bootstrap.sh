@@ -7,7 +7,7 @@
 # the `hermes` user, HOME=HERMES_HOME, hermes venv already on PATH).
 set -euo pipefail
 
-HERMES_HOME="${HERMES_HOME:-/opt/data}"
+HERMES_HOME="${HERMES_HOME:-/opt/data/hermes}"
 TEMPLATE_FILE="/app/config/hermes.template.yaml"
 AGENTS_DIR="/app/agents"
 SKILLS_SRC="/app/skills"

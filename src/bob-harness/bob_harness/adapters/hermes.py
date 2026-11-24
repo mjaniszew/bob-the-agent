@@ -19,11 +19,11 @@ Design contract / live facts (probes recorded 2026-11-12; see
   overrides everything, else ``profile_timeouts[profile]``, else config
   ``agents.hermes.timeout_s``.
 - ``HERMES_HOME`` child-env fact learned live: profiles resolve under
-  ``$HERMES_HOME``; with ``HOME=/opt/data`` and ``HERMES_HOME`` unset the CLI
+  ``$HERMES_HOME``; with ``HERMES_HOME`` unset the CLI
   fails with "Profile 'simple' does not exist" because ``~/.hermes`` does not
-  exist in the container — profiles live at ``/opt/data/profiles``. The child
+  exist in the container — profiles live at ``/opt/data/hermes/profiles``. The child
   env therefore MUST pass ``HERMES_HOME`` (from the ``hermes_home`` ctor arg,
-  defaulting to ``os.environ.get("HERMES_HOME", "/opt/data")``).
+  defaulting to ``os.environ.get("HERMES_HOME", "/opt/data/hermes")``).
 - Child env allowlist (M-3): only ``PATH``/``HOME``/``TERM``/``HERMES_HOME``
   plus optional profile ``.env`` passthrough keys from the ctor; nothing
   matching ``BOB_HARNESS_*`` can ever pass (see ``base.build_child_env``).
@@ -222,9 +222,9 @@ class HermesAdapter:
         self._reasoning_level = reasoning_level
         self._profile_env = dict(profile_env) if profile_env else None
         # Container fact (module docstring): the child needs HERMES_HOME at the
-        # profile store root (/opt/data in the PoC container).
+        # profile store root (HERMES_HOME default /opt/data/hermes in the container).
         self._hermes_home = hermes_home if hermes_home is not None else os.environ.get(
-            "HERMES_HOME", "/opt/data"
+            "HERMES_HOME", "/opt/data/hermes"
         )
         self._ledger = JsonlWriter(persist_root / LEDGER_FILE_NAME)
 

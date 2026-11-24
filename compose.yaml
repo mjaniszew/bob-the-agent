@@ -74,6 +74,10 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
+      # Task 23 folder split: hermes state (profiles/, memories/, sessions) lives
+      # in the dedicated /opt/data/hermes folder — overrides the base image's
+      # image-ENV default (/opt/data) for the whole process tree incl. docker exec.
+      HERMES_HOME: /opt/data/hermes
       OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
       # bob-harness (thin Python orchestrator) — API key required (fail-fast if empty);
       # router defaults to the same ollama OpenAI-compatible endpoint the profiles

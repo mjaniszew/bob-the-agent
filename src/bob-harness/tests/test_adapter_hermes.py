@@ -214,10 +214,10 @@ def test_build_child_env_m3_negative() -> None:
     )
     env = build_child_env(
         poisoned,
-        {"HERMES_HOME": "/opt/data"},
+        {"HERMES_HOME": "/opt/data/hermes"},
         keep=("PATH", "HOME", "TERM", "HERMES_HOME"),
     )
-    assert env["HERMES_HOME"] == "/opt/data"
+    assert env["HERMES_HOME"] == "/opt/data/hermes"
     for kept in ("PATH", "HOME", "TERM"):
         if kept in os.environ:
             assert env[kept] == poisoned[kept]
@@ -237,7 +237,7 @@ async def test_spawn_env_allowlist_and_profile_passthrough(
     """The real _spawn path: allowlisted base env + HERMES_HOME + profile_env."""
     monkeypatch.setenv("BOB_HARNESS_API_KEY", "topsecret")
     monkeypatch.setenv("BOB_HARNESS_ROUTER_MODEL", "glm-x")
-    monkeypatch.setenv("HERMES_HOME", "/opt/data")
+    monkeypatch.setenv("HERMES_HOME", "/opt/data/hermes")
     monkeypatch.setenv("R4_ENV_SHOULD_NOT_PASS", "1")
     adapter = HermesAdapter(
         _sub_config(tmp_path),
@@ -247,7 +247,7 @@ async def test_spawn_env_allowlist_and_profile_passthrough(
     calls = install_fake_start_process(monkeypatch, FakeProc([], b"", 0))
     _ = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
     env = calls[0]["env"]
-    assert env["HERMES_HOME"] == "/opt/data"
+    assert env["HERMES_HOME"] == "/opt/data/hermes"
     assert env["R4_PROFILE_PASSTHROUGH"] == "v"
     for kept in ("PATH", "HOME", "TERM"):
         if kept in os.environ:
