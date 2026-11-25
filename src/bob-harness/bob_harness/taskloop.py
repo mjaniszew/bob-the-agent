@@ -33,10 +33,15 @@ Structure:
   one persisted row per gate event in ``state/gates.jsonl``, ONE 24 h
   ``tasks.gate_timeout_s`` asyncio timer per gate (parked task, in-process),
   exactly one ``gate.notify`` re-notify on expiry then FAILED(gate_timeout);
-  ``answer()`` raises :class:`~bob_harness.tasks.TaskSchemaError` (never
-  ``ValueError``) and the loop's own bus sink consumes ``gate.answered``
-  (the Discord path) the same way the HTTP path does; ``replay()`` restores
-  live gates and ``start()`` re-arms their timers with a fresh full timeout.
+   ``answer()`` raises :class:`~bob_harness.tasks.TaskSchemaError` (never
+   ``ValueError``) and the loop's own bus sink consumes ``gate.answered``
+   (the Discord path) the same way the HTTP path does; ``replay()`` restores
+   live gates and ``start()`` re-arms their timers with a fresh full timeout.
+   A deferred ask (the executor's ``DeferredToolRequests`` system event, P6)
+   parks the SAME shape — question rendered from the validated tool args —
+   and persists the seed + parked in-run history in the task folder;
+   ``answer()`` resumes via ``deferred_tool_results`` and boot restore
+   rebuilds the seed (an unrecoverable park fails as ``gate_corrupt``).
 - **replay()** (F17, §3.4) — sync boot walk over ``tasks/*/state.json``:
   live-session tasks (session transcript still ``agent_running``/``relaying``)
   are ``FAILED(restarted)``, never double-run; others are interrupted ->
@@ -44,8 +49,11 @@ Structure:
   terminal states are honored idempotently). WAITING_INPUT tasks get a live
   in-memory gate record restored (R10; timers are armed by ``start()`` with
   the FULL ``tasks.gate_timeout_s`` since the old asyncio timer is gone).
-  Counters:
-  ``{"tasks", "requeued", "failed_restarted", "gate_restored", "deps_waiting"}``.
+        Counters:
+        ``{"tasks", "requeued", "failed_restarted", "gate_restored", "deps_waiting"}``;
+        ``gate_restored`` counts only tasks whose gate record was actually
+        restored (a P6 unrecoverable deferred park is FAILED(gate_corrupt)
+        with no record).
 
 Blocking note (PoC): ``RouterBrain.analyze`` is synchronous and is called
 directly from the runner coroutine (block-the-loop accepted, mirroring the
@@ -55,9 +63,11 @@ gateway); a test double may hand back an awaitable, which is awaited.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import inspect
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -65,6 +75,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import yaml
+from pydantic_ai.messages import ModelMessagesTypeAdapter, ToolCallPart
 
 from bob_harness.adapters import get as registry_get
 from bob_harness.adapters.base import RunSpec
@@ -103,6 +114,17 @@ _RUNS_LEDGER_FILENAME = "runs.jsonl"
 # back for runtime logic (boot re-arm restores from state.json + events.jsonl).
 _GATES_LEDGER_FILENAME = "gates.jsonl"
 
+# P6 deferred gates: the parked DeferredToolRequests seed + the exact in-run
+# message history persisted in the task folder at park time; answer()/replay()
+# reload them for restart parity and the F15 timeout clears them.
+_DEFERRED_MESSAGES_FILENAME = "deferred_messages.json"
+_DEFERRED_SEED_FILENAME = "deferred_seed.json"
+_DEFERRED_SEED_FILES = (_DEFERRED_MESSAGES_FILENAME, _DEFERRED_SEED_FILENAME)
+
+# Sentinel marking a deferred park unrecoverable at boot (OQ7 gate_corrupt
+# path): _restore_deferred() returns it in place of a tool_call_id.
+_GATE_CORRUPT = object()
+
 # The harness-owned workdir root for drop-block workdir fields (task.yaml rule).
 _WORKDIR_PREFIX = "/app/projects/"
 
@@ -112,6 +134,38 @@ _LIVE_SESSION_STATES = frozenset({"agent_running", "relaying"})
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _write_atomic_text(path: Path, text: str) -> None:
+    """Atomically rewrite ``path`` with ``text`` (documented AtomicCounter
+    pattern, mirroring :func:`bob_harness.memory._atomic_write_text`: write
+    ``<path>.tmp`` -> fsync -> ``os.replace`` -> fsync the parent directory
+    fd, tolerating directory-fsync-less filesystems)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    data = text.encode("utf-8")
+    with open(tmp_path, "wb") as fh:
+        fh.write(data)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, path)
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass  # not every filesystem supports directory fsync
+    finally:
+        os.close(dir_fd)
+
+
+def _question_text(questions: Any) -> str:
+    """Render a DeferredToolRequests questions list as the gate question:
+    each entry's ``question`` text joined with ``" / "`` (non-list/empty -> '')."""
+    if not isinstance(questions, list) or not questions:
+        return ""
+    return " / ".join(
+        str(q.get("question", "")) if isinstance(q, dict) else str(q) for q in questions
+    )
 
 
 class TaskLoop:
@@ -185,7 +239,9 @@ class TaskLoop:
         # Gate park (WAITING_INPUT) in-process bookkeeping for answer()/resume
         # + the 24 h F15 timers: each record is
         # {prompt, analysis, session?, session_id?, agent?, task_oneway,
-        #  question, attempt, deadline_ts, renotified, timer}.
+        #  question, attempt, deadline_ts, renotified, timer, deferred,
+        #  tool_call_id} — deferred/tool_call_id carry the P6 deferred seed
+        # (None on the question-path parks).
         self._gates: dict[str, dict] = {}
         # Per-gate asyncio locks (created with the gate/lazily): serialize
         # answer() against _gate_timeout() so an answer that popped the record
@@ -283,6 +339,10 @@ class TaskLoop:
             raise TaskSchemaError(
                 task_id, f"task {task_id}: not WAITING_INPUT (state {task.state}); cannot answer"
             )
+        # Let a just-scheduled start() gate-re-arm task run first: a restored
+        # gate's timer + 'restored' audit row land BEFORE the record pop
+        # below (answer() is otherwise sync up to that pop).
+        await asyncio.sleep(0)
         async with self._gate_locks.setdefault(task_id, asyncio.Lock()):
             # Serialize vs _gate_timeout(): whoever gets the lock first wins
             # (answer resumes; timeout re-notifies + fails). The lock entry is
@@ -307,6 +367,46 @@ class TaskLoop:
         agent = live.get("agent")
         if not isinstance(agent, str) or not agent.strip():
             agent = self._transcript_agent(session) or "hermes"
+        if live.get("deferred") is not None:
+            # P6 deferred gate (the executor's DeferredToolRequests park — the
+            # question path never sets it): the resume rides
+            # ``deferred_tool_results`` with the ORIGINAL in-run history,
+            # reloaded from the task folder for restart parity, NEVER a
+            # prompt append.
+            tool_call_id = live.get("tool_call_id")
+            messages_json, seed = self._load_deferred_seed(task_id, live)
+            await session.append_event("user", {"text": text})
+            await task.append_event(
+                "gate_answered",
+                {
+                    "answer": text,
+                    "tool_call_id": tool_call_id,
+                    "seed": list(_DEFERRED_SEED_FILES),
+                },
+            )
+            await task.transition("RUNNING")
+            self._gate_row(
+                task_id,
+                "answered",
+                data={
+                    "tool_call_id": tool_call_id,
+                    "seed": list(_DEFERRED_SEED_FILES),
+                },
+            )
+            await self._attempts_loop(
+                task,
+                session,
+                live["analysis"],
+                agent,
+                live["prompt"],
+                task_oneway=bool(live.get("task_oneway")),
+                deferred_resume={
+                    "messages_json": messages_json,
+                    "seed": seed,
+                    "answer": text,
+                },
+            )
+            return
         await session.append_event("user", {"text": text})
         await task.append_event("gate_answered", {"answer": text})
         await task.transition("RUNNING")
@@ -316,6 +416,47 @@ class TaskLoop:
             task, session, live["analysis"], agent, prompt,
             task_oneway=bool(live.get("task_oneway")),
         )
+
+    def _load_deferred_seed(self, task_id: str, live: dict) -> tuple[str, dict]:
+        """Reload the parked deferred resume inputs from the task folder (P6
+        restart parity: one on-disk code path for fresh AND restored gates).
+        Either file unreadable/unparseable -> TaskSchemaError (the gateway
+        maps it to 409). The messages document is a JSON string literal
+        (json.loads -> the parked history str); a legacy list document falls
+        back to its raw text (json.JSONDecodeError is a ValueError). Seed
+        keys missing from the on-disk dict fall back to
+        the live record's values (the same-process park wrote them); neither
+        available -> TaskSchemaError."""
+        task_dir = self._store.root / task_id
+        try:
+            raw_messages = (
+                task_dir / _DEFERRED_MESSAGES_FILENAME
+            ).read_text(encoding="utf-8")
+            parsed_messages = json.loads(raw_messages)
+            messages_json = parsed_messages if isinstance(parsed_messages, str) else raw_messages
+            seed_on_disk = json.loads(
+                (task_dir / _DEFERRED_SEED_FILENAME).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise TaskSchemaError(
+                task_id, f"task {task_id}: deferred gate seed unreadable; cannot answer"
+            ) from exc
+        live_deferred = live.get("deferred")
+        live_seed = live_deferred.get("seed") if isinstance(live_deferred, dict) else None
+        seed = dict(seed_on_disk) if isinstance(seed_on_disk, dict) else None
+        if seed is None:
+            seed = dict(live_seed) if isinstance(live_seed, dict) else None
+        elif isinstance(live_seed, dict):
+            for key in ("calls", "approvals", "metadata", "validated_args", "_kinds"):
+                if key not in seed and key in live_seed:
+                    seed[key] = live_seed[key]
+        if seed is None or not all(
+            key in seed for key in ("calls", "approvals", "metadata", "validated_args", "_kinds")
+        ):
+            raise TaskSchemaError(
+                task_id, f"task {task_id}: deferred gate seed unreadable; cannot answer"
+            )
+        return messages_json, seed
 
     # ------------------------------------------------------------------
     # Gate engine (R10/D18/F15): rows, timers, re-notify, timeout fail
@@ -420,6 +561,7 @@ class TaskLoop:
                 )
                 await task.transition("FAILED", reason="gate_timeout")
                 self._gate_row(task_id, "timeout", deadline_ts=record.get("deadline_ts"))
+                self._clear_deferred_files(task_id)
                 self._drop_gate(task_id)
             except Exception as exc:  # noqa: BLE001 — timeout bookkeeping must not crash the timer
                 _LOG.warning("gate timeout handling for task %s failed: %s", task_id, exc)
@@ -435,6 +577,7 @@ class TaskLoop:
                     task_id, "timeout", deadline_ts=record.get("deadline_ts"),
                     data={"error": str(exc)},
                 )
+                self._clear_deferred_files(task_id)
                 self._drop_gate(task_id)
 
     def _cancel_gate_timer(self, record: dict) -> None:
@@ -449,6 +592,18 @@ class TaskLoop:
         if record is not None:
             self._cancel_gate_timer(record)
         self._gate_locks.pop(task_id, None)
+
+    def _clear_deferred_files(self, task_id: str) -> None:
+        """Best-effort P6 deferred seed clearance: the parked seed is dead
+        once the F15 timer failed the gate — deferred_messages.json +
+        deferred_seed.json are unlinked (they are preserved ONLY on the
+        gate_corrupt restore path). Never blocks the timeout bookkeeping."""
+        task_dir = self._store.root / task_id
+        for name in _DEFERRED_SEED_FILES:
+            try:
+                (task_dir / name).unlink(missing_ok=True)
+            except OSError as exc:
+                _LOG.warning("deferred seed clearance for task %s failed: %s", task_id, exc)
 
     def _transcript_agent(self, session: Session) -> str | None:
         """The agent of the session's last ``agent_final`` record (the
@@ -497,8 +652,11 @@ class TaskLoop:
                 # at boot; the answer resumes the SAME session via --resume).
                 if task_id not in self._boot_gates:
                     self._boot_gates.add(task_id)
-                    self._restore_gate(task_id)
-                    counts["gate_restored"] += 1
+                    # P6: a deferred park whose seed/messages are unrecoverable
+                    # is FAILED(gate_corrupt) with NO gate record — restore
+                    # counts NEITHER gate_restored nor requeued (OQ7).
+                    if self._restore_gate(task_id) is not None:
+                        counts["gate_restored"] += 1
                 continue
             state_data = self._store.read_state(task_id) or {}
             if self._agent_session_live(state_data.get("agent_session")):
@@ -600,7 +758,7 @@ class TaskLoop:
                 return state in _LIVE_SESSION_STATES
         return False
 
-    def _restore_gate(self, task_id: str) -> None:
+    def _restore_gate(self, task_id: str) -> dict | None:
         """Rebuild a live in-process gate record for a persisted WAITING_INPUT
         task (R10 boot re-arm, sync, always best-effort). Sources: state.json
         (agent_session + attempt), the task events.jsonl (``gate_opened``
@@ -609,7 +767,15 @@ class TaskLoop:
         record is degraded but still answerable — ``answer()`` then opens a
         FRESH session and resumes with the answer (documented). The timeout
         timer is armed later, in async ``start()`` (fresh FULL
-        ``tasks.gate_timeout_s`` — the old asyncio timer is gone)."""
+        ``tasks.gate_timeout_s`` — the old asyncio timer is gone).
+
+        P6: a deferred park restores ``deferred`` = {seed, messages_json}
+        from the task folder. An unreadable/missing seed is rebuilt
+        deterministically from the pending tool calls still parked in the
+        messages history (recovered seed persisted); a fully unrecoverable
+        park fails the task honestly as FAILED(gate_corrupt) (OQ7) with NO
+        gate record and the files left untouched. Returns the stored record,
+        or None when no gate record was created."""
         state_data = self._store.read_state(task_id) or {}
         session_id = state_data.get("agent_session")
         session_id = session_id if isinstance(session_id, str) and session_id.strip() else None
@@ -641,6 +807,9 @@ class TaskLoop:
                         if isinstance(meta, dict) and isinstance(meta.get("agent"), str):
                             agent = str(meta["agent"])
                         break
+        deferred_info, tool_call_id = self._restore_deferred(task_id)
+        if tool_call_id is _GATE_CORRUPT:
+            return None
         workdir = raw.get("workdir") if isinstance(raw.get("workdir"), str) else None
         description = raw.get("description")
         description = description if isinstance(description, str) else "restored task"
@@ -662,8 +831,112 @@ class TaskLoop:
             "renotified": False,
             "timer": None,
             "restored": True,
+            "deferred": deferred_info,
+            "tool_call_id": tool_call_id,
         }
         self._raw_note(task_id, {"reason": "gate restored at boot; timer re-arm pending start"})
+        return self._gates[task_id]
+
+    def _restore_deferred(self, task_id: str) -> tuple[dict | None, Any]:
+        """P6 boot restore of a parked deferred seed. Absent files mean a
+        question-path park (no deferred machinery): ``(None, None)``. On
+        success: ``({"seed": ..., "messages_json": ...}, first_call_id)``. An
+        unreadable parked history, or a history with no rebuildable pending
+        calls, is unrecoverable: the task is FAILED(gate_corrupt) (OQ7) and
+        the corrupt sentinel marks the outcome."""
+        messages_path = self._store.root / task_id / _DEFERRED_MESSAGES_FILENAME
+        seed_path = self._store.root / task_id / _DEFERRED_SEED_FILENAME
+        if not messages_path.is_file() and not seed_path.is_file():
+            return None, None
+        messages_text: str | None = None
+        messages: Any = None
+        try:
+            # deferred_messages.json holds a JSON string literal (the parked
+            # history str); a legacy list document falls back to raw text.
+            raw_text = messages_path.read_text(encoding="utf-8")
+            parsed_text = json.loads(raw_text)
+            messages_text = parsed_text if isinstance(parsed_text, str) else raw_text
+            messages = ModelMessagesTypeAdapter.validate_json(messages_text)
+        except Exception:  # noqa: BLE001 — parked history unreadable at boot
+            messages = None
+        if messages is None:
+            return self._gate_corrupt(task_id)
+        seed = self._seed_from_disk_or_rebuild(task_id, messages, seed_path)
+        if seed is None:
+            return self._gate_corrupt(task_id)
+        calls = seed.get("calls") or []
+        tool_call_id = calls[0].get("tool_call_id") if isinstance(calls[0], dict) else None
+        return {"seed": seed, "messages_json": messages_text}, tool_call_id
+
+    def _seed_from_disk_or_rebuild(
+        self, task_id: str, messages: Any, seed_path: Path
+    ) -> dict | None:
+        """The parked deferred seed from disk (shape-checked: ``calls`` a
+        non-empty list of dicts), else a deterministic rebuild from the
+        pending tool calls parked in the messages history (P6 OQ7 recovery:
+        recovered seed persisted atomically + a task note)."""
+        seed: dict | None = None
+        try:
+            parsed = json.loads(seed_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            parsed = None
+        if (
+            isinstance(parsed, dict)
+            and isinstance(parsed.get("calls"), list)
+            and bool(parsed["calls"])
+            and all(isinstance(call, dict) for call in parsed["calls"])
+        ):
+            seed = parsed
+        if seed is not None:
+            return seed
+        pending = self._pending_tool_calls(messages)
+        if not pending:
+            return None
+        rebuilt = {
+            "calls": [dataclasses.asdict(part) for part in pending],
+            "approvals": [],
+            "metadata": {},
+            "validated_args": {},
+            "_kinds": {},
+        }
+        _write_atomic_text(seed_path, json.dumps(rebuilt))
+        self._raw_note(
+            task_id,
+            {"note": "gate restored at boot; deferred seed rebuilt from parked messages"},
+        )
+        return rebuilt
+
+    def _gate_corrupt(self, task_id: str) -> tuple[None, Any]:
+        """OQ7 honest terminal for an unrecoverable deferred park at boot:
+        WAITING_INPUT -> FAILED(gate_corrupt) via _raw_move (the state_change
+        row comes from the move; gate_corrupt is a FAILED REASON, not a new
+        event kind), one raw note, files LEFT untouched, no gate record."""
+        self._raw_move(task_id, "WAITING_INPUT", "FAILED", reason="gate_corrupt")
+        self._raw_note(
+            task_id,
+            {"reason": "deferred gate unrecoverable at boot; marked FAILED(gate_corrupt)"},
+        )
+        return None, _GATE_CORRUPT
+
+    @staticmethod
+    def _pending_tool_calls(messages: Any) -> list[Any]:
+        """ToolCallPart parts (in order) that have NO matching ToolReturnPart
+        (same tool_call_id) later in the history — the calls still pending in
+        a parked in-run history."""
+        returned: set[str] = set()
+        pending: list[Any] = []
+        for message in reversed(list(messages)):
+            for part in getattr(message, "parts", None) or []:
+                kind = getattr(part, "part_kind", None)
+                if kind == "tool-return":
+                    pending_id = getattr(part, "tool_call_id", None)
+                    if isinstance(pending_id, str):
+                        returned.add(pending_id)
+                elif kind == "tool-call" and isinstance(part, ToolCallPart):
+                    pending_id = getattr(part, "tool_call_id", None)
+                    if isinstance(pending_id, str) and pending_id not in returned:
+                        pending.append(part)
+        return list(reversed(pending))
 
     async def _arm_restored_gates(self) -> None:
         """Re-arm every restored gate's F15 timer with the FULL fresh
@@ -1080,6 +1353,7 @@ class TaskLoop:
         agent: str,
         prompt: str,
         task_oneway: bool = False,
+        deferred_resume: dict | None = None,
     ) -> None:
         gate_allowed = getattr(analysis, "mode", "oneway") == "gate" and not task_oneway
         retries = max(0, int(self._cfg.tasks.retries))
@@ -1099,6 +1373,10 @@ class TaskLoop:
                 timeout_s=self._timeout_for(agent),
                 oneway=not gate_allowed,
             )
+            if deferred_resume is not None:
+                # P6 instance attribute (RunSpec stays untouched — base.py is
+                # a closed surface): the executor resumes the parked turn.
+                spec.deferred_resume = dict(deferred_resume)
             await self._to_agent_running(session)
             started = time.monotonic()
             outcome, payload = await self._stream_once(task, session, agent, spec, gate_allowed)
@@ -1122,8 +1400,62 @@ class TaskLoop:
                     "renotified": False,
                     "timer": None,
                     "restored": False,
+                    "deferred": None,
                 }
                 # F15: exactly one 24 h timer per parked gate.
+                timeout_s = self._gate_timeout_s()
+                self._arm_gate_timer(task.id, timeout_s)
+                self._gate_row(task.id, "opened", deadline_ts=self._gates[task.id]["deadline_ts"])
+                return
+            if outcome == "deferred":
+                # P6 deferred park (executor DeferredToolRequests): same
+                # WAITING_INPUT shape as the question park, PLUS the parked
+                # seed + in-run history persisted for the answer()/replay
+                # resume (OQ5).
+                deferred_dict = payload["deferred"]
+                calls = deferred_dict.get("calls") or []
+                tool_call_id = (
+                    calls[0].get("tool_call_id") if calls and isinstance(calls[0], dict)
+                    else None
+                )
+                self._ledger_row(task.id, agent, attempt, "WAITING_INPUT")
+                question = self._deferred_question(deferred_dict)
+                await task.append_event("gate_opened", {"question": question})
+                await self._publish(
+                    "gate.opened", {"task_id": task.id, "question": question}
+                )
+                await task.transition("WAITING_INPUT")
+                # deferred_messages.json is a JSON STRING-LITERAL document
+                # (json.loads(file) -> the parked history JSON str).
+                _write_atomic_text(
+                    task.directory / _DEFERRED_MESSAGES_FILENAME,
+                    json.dumps(payload["messages"]),
+                )
+                # deferred_seed.json is the plain seed dict document.
+                _write_atomic_text(
+                    task.directory / _DEFERRED_SEED_FILENAME,
+                    json.dumps(deferred_dict),
+                )
+                self._gates[task.id] = {
+                    "prompt": prompt,
+                    "analysis": analysis,
+                    "session": session,
+                    "session_id": session.id,
+                    "agent": agent,
+                    "task_oneway": task_oneway,
+                    "question": question,
+                    "attempt": int(attempt),
+                    "deadline_ts": None,
+                    "renotified": False,
+                    "timer": None,
+                    "restored": False,
+                    "deferred": {
+                        "seed": deferred_dict,
+                        "messages_json": payload["messages"],
+                    },
+                    "tool_call_id": tool_call_id,
+                }
+                # F15: exactly one 24 h timer per parked gate (unchanged).
                 timeout_s = self._gate_timeout_s()
                 self._arm_gate_timer(task.id, timeout_s)
                 self._gate_row(task.id, "opened", deadline_ts=self._gates[task.id]["deadline_ts"])
@@ -1170,12 +1502,13 @@ class TaskLoop:
         agent: str,
         spec: RunSpec,
         gate_allowed: bool,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str | dict]:
         """Consume ONE adapter stream (run failure retry = another call).
-        Returns ``("done", final_text)``, ``("failed", error)`` or
-        ``("gate", question)``. Terminal moves agent_running -> relaying ->
-        idle mirror the gateway _run_agent pattern; a gate parks WITHOUT
-        moving (the session stays agent_running for boot replay)."""
+        Returns ``("done", final_text)``, ``("failed", error)``,
+        ``("gate", question)`` or ``("deferred", payload)`` (P6: the executor
+        park payload). Terminal moves agent_running -> relaying -> idle
+        mirror the gateway _run_agent pattern; a gate/deferred park moves
+        NOTHING (the session stays agent_running for boot replay)."""
         adapter = self._resolve_adapter(agent)
         seq = 0
         try:
@@ -1219,14 +1552,28 @@ class TaskLoop:
                     await self._relay_idle(session)
                     return "failed", event.error or "unknown error"
                 elif event.kind == "system":
-                    question = self._gate_question(event)
-                    if question is not None:
+                    # P6 deferred park FIRST, then the question payload — a
+                    # system event has either shape, never both.
+                    payload = self._deferred_payload(event)
+                    if payload is not None:
                         if gate_allowed:
-                            return "gate", question  # stream suspended; session parked live
+                            return "deferred", payload  # stream suspended; session parked live
                         await task.append_event(
                             "note",
-                            {"note": "gate question ignored (oneway or analysis mode != gate)"},
+                            {
+                                "note": "deferred tool requests ignored "
+                                "(oneway or analysis mode != gate)"
+                            },
                         )
+                    else:
+                        question = self._gate_question(event)
+                        if question is not None:
+                            if gate_allowed:
+                                return "gate", question  # stream suspended; session parked live
+                            await task.append_event(
+                                "note",
+                                {"note": "gate question ignored (oneway or analysis mode != gate)"},
+                            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 — honest terminal, never crash the loop
@@ -1252,6 +1599,45 @@ class TaskLoop:
             if isinstance(question, str) and question.strip():
                 return question
         return None
+
+    @staticmethod
+    def _deferred_payload(event: Any) -> dict | None:
+        """The P6 executor park payload (system event raw JSON): a dict with
+        exactly the keys ``deferred`` + ``messages`` where ``deferred`` is a
+        dict carrying a non-empty list-of-dicts ``calls``. None otherwise
+        (question payloads have either shape, never both)."""
+        raw = getattr(event, "raw", None)
+        if not isinstance(raw, str):
+            return None
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return None
+        if not isinstance(data, dict) or set(data) != {"deferred", "messages"}:
+            return None
+        deferred = data.get("deferred")
+        calls = deferred.get("calls") if isinstance(deferred, dict) else None
+        if not (
+            isinstance(calls, list) and bool(calls) and all(isinstance(c, dict) for c in calls)
+        ):
+            return None
+        return data
+
+    @staticmethod
+    def _deferred_question(deferred: dict) -> str:
+        """The parked question rendered from a DeferredToolRequests asdict:
+        the first call's ``validated_args`` questions (joined ``" / "``),
+        else its metadata questions, else the honest placeholder."""
+        calls = deferred.get("calls") or []
+        call_id = calls[0].get("tool_call_id") if calls and isinstance(calls[0], dict) else None
+        if call_id is not None:
+            for section in ("validated_args", "metadata"):
+                entry = (deferred.get(section) or {}).get(call_id)
+                if isinstance(entry, dict):
+                    rendered = _question_text(entry.get("questions"))
+                    if rendered:
+                        return rendered
+        return "deferred question"
 
     async def _to_agent_running(self, session: Session) -> None:
         if session.state in ("created", "failed"):

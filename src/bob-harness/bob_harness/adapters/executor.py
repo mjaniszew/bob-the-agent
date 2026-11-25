@@ -19,7 +19,17 @@ StreamEvent shape):
   message when the model/run raises. Model errors are NEVER re-raised (F1/F2
   parity with the subprocess adapters: consumers treat a stream without a
   terminal event as a failure, so the adapter must always terminate its own
-  stream).
+  stream). EXCEPTION (P6): a run that ends in a ``DeferredToolRequests``
+  output (the D3 ``AskUser`` deferred wiring) parks the stream instead —
+  exactly ONE ``system`` event carrying
+  ``{"deferred": <DeferredToolRequests asdict>, "messages": <in-run history
+  json>}`` and NO terminal event.
+- ``spec.deferred_resume`` (P6, an instance attribute set by the TaskLoop —
+  RunSpec itself stays untouched; no other adapter ever sets it) resumes a
+  parked turn: keys ``messages_json``/``seed``/``answer``. The
+  ``DeferredToolRequests`` seed is rebuilt, the answer is delivered via
+  ``DeferredToolResults`` and the parked history rides
+  ``message_history=`` so the run completes with a str output.
 - ``spec.prompt`` is the user prompt; ``spec.model`` (a pydantic-ai model
   name/instance) overrides the per-run model, falling back to the config
   router model (``cfg.router.base_url``/``model`` as an ``OpenAIChatModel``).
@@ -48,6 +58,8 @@ No side effects on import (no ``__main__`` block; only definitions).
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import uuid
 import warnings
 from collections.abc import AsyncIterator
@@ -55,6 +67,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic_ai import Agent as V2Agent
+from pydantic_ai import DeferredToolRequests
+from pydantic_ai.messages import ModelMessagesTypeAdapter, ToolCallPart
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.workspaces import LocalWorkspaceBackend
@@ -206,11 +220,15 @@ def _build_agent(cfg: HarnessConfig, workdir: str | Path | None = None) -> V2Age
     Capabilities are assembled per the ``cfg.harness.*`` toggles; the default
     model is the config router model (``OpenAIChatModel`` on
     ``router.base_url``). Per-run overrides arrive via ``run(spec.model=...)``.
+    The output type is the ``[str, DeferredToolRequests]`` union (verified
+    2.73.0: plain runs still validate to ``str``; a deferred ``AskUser`` call
+    ends the run with a ``DeferredToolRequests`` output instead of failing).
     """
     return V2Agent(
         _model_from_config(cfg),
         name="executor",
         capabilities=assemble_capabilities(cfg, workdir=workdir),
+        output_type=[str, DeferredToolRequests],
     )
 
 
@@ -243,6 +261,17 @@ class ExecutorAdapter:
         output (``run.result.output``). Streamed text-delta relaying as
         ``chunk`` events is a later phase's scope (P7 consumer surface).
 
+        P6: when the run ends with a ``DeferredToolRequests`` output (the
+        ``AskUser`` deferred wiring), exactly ONE ``system`` event carries
+        ``{"deferred": <asdict>, "messages": <in-run history json>}`` and the
+        stream returns WITHOUT a terminal event (park parity with the
+        question path: consumers treat the missing terminal as a suspended
+        stream). When ``spec.deferred_resume`` is a dict, the run resumes a
+        parked turn instead of starting fresh: the seed is rebuilt into a
+        ``DeferredToolRequests``, ``DeferredToolResults`` delivers the user's
+        answer (mismatched ids fail the event), and the parked
+        ``messages_json`` history rides ``message_history=``.
+
         Model/run exceptions are converted to exactly one ``failed`` event
         and never re-raised. ``spec.oneway`` and other fire-and-forget hints
         ride along unchanged — no gate/ask machinery is engaged here.
@@ -255,20 +284,75 @@ class ExecutorAdapter:
             _model_from_config(self.cfg),
             name="executor",
             capabilities=assemble_capabilities(self.cfg, workdir=workdir),
+            # The str | DeferredToolRequests union (P6): does NOT change plain
+            # runs (output still str, P2 stream contract preserved).
+            output_type=[str, DeferredToolRequests],
         )
         workspace = LocalWorkspaceBackend(workdir) if workdir else None
         try:
-            async with agent.iter(
-                spec.prompt,
-                model=spec.model,
-                workspace=workspace,
-            ) as run:
-                async for _node in run:  # node walk drives the graph to completion
+            deferred_resume = getattr(spec, "deferred_resume", None)
+            resume_ctx = None
+            if isinstance(deferred_resume, dict):
+                seed = (
+                    deferred_resume["seed"]
+                    if isinstance(deferred_resume.get("seed"), dict)
+                    else {}
+                )
+                rebuilt = DeferredToolRequests(
+                    calls=[ToolCallPart(**{k: v for k, v in d.items()}) for d in
+                           seed.get("calls", [])],
+                    approvals=[ToolCallPart(**{k: v for k, v in d.items()}) for d in
+                               seed.get("approvals", [])],
+                    metadata=seed.get("metadata", {}),
+                    validated_args=seed.get("validated_args", {}),
+                    _kinds=seed.get("_kinds", {}),
+                )
+                if not rebuilt.calls:
+                    # Honest corrupt seed: no tool call to deliver the answer to.
+                    yield StreamEvent(
+                        kind="failed",
+                        error=_error_text(ValueError(
+                            "deferred resume seed carries no tool calls"
+                        )),
+                    )
+                    return
+                # build_results raises ValueError on foreign/mismatched ids —
+                # the except below converts it to the failed event.
+                results = rebuilt.build_results(
+                    calls={call.tool_call_id: deferred_resume["answer"] for call in rebuilt.calls}
+                )
+                messages = ModelMessagesTypeAdapter.validate_json(
+                    deferred_resume["messages_json"]
+                )
+                resume_ctx = agent.iter(
+                    None,
+                    message_history=messages,
+                    deferred_tool_results=results,
+                    workspace=workspace,
+                )
+            if resume_ctx is None:
+                resume_ctx = agent.iter(spec.prompt, model=spec.model, workspace=workspace)
+            async with resume_ctx as run:
+                # node walk drives the graph to completion
+                async for _node in run:
                     pass
                 result = run.result
-            final_text = result.output if result is not None else ""
-            if not isinstance(final_text, str):
-                final_text = str(final_text)
+                output = result.output if result is not None else ""
+                if isinstance(output, DeferredToolRequests):
+                    # Park: ONE system event with the deferred seed + the exact
+                    # in-run history, then return (no terminal event — the
+                    # stream suspends and the run waits for an answer).
+                    yield StreamEvent(
+                        kind="system",
+                        raw=json.dumps({
+                            "deferred": dataclasses.asdict(output),
+                            "messages": ModelMessagesTypeAdapter.dump_json(
+                                run.all_messages()
+                            ).decode(),
+                        }),
+                    )
+                    return
+            final_text = output if isinstance(output, str) else str(output)
             yield StreamEvent(kind="final", final_text=final_text)
         except Exception as exc:  # noqa: BLE001 - terminal failed event, never re-raised
             yield StreamEvent(kind="failed", error=_error_text(exc))

@@ -43,6 +43,7 @@ import dataclasses
 import json
 import time
 from collections.abc import AsyncIterator
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,17 +53,16 @@ from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelResponse,
-    TextPart,
     ToolCallPart,
 )
 from pydantic_ai.models.function import FunctionModel
 
 from bob_harness.adapters.base import RunSpec, StreamEvent
+from bob_harness.bus import Bus as _RealBus
 from bob_harness.gateway.app import create_app
 from bob_harness.session_manager import SessionManager
 from bob_harness.taskloop import TaskLoop
 from bob_harness.tasks import TaskStore
-
 from tests.test_taskloop import (
     _T1,
     _analysis,
@@ -121,9 +121,14 @@ def _call_part_dict() -> dict:
 
 
 def _defer_messages_json() -> str:
-    """The parked in-run history: ModelResponse(ToolCallPart) -> JSON str."""
-    response = ModelResponse(parts=[ToolCallPart(tool_name=_TOOL_NAME, args=_seed_args(),
-                                                 tool_call_id=TC_ID)])
+    """The parked in-run history: ModelResponse(ToolCallPart) -> JSON str.
+    The ModelResponse timestamp is PINNED so two generations are byte-equal —
+    the parked document and a fresh generation must compare equal."""
+    response = ModelResponse(
+        parts=[ToolCallPart(tool_name=_TOOL_NAME, args=_seed_args(),
+                             tool_call_id=TC_ID)],
+        timestamp=datetime.fromisoformat("2020-01-01T00:00:00+00:00"),
+    )
     return ModelMessagesTypeAdapter.dump_json([response]).decode()
 
 
@@ -203,7 +208,11 @@ def _transcript_records(cfg: Any, session_id: str) -> list[dict]:
 
 def _deferred_planner(messages_json: str, final_text: str):
     def planner(spec: RunSpec, index: int) -> list[tuple[float, StreamEvent]]:
-        del spec
+        # A deferred RESUME carries spec.deferred_resume — it completes with
+        # the final regardless of which adapter instance runs it (test 5's
+        # restart loop is a FRESH adapter whose first call IS the resume).
+        if getattr(spec, "deferred_resume", None) is not None:
+            return [(0.0, _final(final_text))]
         if index == 0:
             return [(0.0, _deferred_system_event(messages_json))]
         return [(0.0, _final(final_text))]
@@ -211,13 +220,16 @@ def _deferred_planner(messages_json: str, final_text: str):
     return planner
 
 
-async def _park_deferred(cfg: Any, bus: _Bus, store: TaskStore,
-                         runs: list[dict], *, final_text: str = "final after deferred answer") -> TaskLoop:
+async def _park_deferred(cfg: Any, bus: Any, store: TaskStore,
+                         runs: list[dict], *, final_text: str = "final after deferred answer",
+                         messages_json: str | None = None) -> TaskLoop:
     """Start a loop that parks _T1 on one deferred ask_user call."""
+    if messages_json is None:
+        messages_json = _defer_messages_json()
     store.create_inbox_task("deferred park marker", origin="user", task_id=_T1)
     loop = TaskLoop(
         cfg, SessionManager(cfg, bus=bus), bus=bus,
-        adapter_factory=_recording_factory(runs, _deferred_planner(_defer_messages_json(), final_text)),
+        adapter_factory=_recording_factory(runs, _deferred_planner(messages_json, final_text)),
         router=_Router(_analysis("seed", mode="gate")),
     )
     loop.start()
@@ -226,9 +238,8 @@ async def _park_deferred(cfg: Any, bus: _Bus, store: TaskStore,
 
 
 def _fake_brain(cfg: Any) -> Any:
-    from tests.mocks.router_model import make_fake_model
-
     from bob_harness.router import RouterBrain
+    from tests.mocks.router_model import make_fake_model
 
     return RouterBrain(cfg, model=make_fake_model([{"agent": "hermes", "task_title": "demo"}]))
 
@@ -384,7 +395,7 @@ async def test_answer_resumes_with_deferred_results(tmp_volume: Any, cfg: Any) -
     store = TaskStore(cfg, bus=bus)
     runs: list[dict] = []
     messages_json = _defer_messages_json()
-    loop = await _park_deferred(cfg, bus, store, runs)
+    loop = await _park_deferred(cfg, bus, store, runs, messages_json=messages_json)
     try:
         await loop.answer(_T1, ANSWER)
         await _wait_state(store, _T1, "DONE")
@@ -427,7 +438,8 @@ async def test_parked_task_survives_restart(tmp_volume: Any, cfg: Any) -> None:
     bus = _Bus()
     store = TaskStore(cfg, bus=bus)
     runs: list[dict] = []
-    loop = await _park_deferred(cfg, bus, store, runs)
+    messages_json = _defer_messages_json()
+    loop = await _park_deferred(cfg, bus, store, runs, messages_json=messages_json)
     parked_seed = _read_seed(store, _T1, "deferred_seed.json")
     parked_messages = _read_seed(store, _T1, "deferred_messages.json")
     # Kill the loop (the "restart") — timer + records die with the process.
@@ -581,12 +593,13 @@ def _HEADERS() -> dict:
 async def test_discord_gate_answered_consumed(tmp_volume: Any, cfg: Any) -> None:
     del tmp_volume
     cfg = _tweak(cfg, poll_seconds=0.05)
-    bus = _Bus()
+    bus = _RealBus()  # the REAL bus: the taskloop sink consumes gate.answered
     store = TaskStore(cfg, bus=bus)
     runs: list[dict] = []
     messages_json = _defer_messages_json()
     loop = await _park_deferred(cfg, bus, store, runs,
-                                final_text="resumed via discord answer")
+                                final_text="resumed via discord answer",
+                                messages_json=messages_json)
     try:
         await _wait_state(store, _T1, "WAITING_INPUT")
         # The Discord payload shape (task_id as T<id>).
