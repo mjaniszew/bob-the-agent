@@ -43,8 +43,12 @@ async def test_topics_registry_exact() -> None:
         "handoff.request",
         "memory.updated",
         "skill.captured",
+        # P8 pin-update (disclosed, plan-mandated topic additions): the two
+        # harness.ask_user.* CapabilityEvent bridge topics join the registry.
+        "harness.ask_user.requested",
+        "harness.ask_user.answered",
     }
-    assert len(TOPICS) == 17
+    assert len(TOPICS) == 19  # 17 rev2 topics + the two P8 bridge topics (disclosed update)
     assert all(isinstance(keys, tuple) and keys for keys in TOPICS.values())
 
 
