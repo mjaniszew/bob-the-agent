@@ -1315,8 +1315,21 @@ class TaskLoop:
     def _assemble_prompt(self, analysis: Any) -> str:
         """Gateway _assemble_prompt mirror (simplified): memory digests when
         ``need_context``, skill bodies for ``skill_hints`` — both best-effort
-        try/except — and ``prompt_seed`` ALWAYS last."""
+        try/except — and ``prompt_seed`` ALWAYS last.
+
+        P7 runner hint (plan compat-matrix line 521): when
+        ``cfg.tasks.runner == "executor"`` a delegation hint naming the
+        analysis ``agent`` pick is PREPENDED (first section), telling the
+        executor which CLI adapter to ``delegate_run`` to — no Analysis
+        schema change. ``"analyzed"`` keeps the pre-flip prompt bytes."""
         sections: list[str] = []
+        if getattr(self._cfg.tasks, "runner", "analyzed") == "executor":
+            hint_agent = str(getattr(analysis, "agent", "") or "hermes")
+            sections.append(
+                "### Executor delegation\n"
+                "Run the delegated work via the `delegate_run` tool: "
+                f"agent='{hint_agent}'."
+            )
         if getattr(analysis, "need_context", False):
             try:
                 engine = MemoryEngine(self._cfg, self._bus)
@@ -1892,13 +1905,23 @@ class TaskLoop:
             _LOG.warning("task %s: failure bookkeeping failed: %s", task_id, exc)
 
     def _resolve_adapter(self, agent: str) -> Any:
-        """The adapter seam (cached per agent — the row-23 spy point)."""
+        """The adapter seam (cached per agent — the row-23 spy point).
+
+        P7 runner switch: when ``cfg.tasks.runner == "executor"`` the task
+        run ALWAYS resolves through the ``executor`` registry entry (the
+        in-process pydantic-ai adapter, D2) regardless of the analysis
+        agent pick; "analyzed" keeps the registry lookup on the picked
+        agent name exactly as pre-flip. Injected seams (mapping/factory)
+        bypass the switch entirely (battery-safety: preserved tests inject
+        their seams and never see the flip)."""
         cached = self._adapter_cache.get(agent)
         if cached is not None:
             return cached
         if self._adapter_factory is not None:
             adapter = self._adapter_factory(agent)
         elif self._adapters is None:
+            if self._cfg.tasks.runner == "executor":
+                agent = "executor"
             adapter = registry_get(agent, self._cfg)
         elif callable(self._adapters):
             adapter = self._adapters(agent)

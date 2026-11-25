@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import uuid
 import warnings
 from collections.abc import AsyncIterator
@@ -68,9 +69,20 @@ from typing import Any
 
 from pydantic_ai import Agent as V2Agent
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.messages import ModelMessagesTypeAdapter, ToolCallPart
+from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.messages import (
+    CapabilityEvent,
+    FunctionToolResultEvent,
+    ModelMessagesTypeAdapter,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPartDelta,
+    ToolCallPart,
+)
+from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.tools import RunContext
 from pydantic_ai.workspaces import LocalWorkspaceBackend
 
 from bob_harness.adapters.base import RunSpec, StreamEvent
@@ -89,6 +101,8 @@ __all__ = [
 
 # In-process run identity prefix (no OS session exists for this adapter).
 SESSION_REF_PREFIX = "exec-"
+
+_LOG = logging.getLogger("bob_harness.executor")
 
 
 def _model_from_config(cfg: HarnessConfig) -> OpenAIChatModel | str:
@@ -237,6 +251,135 @@ def _error_text(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
+class _EventRelayCapability(AbstractCapability):
+    """P7 OQ2-b relay: capability events -> the run's event stream.
+
+    Mounted ONLY on runs whose model supports streamed requests (a
+    ``wrap_run_event_stream`` hook forces pydantic-ai to DRAIN each node's
+    event stream, which raises on non-streaming models — probed 2.73.0).
+    The hook records every event into the shared :class:`_RelayCollector`
+    so the adapter's walk loop can map them to consumer StreamEvents.
+    """
+
+    def __init__(self, collector: _RelayCollector) -> None:
+        self._collector = collector
+
+    async def wrap_run_event_stream(
+        self, ctx: RunContext[Any], *, stream: AsyncIterator[Any]
+    ) -> AsyncIterator[Any]:
+        async for event in stream:
+            self._collector.record(event)
+            yield event
+
+
+class _RelayCollector:
+    """Thread/task-local accumulator for one executor run's relayed events."""
+
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def record(self, event: Any) -> None:
+        self.events.append(event)
+
+    def drain(self) -> list[Any]:
+        drained = self.events
+        self.events = []
+        return drained
+
+
+def _relay_event_to_stream_event(event: Any) -> StreamEvent | None:
+    """Map ONE relayed run-stream event to a consumer StreamEvent (or None).
+
+    Closed-kind mapping (OQ2 decided default b, no new kinds):
+
+    - ``FunctionToolResultEvent`` (one per COMPLETED tool invocation) ->
+      ``tool`` (``tool_name``/``tool_brief`` from the return part).
+    - ``PartStartEvent``/``PartDeltaEvent`` carrying model text ->
+      ``chunk`` (``text`` = the delta; the terminal final text itself is
+      carried by the run result — chunk rows are the LIVE relay only).
+    - ``DelegateRunEvent`` (capability event emitted by ``delegate_run``)
+      -> ``tool`` when the child kind is ``tool``/``system``, ``chunk``
+      when ``chunk``, ``final``-shaped text stays a ``chunk`` (the run
+      itself owns the terminal event).
+    - everything else (``FunctionToolCallEvent``, ``FinalResultEvent``,
+      wire bookkeeping) -> None (not consumer-visible).
+    """
+
+    if isinstance(event, FunctionToolResultEvent):
+        part = event.part
+        name = getattr(part, "tool_name", None) or "?"
+        content = getattr(part, "content", None)
+        brief = name if content is None else f"{name} -> {content!r}"[:120]
+        return StreamEvent(kind="tool", tool_name=name, tool_brief=brief)
+    if isinstance(event, (PartStartEvent, PartDeltaEvent)):
+        delta = getattr(event, "delta", None)
+        if isinstance(delta, TextPartDelta):
+            return StreamEvent(kind="chunk", text=delta.content_delta)
+        part = getattr(event, "part", None)
+        content = getattr(part, "content", None) if part is not None else None
+        if isinstance(content, str) and content:
+            return StreamEvent(kind="chunk", text=content)
+        return None
+    if isinstance(event, CapabilityEvent) and type(event).__name__ == "DelegateRunEvent":
+        child_kind = getattr(event, "child_kind", None)
+        if child_kind in ("tool", "system"):
+            text = getattr(event, "text", None) or getattr(event, "error", None) or ""
+            return StreamEvent(
+                kind="tool",
+                tool_name=getattr(event, "target", None) or "delegate_run",
+                tool_brief=f"[delegated:{child_kind}] {text}"[:200],
+            )
+        if child_kind in ("chunk", "final"):
+            return StreamEvent(kind="chunk", text=getattr(event, "text", None) or "")
+        return None
+    return None
+
+
+def _model_supports_streaming(spec: RunSpec, cfg: HarnessConfig) -> bool:
+    """Whether THIS run's model can serve a drained event stream: an
+    effective NON-streaming model cannot (probed 2.73.0: a ``wrap_run_event_stream``
+    hook forces pydantic-ai to drain every node's event stream and a
+    ``FunctionModel`` without a ``stream_function`` raises AssertionError there).
+
+    The EFFECTIVE model is ``spec.model`` when set, ELSE the agent model
+    ``_model_from_config(cfg)`` (the preserved P2/P6 pins monkeypatch
+    ``_model_from_config`` to a non-streaming FunctionModel with
+    ``spec.model=None`` — the plain node walk must stay for those runs).
+    Streaming-capable: a FunctionModel WITH ``stream_function``, a
+    config-default ``OpenAIChatModel``, or a bare model-name string.
+
+    Known_bug_TestModel_relay exclusions (P7 attempt-4): a ``TestModel``
+    instance or the ``infer_model('test')`` literal string ``"test"`` are
+    NON-relay-eligible — a mounted ``wrap_run_event_stream`` hook makes
+    TestModel STREAM its answer's ``PartStartEvent``/``TextPartDelta``s, so
+    a relayed walk yields ``chunk`` rows and the pinned P2 stream contract
+    (``[started, final]``, byte-equal no-subprocess walk) breaks; the plain
+    node walk keeps TestModel runs exactly at the P2/P6 shapes."""
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.models.test import TestModel
+
+    model = spec.model
+    if model is None:
+        _LOG.debug("relay gate: no spec.model -> agent model from config")
+        model = _model_from_config(cfg)
+    if isinstance(model, TestModel):
+        return False
+    if isinstance(model, FunctionModel):
+        return model.stream_function is not None
+    if isinstance(model, str):
+        return model != "test"
+    if isinstance(model, OpenAIChatModel):
+        return True
+    # Unknown/other model objects: conservatively skip the relay.
+    _LOG.debug("relay gate: unknown model type %s -> no relay", type(model).__name__)
+    return False
+
+
+def _test_model_name(spec: RunSpec) -> str | None:
+    """The bare model-name override for the relay gate (or None)."""
+    return spec.model if isinstance(spec.model, str) else None
+
+
 class ExecutorAdapter:
     """In-process pydantic-ai executor: zero subprocesses, capability-driven."""
 
@@ -280,10 +423,20 @@ class ExecutorAdapter:
         yield StreamEvent(kind="started", session_ref=session_ref)
 
         workdir = spec.workdir
+        # P7 OQ2-b relay gate: the relay capability mounts ONLY on
+        # streaming-capable models; a mounted hook makes pydantic-ai drain
+        # every node's event stream (which raises on non-streaming models).
+        collector = _RelayCollector()
+        relay = (
+            _EventRelayCapability(collector)
+            if _model_supports_streaming(spec, self.cfg)
+            else None
+        )
         agent = V2Agent(
             _model_from_config(self.cfg),
             name="executor",
-            capabilities=assemble_capabilities(self.cfg, workdir=workdir),
+            capabilities=assemble_capabilities(self.cfg, workdir=workdir)
+            + ([relay] if relay is not None else []),
             # The str | DeferredToolRequests union (P6): does NOT change plain
             # runs (output still str, P2 stream contract preserved).
             output_type=[str, DeferredToolRequests],
@@ -333,9 +486,18 @@ class ExecutorAdapter:
             if resume_ctx is None:
                 resume_ctx = agent.iter(spec.prompt, model=spec.model, workspace=workspace)
             async with resume_ctx as run:
-                # node walk drives the graph to completion
-                async for _node in run:
-                    pass
+                # P7 relay walk: consume the node stream's relayed events as
+                # they arrive (drained per node), then map to StreamEvents.
+                if relay is not None:
+                    async for node in run:
+                        for event in collector.drain():
+                            mapped = _relay_event_to_stream_event(event)
+                            if mapped is not None:
+                                yield mapped
+                else:
+                    # P2/P6 node walk: no relay mounted, no extra events.
+                    async for _node in run:
+                        pass
                 result = run.result
                 output = result.output if result is not None else ""
                 if isinstance(output, DeferredToolRequests):

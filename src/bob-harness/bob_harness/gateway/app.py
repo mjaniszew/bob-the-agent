@@ -371,6 +371,18 @@ def create_app(
                     brief = event.tool_brief or event.tool_name or "?"
                     await _chunk(f"[tool] {brief}")
                 elif event.kind == "final":
+                    # P7 impl step (1): the terminal carries the adapter's
+                    # per-agent session ref; record it into meta.json's
+                    # agents_refs (multi-turn continuity, session.py API).
+                    ref = event.session_ref
+                    if ref:
+                        try:
+                            await session.set_agent_ref(route.agent, ref)
+                        except Exception as exc:  # noqa: BLE001 — ref recording must never fail a run
+                            _LOG.warning(
+                                "session %s: agents_ref(%s) recording failed: %s",
+                                session.id, route.agent, exc,
+                            )
                     await _final(event.final_text or "", failed=False)
                     terminal_seen = True
                     break

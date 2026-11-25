@@ -257,8 +257,9 @@ harness:
     assert g.subagents.max_depth == 2
     assert g.delegation.enabled is False
     assert g.delegation.tool_name == "delegate"
-    # tasks.runner: Literal["analyzed","executor"], default "analyzed" (P7).
-    assert cfg.tasks.runner == "analyzed"
+    # tasks.runner: Literal["analyzed","executor"], default "executor" (P7 flip;
+    # rollback = BOB_HARNESS_TASKS_RUNNER=analyzed).
+    assert cfg.tasks.runner == "executor"
 
 
 def test_harness_group_yaml_defaults(

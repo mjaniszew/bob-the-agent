@@ -164,7 +164,7 @@ _BUILTIN_DEFAULTS: dict[str, Any] = {
         "retries": 1,
         "gate_timeout_s": 86400,
         "max_desc_chars": 4000,
-        "runner": "analyzed",  # P7's dispatch flip switch: analyzed today
+        "runner": "executor",  # P7's dispatch flip switch: executor NOW (default)
     },
     # P2 (plan §3.4): executor agent capability-configuration group. Every
     # capability toggle defaults to ON for the shipped executor; the P2 test
@@ -522,11 +522,14 @@ class TasksConfig(BaseModel):
     retries: int = 1
     gate_timeout_s: int = 86400
     max_desc_chars: int = 4000
-    # P2 (plan §3.4): dispatch runner for polled tasks — "analyzed" keeps the
-    # today-behavior (router-analyzed agent + profile → hermes/opencode CLI
-    # adapter); "executor" (P7's flip switch, unreachable until wired) routes
-    # the task run through the in-process executor adapter instead.
-    runner: Literal["analyzed", "executor"] = "analyzed"
+    # P7's dispatch flip switch (the behavioral flip): the DEFAULT runner is
+    # now the in-process executor adapter (runner="executor"); "analyzed"
+    # restores today-behavior exactly (router-analyzed agent + profile ->
+    # hermes/opencode CLI adapter). The flip is MERGE-SAFE: it is a single
+    # default literal with no state migration; rollback =
+    # BOB_HARNESS_TASKS_RUNNER=analyzed (the flat env (P2) overrides per
+    # environment).
+    runner: Literal["analyzed", "executor"] = "executor"
 
 
 class SchedulerConfig(BaseModel):
