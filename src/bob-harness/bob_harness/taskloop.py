@@ -77,6 +77,16 @@ from typing import Any
 import yaml
 from pydantic_ai.messages import ModelMessagesTypeAdapter, ToolCallPart
 
+# P8 bridge (the REAL 0.73.0 capability events; live-probed): the deferred
+# ask_user park answers through the SAME event classes the capability emits.
+from pydantic_ai_harness.ask_user import (
+    AskUserAnswer,
+    AskUserAnsweredEvent,
+    AskUserRequestedEvent,
+    AskUserResponse,
+)
+from pydantic_ai_harness.ask_user._types import rebuild_request
+
 from bob_harness.adapters import get as registry_get
 from bob_harness.adapters.base import RunSpec
 from bob_harness.blocks import parse_blocks, strip_blocks
@@ -165,6 +175,51 @@ def _question_text(questions: Any) -> str:
         return ""
     return " / ".join(
         str(q.get("question", "")) if isinstance(q, dict) else str(q) for q in questions
+    )
+
+
+# P8 CapabilityEvent bridge (plan §P8): the ask_user CapabilityEvent kinds the
+# taskloop sink mirrors onto the bus, with their topics. Anything else -> None
+# (subscriber tolerance; consumers ignore unknown kinds). The payload-key
+# tuples live in :data:`bob_harness.bus.TOPICS` (the documented keys).
+_CAPABILITY_EVENT_TOPICS: dict[str, str] = {
+    "ask_user.requested": "harness.ask_user.requested",
+    "ask_user.answered": "harness.ask_user.answered",
+}
+
+
+def capability_event_to_topic(
+    event: Any, *, task_id: str, tool_call_id: str | None = None
+) -> tuple[str, dict] | None:
+    """Map one pydantic-ai :class:`~pydantic_ai.messages.CapabilityEvent` to a
+    bus publish ``(topic, payload)`` pair (P8 bridge): ``AskUserRequestedEvent``
+    -> ``harness.ask_user.requested`` and ``AskUserAnsweredEvent`` ->
+    ``harness.ask_user.answered``; every other kind (unregistered capability
+    events, future kinds) returns ``None`` — subscriber tolerance, no
+    exception, no publish.
+
+    The payload is the TOPICS-documented
+    ``(task_id, tool_call_id, kind, event_kind)`` shape. ``event.tool_call_id``
+    wins when set; ``tool_call_id`` is the fall-back seam (the deferred gate
+    park passes the seed's tool call id — a legacy/rebuilt event may carry
+    ``tool_call_id=None``, e.g. an AnsweredEvent reconstructed after restart).
+    """
+    kind = getattr(event, "kind", None)
+    topic = _CAPABILITY_EVENT_TOPICS.get(kind) if isinstance(kind, str) else None
+    if topic is None:
+        return None
+    event_tool_call_id = getattr(event, "tool_call_id", None)
+    resolved_tool_call_id = (
+        event_tool_call_id if isinstance(event_tool_call_id, str) and event_tool_call_id else tool_call_id
+    )
+    return (
+        topic,
+        {
+            "task_id": task_id,
+            "tool_call_id": resolved_tool_call_id,
+            "kind": kind,
+            "event_kind": getattr(event, "event_kind", "capability"),
+        },
     )
 
 
@@ -375,6 +430,15 @@ class TaskLoop:
             # prompt append.
             tool_call_id = live.get("tool_call_id")
             messages_json, seed = self._load_deferred_seed(task_id, live)
+            # The park's validated questions (the seed's jsonable tool args),
+            # parsed EXACTLY the way _deferred_question renders the parked
+            # question — the bridge response mirrors one answer per question.
+            metadata = seed.get("metadata") if isinstance(seed.get("metadata"), dict) else {}
+            owner_meta: dict = {}
+            for value in metadata.values():  # type: ignore[union-attr]
+                if isinstance(value, dict) and isinstance(value.get("questions"), list):
+                    owner_meta = value
+            deferred_questions = owner_meta.get("questions") or []
             await session.append_event("user", {"text": text})
             await task.append_event(
                 "gate_answered",
@@ -383,6 +447,27 @@ class TaskLoop:
                     "tool_call_id": tool_call_id,
                     "seed": list(_DEFERRED_SEED_FILES),
                 },
+            )
+            # P8 bridge: the REAL AskUserAnsweredEvent the resumed executor
+            # run emits — request_id = the AskUserRequest id (the seed seam =
+            # tool call id), response shaped the way the executor delivers
+            # the user's answer to DeferredToolResults (single-select labels
+            # list / one-item custom list per question, mirrored from the
+            # park's validated questions).
+            await self._publish_capability_event(
+                AskUserAnsweredEvent(
+                    tool_call_id=tool_call_id,
+                    tool_name="ask_user_question",
+                    request_id=str(tool_call_id or ""),
+                    response=AskUserResponse(
+                        answers=tuple(
+                            AskUserAnswer(header=str(question.get("header", "")), selected=(text,))
+                            for question in deferred_questions
+                        )
+                    ),
+                ),
+                task_id=task_id,
+                tool_call_id=tool_call_id,
             )
             await task.transition("RUNNING")
             self._gate_row(
@@ -457,6 +542,18 @@ class TaskLoop:
                 task_id, f"task {task_id}: deferred gate seed unreadable; cannot answer"
             )
         return messages_json, seed
+
+    async def _publish_capability_event(
+        self, event: Any, *, task_id: str, tool_call_id: str | None = None
+    ) -> None:
+        """P8 bridge: map one CapabilityEvent to its bus topic (see
+        :func:`capability_event_to_topic`) and publish it. A ``None`` mapping
+        (unknown kind) publishes nothing; the publish (never the task) absorbs
+        bus failures, exactly like every other taskloop topic."""
+        mapped = capability_event_to_topic(event, task_id=task_id, tool_call_id=tool_call_id)
+        if mapped is None:
+            return
+        await self._publish(mapped[0], mapped[1])
 
     # ------------------------------------------------------------------
     # Gate engine (R10/D18/F15): rows, timers, re-notify, timeout fail
@@ -1437,6 +1534,35 @@ class TaskLoop:
                 await self._publish(
                     "gate.opened", {"task_id": task.id, "question": question}
                 )
+                # P8 bridge: mirror the ask_user deferral as the REAL
+                # AskUserRequestedEvent the capability toolset emits on
+                # 0.73.0 (request rebuilt from the parked seed's tool call,
+                # `id` = the tool_call_id seam, verified); unknown seed
+                # shapes tolerate to no publish.
+                publish_event: Any = None
+                if calls and isinstance(calls[0], dict):
+                    try:
+                        parked_call = ToolCallPart(
+                            tool_name=str(calls[0].get("tool_name", "ask_user_question")),
+                            args=calls[0].get("args"),
+                            tool_call_id=str(calls[0].get("tool_call_id", "")),
+                        )
+                        parked_request = rebuild_request(parked_call)
+                        publish_event = AskUserRequestedEvent(
+                            tool_call_id=parked_call.tool_call_id or None,
+                            tool_name=parked_call.tool_name,
+                            request=parked_request,
+                        )
+                    except Exception as exc:  # noqa: BLE001 — bridge must not block the park
+                        _LOG.warning(
+                            "task %s: ask_user requested-event bridge skipped: %s",
+                            task.id,
+                            exc,
+                        )
+                if publish_event is not None:
+                    await self._publish_capability_event(
+                        publish_event, task_id=task.id, tool_call_id=tool_call_id
+                    )
                 await task.transition("WAITING_INPUT")
                 # deferred_messages.json is a JSON STRING-LITERAL document
                 # (json.loads(file) -> the parked history JSON str).

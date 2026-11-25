@@ -11,8 +11,9 @@ publishers are never backpressured by slow consumers).
 
 Contract and design choices:
 
-- **Topics are a closed registry** (``TOPICS``): the 17 rev2 topics of
-  section 2.3 (``user.msg`` ... ``skill.captured``), each mapping to a
+- **Topics are a closed registry** (``TOPICS``): the 19 rev2 topics of
+  section 2.3 (``user.msg`` ... ``skill.captured``; the P8 CapabilityEvent
+  bridge appends the two ``harness.ask_user.*`` topics), each mapping to a
   documented tuple of payload keys. Publishing an unknown topic raises
   :class:`ValueError` naming the topic before any fan-out; a payload that is
   not a ``dict`` raises :class:`TypeError` (payload keys themselves are
@@ -73,6 +74,11 @@ TOPICS: dict[str, tuple[str, ...]] = {
     "handoff.request": ("from", "to", "prompt"),
     "memory.updated": ("file", "op"),
     "skill.captured": ("skill_name", "path"),
+    # P8 CapabilityEvent bridge (plan §P8): the ask_user capability events the
+    # taskloop sink mirrors onto the bus (payloads shaped by
+    # bob_harness.taskloop.capability_event_to_topic).
+    "harness.ask_user.requested": ("task_id", "tool_call_id", "kind", "event_kind"),
+    "harness.ask_user.answered": ("task_id", "tool_call_id", "kind", "event_kind"),
 }
 
 

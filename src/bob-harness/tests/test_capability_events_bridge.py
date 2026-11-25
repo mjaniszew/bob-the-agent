@@ -454,7 +454,18 @@ async def test_unknown_capability_events_ignored(tmp_volume: Any, cfg: Any) -> N
 
     assert capability_event_to_topic(weird, task_id=_T1) is None
     # Known kinds DO map.
-    requested = AskUserRequestedEvent(kind="ask_user.requested", tool_call_id=_TC_ID)
+    # Orchestrator-disclosed third bridge-test bug (attempt-2 handoff 2026-11-25,
+    # independently re-verified live on 0.73.0): `request` is a REQUIRED
+    # kw-only field, so bare construction raises TypeError unconditionally (it
+    # was masked pre-impl by the mapper ImportError). The file's own
+    # dataclasses_fields_request() builds the request (id = tool_call_id);
+    # the mapper returns exactly the (topic, 4-key payload) pinned below.
+    requested = AskUserRequestedEvent(
+        kind="ask_user.requested",
+        tool_call_id=_TC_ID,
+        tool_name="ask_user_question",
+        request=dataclasses_fields_request(),
+    )
     mapped = capability_event_to_topic(requested, task_id=_T1)
     assert mapped == (
         "harness.ask_user.requested",
