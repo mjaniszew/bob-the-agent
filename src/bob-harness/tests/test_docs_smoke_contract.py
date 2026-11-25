@@ -112,12 +112,12 @@ def test_architecture_documents_capability_manifest() -> None:
     section_anchors = (
         "Pydantic AI v2 Architecture",
         "Design decisions D1-D7",
-        # D1-D7 rationale, one anchor per decision (plan §2 titles).
+        # D1-D7 rationale, one anchor per decision (plan §2 titles, verbatim).
         "D1 — Delegation via a custom capability (toolset), NOT SubAgents entries",
-        "D2 — executor adapter in the existing registry; taskloop remains sole invoker",
+        "D2 — `executor` adapter in the existing registry; taskloop remains sole",
         "D3 — WAITING_INPUT gate on deferred tool calls; persisted resume seed",
         "D4 — One shared memory store; plain-file format + budgets preserved",
-        "D5 — Harness Skills capability on existing folders; SkillsEngine keeps INDEX.md",
+        "D5 — Harness `Skills` capability on existing folders; SkillsEngine keeps",
         "D6 — Harness coder capabilities NOT adopted",
         "D7 — Router stays capability-free",
         # §3.2 capability manifest, executor agent.

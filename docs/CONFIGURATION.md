@@ -258,6 +258,100 @@ agent:
 
 The agent healthcheck probes TCP 8181 via the shared `x-agent-healthcheck` anchor (compose.yaml lines 10-19; `start_period: 120s`), and the bob-harness gateway exposes an unauthenticated `GET /healthz` returning exactly `{"ok": true}` (all other routes are API-key secured).
 
+<!-- append-anchor: P9 harness capability configuration -->
+
+## Harness Capability Configuration (pydantic-ai v2, phases P2-P9)
+
+The executor agent's pydantic-ai-harness capability stack is configured under
+the top-level `harness:` YAML key of the bob-harness config
+(`/opt/data/bob-harness/config.yaml`, template
+`src/bob-harness/bob-harness.template.yaml`). Every sub-key has `extra="forbid"`
+— unknown keys fail fast at boot — and a flat `BOB_HARNESS_*` env binding where
+the table below shows one (list-valued keys are YAML-only by design; no flat
+binding). Toggle keys default to ON; disabling a capability simply omits it
+from the executor agent's `capabilities=[...]` and the executor still functions
+(graceful degradation, asserted by tests).
+
+### The harness group (bob-harness.template.yaml keys)
+
+| Config key | Type | Default | Purpose |
+|---|---|---|---|
+| `harness.memory.enabled` | bool | `true` | Memory capability mounted on the executor |
+| `harness.memory.dir` | str | `''` | Store dir; `''` -> `<storage.data_dir>/memory`, SHARED with MemoryEngine (D4) |
+| `harness.memory.workspace_root` | str | `''` | `''` -> per-run workspace (task workdir / session workdir); LocalWorkspaceBackend binding |
+| `harness.memory.agent_name` | str | `executor` | `Memory(store=..., agent_name=...)` |
+| `harness.memory.inject` | bool | `true` | `inject_memory=True/False` |
+| `harness.memory.max_tokens` | int | `2000` | Memory `max_tokens` (SDK default, verified) |
+| `harness.skills.enabled` | bool | `true` | Skills capability mounted on the executor |
+| `harness.skills.include` | list | `[]` | Optional slug filter (Skills `include=`) [YAML-only] |
+| `harness.skills.exclude` | list | `[]` | Optional slug filter (Skills `exclude=`) [YAML-only] |
+| `harness.skills.read_files` | bool | `false` | Skills `read_files` |
+| `harness.skills.missing_directories` | `'error'\|'skip'` | `skip` | Fresh-tree boot uses `skip` (`ignore` raises ValueError — verified) |
+| `harness.ask_user.enabled` | bool | `true` | AskUser capability mounted on the executor |
+| `harness.ask_user.id` | str | `ask_user` | `AskUser(id=...)`; tool name `ask_user_question` |
+| `harness.ask_user.answerer` | `'deferred'\|'inline'\|'none'` | `deferred` | `deferred` (default, D3): run parks via `DeferredToolRequests`, TaskLoop answers on resume. `inline`: interactive Answerer + gateway session/bus within `timeout_s`. `none`: no answering surface |
+| `harness.ask_user.timeout_s` | int\|null | `null` | `AskUser(timeout=...)` when `answerer=inline` |
+| `harness.subagents.enabled` | bool | `true` | Nested SubAgents capability (in-process helper entries only — NEVER hermes/opencode, D1) |
+| `harness.subagents.max_depth` | int | `3` | `SubAgents(max_depth=...)` |
+| `harness.delegation.enabled` | bool | `true` | `delegate_run` custom capability (D1) — hermes/opencode CLI adapters exposed as executor tools |
+| `harness.delegation.tool_name` | str | `delegate_run` | Tool name of the custom capability [YAML-only] |
+
+### Flat environment bindings (BOB_HARNESS_* table)
+
+| Config key | Env var | Default |
+|---|---|---|
+| `harness.memory.enabled` | `BOB_HARNESS_MEMORY_ENABLED` | `true` |
+| `harness.memory.dir` | `BOB_HARNESS_MEMORY_DIR` | `''` -> `<storage.data_dir>/memory` |
+| `harness.memory.workspace_root` | `BOB_HARNESS_MEMORY_WORKSPACE` | `''` -> per-run workdir |
+| `harness.memory.agent_name` | `BOB_HARNESS_MEMORY_AGENT_NAME` | `executor` |
+| `harness.memory.inject` | `BOB_HARNESS_MEMORY_INJECT` | `true` |
+| `harness.memory.max_tokens` | `BOB_HARNESS_MEMORY_MAX_TOKENS` | `2000` |
+| `harness.skills.enabled` | `BOB_HARNESS_SKILLS_ENABLED` | `true` |
+| `harness.skills.read_files` | `BOB_HARNESS_SKILLS_READ_FILES` | `false` |
+| `harness.skills.missing_directories` | `BOB_HARNESS_SKILLS_MISSING` | `skip` |
+| `harness.ask_user.enabled` | `BOB_HARNESS_ASK_USER_ENABLED` | `true` |
+| `harness.ask_user.answerer` | `BOB_HARNESS_ASK_USER_ANSWERER` | `deferred` |
+| `harness.ask_user.timeout_s` | `BOB_HARNESS_ASK_USER_TIMEOUT_S` | `null` |
+| `harness.subagents.enabled` | `BOB_HARNESS_SUBAGENTS_ENABLED` | `true` |
+| `harness.subagents.max_depth` | `BOB_HARNESS_SUBAGENTS_MAX_DEPTH` | `3` |
+| `harness.delegation.enabled` | `BOB_HARNESS_DELEGATION_ENABLED` | `true` |
+| `tasks.runner` | `BOB_HARNESS_TASKS_RUNNER` | `executor` |
+
+Integer-valued env vars (`..._MAX_TOKENS`, `..._TIMEOUT_S`, `..._MAX_DEPTH`)
+coerce exactly like `BOB_HARNESS_PORT`; boolean ones cast
+`true/1/yes/on` -> true. `PYDANTIC_AI_NO_BANNER=1` is set in the
+Dockerfile + compose (image/container env, not a `HarnessConfig` key).
+
+### Task dispatch runner: `tasks.runner` (the P7 flip)
+
+The config key `tasks.runner` (`analyzed | executor`) picks the adapter that
+runs inbox tasks:
+
+| Value | Behavior |
+|---|---|
+| `executor` (**executor default since P7**) | in-process pydantic-ai v2 agent + harness capabilities (Memory/Skills/AskUser/SubAgents/delegate_run) |
+| `analyzed` | pre-migration behavior exactly: router-analyzed agent + profile -> hermes/opencode CLI adapter |
+
+- **Default:** `executor` since phase P7 (single default literal, no state
+  migration — merge-safe).
+- **Rollback lever:** `BOB_HARNESS_TASKS_RUNNER=analyzed` restores 1.x behavior
+  per environment without code changes (flat env overrides YAML per the
+  precedence rules above).
+- The runner value is resolved by taskloop from the same registry used by the
+  gateway; see `src/bob-harness/bob_harness/config.py` (`TasksConfig.runner`)
+  and the `scripts/host-smoke.sh` executor-pickup smoke check.
+
+### v2 dependency pins (as frozen in requirements.lock at P0)
+
+`pydantic-ai==2.73.0` · `pydantic-ai-slim==2.73.0` · `pydantic-graph==2.73.0` ·
+`pydantic-evals==2.73.0` · `pydantic-ai-harness[coder]==0.73.0` ·
+`json-repair==0.64.9` · `pydantic==2.14.4` · `pydantic-core==2.50.5`.
+(`requirements.txt` carries the `>=2,<3` cap + the same harness extra;
+`requirements.lock` is the frozen resolution, regenerated ONCE at P0 per
+policy OQ8, dev-tools-free.)
+
+<!-- append-anchor: P9 harness capability configuration end -->
+
 ## Model Configuration
 
 ### Changing Profile Models

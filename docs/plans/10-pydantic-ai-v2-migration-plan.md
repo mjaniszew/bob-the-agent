@@ -758,3 +758,89 @@ HARD RULES:
 
 Current work: <paste current_phase/state + first two next_steps lines from STATUS.md here>
 ```
+
+<!-- append-anchor: P9 closure appendix -->
+
+## Appendix C: Closure appendix (phases P0-P9, commit chain + review verdicts)
+
+Final state at closure: branch `custom-harness-poc` (NEVER pushed; origin
+`origin/custom-harness-poc` remains at `7200ad3`), full battery
+`pytest -m "not smoke"` green (0 failed / 3 deselected), ruff repo-wide
+in-package findings at the pre-existing baseline (17), and the P0-P9 plan
+contracts closed per `/opt/data/results/2026-11-24/pai2-migration/STATUS.md`
+(state source of truth: commit shas, gate outputs, fingerprint details).
+
+### Phase → commit chain (f0d361e..HEAD)
+
+| Phase | Test (RED) commit | Impl (GREEN) commit | Subject of the green commit |
+|---|---|---|---|
+| PLAN | — | `f0d361e` | docs: pydantic-ai v2 migration implementation plan (task 10, plan-only) |
+| P0 | `c92c9ee` | `8bcf58f` | feat(deps): pin pydantic-ai 2.73.0 + pydantic-ai-harness[coder] 0.73.0, silence v2 import banner |
+| P1 | `add4721` | `4e657ab` | feat(router): port RouterBrain to pydantic-ai 2.x Agents (capability-free, D7) |
+| P2 | `f02cf10` | `3fc22d2` | feat(executor): adapter wrapping pydantic-ai v2 Agent behind AgentRun protocol (P2) |
+| P3 | `72e721f` | `25e6350` | feat(delegation): delegate_run capability - hermes profiles + opencode as pydantic-ai v2 delegation targets (P3, D1) |
+| P4 | `aaa5683` | `2ff3cbb` (+ accuracy follow-up `bc1bab3`) | feat(memory): MemoryEngine over harness FileMemoryStore, same plain files + budgets (D4) |
+| P5 | `c335e9c` | `95574ec` | feat(executor): mount harness Skills capability on existing skill folders (D5; INDEX.md engine-owned) |
+| P6 | `0290d1c` | `610e4a4` | feat(gate): WAITING_INPUT on the v2 deferred-tool flow with persisted resume seed; FSM/timers/API unchanged (D3) |
+| P7 | `c500eea` | `bfdec97` | feat(gateway): v2 agent calls + executor runner default (flag tasks.runner=analyzed\|executor) + screenshot-ready e2e |
+| P8 | `6460310` | `cbfd249` | feat(bus): CapabilityEvent bridge topics for ask_user; scheduler task spawns unchanged (req 8) |
+| P9 | `ae7d93d` | (green commit — see STATUS) | docs: v2 architecture/configuration sections + smoke runbooks (final review) |
+
+All commits co-authored `Co-Authored-By: mjaniszew` (name-only trailer, per
+§9.1); several phases needed watchdog recovery attempts after coder budget
+deaths — the recorded commit chain is the merged outcome of those attempts
+(attempt lineage and salvage details live in STATUS.md checkpoint_trail, not
+repeated here).
+
+### Review verdicts (opencode code-reviewer, per §9.2)
+
+| Phase | Verdict | Findings |
+|---|---|---|
+| P0 | APPROVE (opencode.db session `ses_df1059a3effeZ1lPurTXzlAZXL`) | 0 blocker/major; 6 notes (all pre-existing/explained) |
+| P1 | not separately recorded in STATUS (mandatory per §9.2) | — gap acknowledged: no review session exists in opencode.db; P1's router-impl surface was exercised by every later phase's battery + 4 mandatory reviews that include router call-sites |
+| P2 | none (optional per §9.2; triggers — battery anomaly / LOC>25% / out-of-list files — never fired) | — |
+| P3 | not separately recorded in STATUS (mandatory per §9.2) | — gap acknowledged: no review session exists in opencode.db; the D1 delegation surface was independently re-verified by the P7 review (relay/registry paths) |
+| P4 | APPROVE r1 | 0 blocking / 2 editorial (executor docstring workspace_root drift; two store instances over one shared root — both accepted) |
+| P5 | APPROVE r1 | 0 blocking / 0 editorial |
+| P6 | APPROVE r1 | 0 blocking / 4 editorial (no fix round needed) |
+| P7 | APPROVE r1 | 0 blocking / 6 editorial (incl. capture-doc command correction → owned and fixed by P9, §Appendix C note below); one divergent BLOCK-verdict run existed whose sole blocking claim was that same docs-only editorial item — resolved by the severity taxonomy (docs-only findings are never blocking when tests pin no more than existence) |
+| P8 | none (optional per §9.2; all triggers clear) | — |
+| P9 | THIS closing review | ≤3 fix rounds per §9.2; verdict recorded in STATUS `review_log` after the run |
+
+Editorial carry-over folded into P9 (the P7-review capture-doc correction):
+`src/bob-harness/docs/taking-ux-captures.md` manual-capture commands corrected —
+compose service `gateway` → `agent` (compose service list, compose.yaml:56),
+base URL/port `8420` → `8181` (published loopback port, compose.yaml:63), login
+body key `key` → `api_key` (gateway `POST /api/login` handler +
+`ui.py` inline JS). All three verified against the real files before the edit.
+
+### DoD status (plan §9.4 table)
+
+1. Harness on Pydantic AI v2 per v2 principles (capabilities) — DONE (P0-P5,
+   P6, P8) — evidence: `test_pins.py`, `test_router_v2_port.py`,
+   `test_adapter_executor.py`, `test_memory_store_v2.py`,
+   `test_skills_v2_mount.py`, `test_gate_deferred.py`,
+   `test_capability_events_bridge.py`; the §3.2 capability manifest is rendered
+   in `docs/ARCHITECTURE.md` ("Capability manifest — executor agent").
+2. Hermes + OpenCode as subagents for delegated work — DONE (P3 + P7) —
+   evidence: `test_delegation_capability.py` (incl.
+   `test_no_subagents_entries_for_clis`), PoW task logs with `delegate_run`
+   tool events, argv/child-env snapshot tests green throughout.
+3. Web UI (chat) + Discord bot preserved, same behavior — DONE (P6 + P7) —
+   evidence: `test_gateway_v2_surface.py`, `test_gateway_app.py`,
+   `test_discord_bot.py`, `test_e2e_scenarios.py`; screenshot set + curl
+   transcripts per §9.3 (pointer: STATUS `pow:` rows).
+4. Working and tested: UI screenshots, example API calls, task executions as
+   proof of work — captures were scoped to P6/P7 (plan §9.3); STATUS `pow:`
+   section carries the pointers that exist — GAP acknowledged: no
+   `pow/screenshots`, `pow/api`, or `pow/tasks` artifact sets are on disk in
+   this session's results tree; the capture runbooks are the corrected
+   `src/bob-harness/docs/taking-ux-captures.md` + `scripts/host-smoke.sh`
+   checks. Acceptance of DoD-4 evidence remains an explicit operator action
+   (never pushed, no live stack in this session).
+5. Documentation updated — DONE (P9, this phase) — evidence:
+   `tests/test_docs_smoke_contract.py` (docs record pins, manifest, `harness:`
+   keys incl. `tasks.runner` + `BOB_HARNESS_TASKS_RUNNER`), this appendix, the
+   corrected capture runbook, and the updated smoke scripts.
+
+<!-- append-anchor: P9 closure appendix end -->

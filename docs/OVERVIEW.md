@@ -25,6 +25,40 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, conta
 - your job as AI Agent is to build another ai agent with any means possible, according to requirements specified in a particular task pointed from `docs/tasks` folder at the time, as well as according to context of all features described in `docs/features`
 - `docs/tasks` folder will contain specific tasks with detailed definition of what to build step by step. You will be asked to build something new every time, executing only one, specified by user task at the time, and ignoring rest of tasks from that folder
 
+## Pydantic AI v2 Migration (task 10, branch custom-harness-poc)
+
+The bob-harness now runs on **pydantic-ai 2.73.0** with the harness capability
+stack (**pydantic-ai-harness[coder]==0.73.0**), migrated over phases P0-P9 of
+`docs/plans/10-pydantic-ai-v2-migration-plan.md`. Frozen pin set (see
+`src/bob-harness/requirements.lock`): `pydantic-ai==2.73.0`,
+`pydantic-ai-slim==2.73.0`, `pydantic-graph==2.73.0`, `pydantic-evals==2.73.0`,
+`pydantic-ai-harness[coder]==0.73.0`, `json-repair==0.64.9`,
+`pydantic==2.14.4`, `pydantic-core==2.50.5`.
+
+What changed, in brief:
+
+- **Router** (`RouterBrain`) is ported to v2 `Agent`s — capability-free, schema
+  outputs, keyword fallback and `router_ledger.jsonl` contract unchanged (D7).
+- **Executor adapter** (new, default `tasks.runner: executor` since P7): one
+  v2 `Agent` per run wrapped behind the existing `AgentRun` protocol, with
+  harness capabilities — Memory (shared FileMemoryStore, D4), Skills (existing
+  SKILL.md folders, engine still owns INDEX.md, D5), AskUser (deferred-tool
+  gate with a persisted resume seed, D3), nested SubAgents and a custom
+  `delegate_run` capability that keeps hermes/opencode REAL subprocess CLI
+  adapters (D1). The harness coder capabilities are NOT adopted (D6).
+- **WAITING_INPUT gate** is rebuilt on the v2 deferred-tool mechanism;
+  parked questions survive restarts (D3). FSM, `gates.jsonl`, timers, API and
+  the Discord/gateway UI surfaces are unchanged (P6/P7).
+- AskUser capability events are mirrored onto the Event Bus topics
+  `harness.ask_user.requested` / `harness.ask_user.answered` (P8).
+- Rollback lever for the one behavior flip (P7): `BOB_HARNESS_TASKS_RUNNER=analyzed`.
+
+Detailed architecture: the "Pydantic AI v2 Architecture" section of
+[ARCHITECTURE.md](./ARCHITECTURE.md) (D1-D7 rationale + capability manifest);
+configuration: the "Harness Capability Configuration" section of
+[CONFIGURATION.md](./CONFIGURATION.md) (the `harness:` group + flat
+`BOB_HARNESS_*` env table).
+
 ## Main assumptions and requirements
 
 - agent should be able to run in container using Docker or Docker Compose

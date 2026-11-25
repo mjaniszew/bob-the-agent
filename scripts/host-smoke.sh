@@ -5,8 +5,8 @@
 # docker compose v2. Verifies the bob-harness gateway on 127.0.0.1:8181 end to end:
 # image build, stack start, gateway HTTP 200, startup marker in container logs,
 # no-banner start (P7), in-container harness import, executor-backed task pickup
-# (P7 default runner=executor), screenshot e2e readiness (P7 capture flow), and
-# all four compose services Up.
+# (P7 default runner=executor), the v2 requirements.lock dependency pins (P9),
+# screenshot e2e readiness (P7 capture flow), and all four compose services Up.
 #
 # Usage: ./scripts/host-smoke.sh [--skip-build]
 #
@@ -151,6 +151,28 @@ if [ -n "${BOB_HARNESS_API_KEY:-}" ]; then
   fi
 else
   echo "RESULT: [6/9] taskloop resolved runner=executor ... SKIP (BOB_HARNESS_API_KEY unset)"
+fi
+
+# 6b. v2 dependency lock pins (P9): the smoke contract pins the frozen
+# pydantic-ai v2 + harness dependency set host-side (grep the committed lock
+# file - no container exec needed; if the lock drifts from the documented
+# pins the smoke run fails here).
+lock_file="src/bob-harness/requirements.lock"
+req_file="src/bob-harness/requirements.txt"
+for needle in 'pydantic-ai==2.73.0' 'pydantic-ai-slim==2.73.0' 'pydantic-graph==2.73.0' \
+  'pydantic-evals==2.73.0' 'json-repair==0.64.9' 'pydantic==2.14.4' 'pydantic-core==2.50.5'; do
+  if [ -f "$lock_file" ] && grep -qF -- "$needle" "$lock_file"; then
+    pass "6b/9" "requirements.lock pins $needle"
+  else
+    fail "6b/9" "requirements.lock pins $needle" "needle missing from ${lock_file}"
+  fi
+done
+if [ -f "$req_file" ] && grep -qF -- 'pydantic-ai-harness[coder]==0.73.0' "$req_file" \
+  && [ -f "$lock_file" ] && grep -qF -- 'pydantic-ai-harness==0.73.0' "$lock_file"; then
+  pass "6b/9" "requirements pin the harness extra ([coder] extra + frozen harness core)"
+else
+  fail "6b/9" "requirements pin the harness extra ([coder] extra + frozen harness core)" \
+    "pydantic-ai-harness[coder]==0.73.0 (requirements.txt) or pydantic-ai-harness==0.73.0 (lock) missing"
 fi
 
 # 7. screenshot e2e entry (P7): the gateway serves the capture-ready page and

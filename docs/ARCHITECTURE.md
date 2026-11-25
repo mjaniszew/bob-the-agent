@@ -332,6 +332,120 @@ See `.env.template` for all configurable variables:
 | `LOG_LEVEL` | No | Logging level (info, debug, warn, error) |
 | `LOGFIRE_TOKEN` | No | Logfire ingest token — remote export token for the harness's built-in Logfire instrumentation (pydantic-AI router/analyze agent spans, httpx, system metrics; service name `bob-harness`). Gated by `logfire.enabled` in the harness YAML (template default `true`); unset = no remote export |
 
+<!-- append-anchor: P9 pydantic-ai v2 architecture -->
+
+## Pydantic AI v2 Architecture
+
+The branch `custom-harness-poc` migrates the bob-harness from the pydantic-ai 1.x
+API to **pydantic-ai 2.73.0** with the harness capability stack
+(**pydantic-ai-harness[coder]==0.73.0**), implemented across phases P0-P8 of
+`docs/plans/10-pydantic-ai-v2-migration-plan.md` (task 10). This section renders
+the decisions and the capability manifest from that plan (§2, §3.2); the plan doc
+is binding and carries the full rationale.
+
+### Dependency pins (requirements.lock, frozen at P0)
+
+| Package | Pin | Role |
+|---|---|---|
+| `pydantic-ai` | `pydantic-ai==2.73.0` | Router brain + executor agent framework (v2 `Agent` API) |
+| `pydantic-ai-slim` | `pydantic-ai-slim==2.73.0` | Core slim distribution (transitive, frozen) |
+| `pydantic-graph` | `pydantic-graph==2.73.0` | v2 graph runtime (transitive, frozen) |
+| `pydantic-evals` | `pydantic-evals==2.73.0` | v2 evals distribution (transitive, frozen) |
+| `pydantic-ai-harness` | `pydantic-ai-harness[coder]==0.73.0` | Capability stack (Memory/Skills/AskUser) + FileMemoryStore + harness Skills loader |
+| `json-repair` | `json-repair==0.64.9` | Hard import requirement of the harness package (`[coder]` extra keeps it installed) |
+| `pydantic` | `pydantic==2.14.4` | Settings + structured outputs for both agents |
+| `pydantic-core` | `pydantic-core==2.50.5` | pydantic runtime (transitive, frozen) |
+
+Banner hygiene: every v2 import path sets `PYDANTIC_AI_NO_BANNER=1` (Dockerfile
+ENV + compose env + `tests/conftest.py`) so supervisor logs and smoke output
+stay identical in shape.
+
+### Design decisions D1-D7
+
+One-line rationale per decision (full text incl. rejected alternatives: plan §2):
+
+- **D1 — Delegation via a custom capability (toolset), NOT SubAgents entries**
+  — hermes/opencode stay real subprocess adapters speaking their native CLI
+  protocols (argv snapshots, `--resume`/`--session`, child-env allowlist); a
+  custom `delegate_run` capability exposes them as tools without faking the
+  in-process `AbstractAgent` message graph that harness `SubAgents` entries
+  would require.
+- **D2 — `executor` adapter in the existing registry; taskloop remains sole
+  invoker** — the v2 pydantic agent is wrapped as an `AgentRun` adapter
+  registered alongside `hermes`/`opencode`; taskloop stays the single task
+  runner and every consumer keeps the closed `StreamEvent` contract
+  (`started/chunk/final/tool/failed/system`). Delegation inside executor runs
+  is nested, never task-origin; SUBTASK_DROP remains a taskloop/FSM-side event.
+- **D3 — WAITING_INPUT gate on deferred tool calls; persisted resume seed**
+  — the executor's ask tool raises `CallDeferred` (AskUser capability), the run
+  returns `DeferredToolRequests`, and TaskLoop parks the task exactly as today
+  (FSM `RUNNING -> WAITING_INPUT`, `gates.jsonl`, 24h timer) while additionally
+  persisting `run.all_messages_json()` + a `DeferredToolResults` seed into the
+  task folder; `answer()` resumes the SAME run — parked questions survive
+  restarts. Subprocess adapters keep the prompt-append resume untouched.
+- **D4 — One shared memory store; plain-file format + budgets preserved** —
+  `MemoryEngine` is reimplemented over
+  `FileMemoryStore(<storage.data_dir>/memory, workspace=LocalWorkspaceBackend)`,
+  the same store the executor's `Memory` capability binds: plain
+  `MEMORY.md`/`USER.md`/`lessons.md` files with the existing char budgets, plus
+  the read-observe-then-write SHA-256 content versions and audit ledger the SDK
+  store provides.
+- **D5 — Harness `Skills` capability on existing folders; SkillsEngine keeps
+  INDEX.md** — the `Skills` capability mounts the existing
+  `<data_dir>/skills/*/SKILL.md` folders (`missing_directories='skip'` on a
+  fresh tree) while `SkillsEngine` stays the sole owner of the
+  byte-deterministic `INDEX.md` and the SKILL_DRAFT capture flow.
+- **D6 — Harness coder capabilities NOT adopted** — `Coder`, `FileSystem`,
+  `Shell`, `DockerContainer` (and `ModelRouter`) are not mounted on any agent;
+  OpenCode remains the coder via delegation (D1). The only workspace machinery
+  adopted is `LocalWorkspaceBackend` (memory/skills store bindings). The
+  `[coder]` extra stays installed because the package hard-requires
+  `json-repair` at import time.
+- **D7 — Router stays capability-free** — `RouterBrain` keeps pure
+  temperature-0 schema calls with one retry and the keyword fallback as the
+  decision floor; capabilities would inject instructions/toolsets that break
+  the `_PROMPT_CHAR_CAP` budget and add a failure mode to the never-blocking
+  contract. The router consumes pre-capped projections (`digest()` ≤ 600
+  chars, index ≤ 1500 chars) and never touches the memory/skills stores
+  directly.
+
+### Capability manifest — executor agent
+
+| Capability | Mount / data binding | Config keys | Notes |
+|---|---|---|---|
+| `Memory` | `Memory(store=FileMemoryStore(<storage.data_dir>/memory, workspace=LocalWorkspaceBackend), agent_name='executor', inject_memory=True, max_tokens=2000)` — dir SHARED with `MemoryEngine` (D4) | `harness.memory.*` | Auto-injected memory per run; delegates get read-only injection as today |
+| `Skills` | `Skills(directories=[<data_dir>/skills], missing_directories='skip', read_files=False)` over the existing SKILL.md folders; `INDEX.md` stays `SkillsEngine`-owned (D5) | `harness.skills.*` | Optional `include`/`exclude` slug filters; toolset exposes skill lookup to the executor |
+| `AskUser` | `AskUser(answerer=None (deferred by default), id='ask_user')` — tool `ask_user_question`; events `AskUserRequestedEvent`/`AskUserAnsweredEvent` (`ctx.emit` → taskloop bus sink) | `harness.ask_user.*` | In task context the run returns `DeferredToolRequests` (D3); restart survival via the persisted message seed |
+| `SubAgents` (nested only) | nested in-process helper agent entries (`max_depth=3`); NEVER wraps hermes/opencode (D1) | `harness.subagents.*` | Decompose/verify-style nested runs |
+| `delegate_run` (custom) | custom `AbstractCapability` exposing `delegate_run(agent='hermes'\|'opencode', prompt, ...)` which calls the registered adapter's `run(spec)` and re-streams `StreamEvent`s into the executor run | `harness.delegation.*` | The mechanism by which Hermes and OpenCode act as delegated subagents (task DoD #2) without `SubAgents` entries; child-env rules untouched |
+
+Explicitly NOT mounted (D6): `Coder`, `FileSystem`, `Shell`, `DockerContainer`,
+`ModelRouter`. The executor's structured output streams to the session/task
+transcript via the existing `StreamEvent(final|chunk)` kinds.
+
+### Capability events on the bus (phase P8)
+
+AskUser capability events are mirrored onto the existing `EventBus` topics
+(additive; the closed `events.jsonl` kind registry is untouched):
+
+- `harness.ask_user.requested` — `AskUserRequestedEvent` (CapabilityEvent base
+  fields `kind`/`capability_id`/`tool_call_id`/`tool_name`)
+- `harness.ask_user.answered` — `AskUserAnsweredEvent` (with
+  `tool_call_id` + task id)
+
+Scheduler task spawns keep flowing through taskloop unchanged (single-runner
+pickup unchanged).
+
+### Executor default runner (phase P7, the only behavior flip)
+
+`tasks.runner` defaults to **`executor`** (the in-process v2 agent + harness
+capabilities) since P7; `analyzed` restores the pre-migration behavior exactly
+(router-analyzed agent + profile -> hermes/opencode CLI adapter). The flip is
+merge-safe (single config default literal, no state migration); rollback lever
+per environment: `BOB_HARNESS_TASKS_RUNNER=analyzed`.
+
+<!-- append-anchor: P9 pydantic-ai v2 architecture end -->
+
 ## Related Documentation
 
 - [Configuration Guide](./CONFIGURATION.md) - Detailed configuration options

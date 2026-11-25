@@ -17,11 +17,11 @@ scripts/host-smoke.sh   # build/up + /healthz poll + smoke checks
 or manually:
 
 ```bash
-docker compose up -d gateway    # UI served by bob_harness.gateway.app
-curl -fsS http://127.0.0.1:8420/healthz
+docker compose up -d agent      # UI served by bob_harness.gateway.app (compose service "agent", compose.yaml:56)
+curl -fsS http://127.0.0.1:8181/healthz
 ```
 
-The gateway base URL below is `http://127.0.0.1:8420`.
+The gateway base URL below is `http://127.0.0.1:8181` (the compose loopback publish, compose.yaml:63).
 
 ## 1. Login (key-for-cookie exchange, D6)
 
@@ -31,7 +31,7 @@ session cookie (`POST /api/login`), then the key is forgotten
 
 ```bash
 curl -fsS -c /tmp/bob-cookies.txt -H 'Content-Type: application/json' \
-  -d '{"key": "<BOB_API_KEY>"}' http://127.0.0.1:8420/api/login
+  -d '{"api_key": "<BOB_API_KEY>"}' http://127.0.0.1:8181/api/login
 ```
 
 In the browser: open the base URL, paste the key into the login prompt,
@@ -87,7 +87,7 @@ Screenshot tooling: any headless browser works, e.g.
 
 ```bash
 chromium --headless --disable-gpu --window-size=1280,900 \
-  --screenshot=docs/captures/task-board.png http://127.0.0.1:8420/
+  --screenshot=docs/captures/task-board.png http://127.0.0.1:8181/
 ```
 
 After login the cookie jar from the exchange must be used by the browser

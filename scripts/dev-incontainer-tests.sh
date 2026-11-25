@@ -23,5 +23,6 @@ uv pip install --python "$VENV/bin/python" -r requirements.txt -q
 echo "== installing dev tools (excluded from requirements.lock by design) =="
 uv pip install --python "$VENV/bin/python" -r requirements-dev.txt -q
 echo "== running pytest (-m \"not smoke\"; canonical form per IMPLEMENTATION-PLAN.md R1/M4) =="
+echo "== phase note: P9 docs+smoke contract suite tests/test_docs_smoke_contract.py is part of this battery =="
 cd "$repo_root/src/bob-harness"
 exec /tmp/bob-harness-venv/bin/python -m pytest -m "not smoke" "$@"
