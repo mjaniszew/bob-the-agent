@@ -569,3 +569,53 @@ async def test_live_hermes_oneshot(tmp_path: Path) -> None:
     transcript = "\n".join(event.text or "" for event in events if event.kind == "chunk")
     assert events[-1].kind != "failed"
     assert extract_session_id(transcript) is not None
+
+
+# --- multi-line query echo (task: discord-bot-failing follow-up) ------------
+# Hermes echoes the WHOLE --query-file prompt after "Query: " (wrapped at
+# terminal width) until "Initializing agent...". Only the first echo line used
+# to be filtered, so assembled prompts (skills, memory, "## Input") leaked into
+# every reply.
+
+
+async def test_relay_drops_multiline_query_echo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = _adapter(tmp_path)
+    install_fake_start_process(
+        monkeypatch, FakeProc(fixture_lines("hermes-multiline-query-stdout.txt"), b"", 0)
+    )
+    events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
+    assert [(event.kind, event.text) for event in events[:-1]] == [
+        ("chunk", "  ┊ \U0001f40d preparing execute_code…"),
+        ("chunk", "17 * 23 = 391."),
+        ("chunk", "Resume this session with:"),
+        ("chunk", "  hermes --resume 20261126_143028_6ea177 -p simple"),
+        ("chunk", "Session:        20261126_143028_6ea177"),
+        ("chunk", "Duration:       5s"),
+        ("chunk", "Messages:       4 (1 user, 2 tool calls)"),
+    ]
+    final = events[-1]
+    assert final.kind == "final"
+    assert "Math Operations Skill" not in (final.final_text or "")
+    assert final.session_ref == "20261126_143028_6ea177"
+
+
+async def test_relay_keeps_echo_tail_when_no_init_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defensive: without the "Initializing agent..." terminator nothing after
+    the first Query line is silently lost (held lines are relayed at EOF)."""
+    adapter = _adapter(tmp_path)
+    install_fake_start_process(
+        monkeypatch,
+        FakeProc([b"Query: first\n", b"second\n", b"ANSWER\n"], b"", 0),
+    )
+    events = [event async for event in adapter.run(RunSpec(prompt="x", profile="simple"))]
+    assert [(event.kind, event.text) for event in events[:-1]] == [
+        ("chunk", "second"),
+        ("chunk", "ANSWER"),
+    ]
+    assert events[-1].kind == "final"

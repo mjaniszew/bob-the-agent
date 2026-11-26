@@ -670,3 +670,25 @@ async def test_spawn_bot_forwards_injected_brain(
     routed = [r for r in transcript_records(cfg, session.id) if r.get("kind") == "router"]
     assert routed and routed[-1]["data"]["task_title"] == "injected turn"
     assert "lazy done" in client.sent_to[dm.id]
+
+
+async def test_stream_preview_capped_to_discord_limit(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A streamed buffer past Discord's 2000-char ceiling must never be sent or
+    edited verbatim (live: 400 Invalid Form Body, the stream then died). The
+    preview shows the newest tail, prefixed with an ellipsis; the full text
+    still arrives via handle_final's 1900-char slicing."""
+    bot, _bus, _manager, _adapter, client = await _make_bot(cfg, monkeypatch, chunk_ms=1.0)
+    chan = client.channels[5100]
+    sid = "CCCC3333"
+    bot._session_channels[sid] = chan.id
+    await bot.handle_chunk(sid, "a" * 1500)
+    await asyncio.sleep(0.02)
+    await bot.handle_chunk(sid, "b" * 1500 + "END")
+    await asyncio.sleep(0.02)
+    shown = client.sent_to[chan.id] + [edit[1] for edit in client.edits]
+    assert shown, "stream never reached the channel"
+    assert all(len(text) <= 1900 for text in shown)
+    assert shown[-1].endswith("END") and shown[-1].startswith("…")
+    assert sid in bot._stream, "stream must stay alive (no failed edit)"
