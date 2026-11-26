@@ -693,22 +693,31 @@ class DiscordBot:
             self._log.warning("discord stream channel %s vanished for %s", channel_id, session_id)
             self._stream.pop(session_id, None)
             return
+        preview = self._stream_preview(state.buffer)
         if state.message is None:
             try:
-                state.message = await self._client.send_message(channel, state.buffer)
+                state.message = await self._client.send_message(channel, preview)
             except Exception as exc:  # noqa: BLE001 — F8: the web stays unaffected
                 self._log.warning("discord stream send failed for %s: %s", session_id, exc)
                 self._stream.pop(session_id, None)
                 return
         else:
             try:
-                await self._client.edit_message(state.message, state.buffer)
+                await self._client.edit_message(state.message, preview)
             except Exception as exc:  # noqa: BLE001 — F8
                 self._log.warning("discord stream edit failed for %s: %s", session_id, exc)
                 self._stream.pop(session_id, None)
                 return
         state.next_edit_at = self._clock() + (self._cfg.discord.chunk_ms / 1000)
         state.edit_task = None
+
+    def _stream_preview(self, buffer: str) -> str:
+        """Live preview within Discord's message ceiling: the newest tail,
+        ellipsis-prefixed when trimmed (handle_final still delivers it all)."""
+        limit = getattr(self._cfg.discord, "chunk_chars", _ROUTE_CHUNK_CHARS) or _ROUTE_CHUNK_CHARS
+        if len(buffer) <= limit:
+            return buffer
+        return "\u2026" + buffer[-(limit - 1) :]
 
     async def _resolve_channel(self, channel_id: int) -> object | None:
         """get_channel-first, fetch-as-fallback; failures -> None (2.8)."""

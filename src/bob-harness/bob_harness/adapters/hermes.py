@@ -34,7 +34,9 @@ Design contract / live facts (probes recorded 2026-11-12; see
   ``max_output_bytes`` is enforced supervisor-side, not here).
 - Relay: every stdout line becomes a ``chunk`` event after stripping the
   trailing newline and pty ``\\r`` artifacts, EXCEPT lines matched by
-  :data:`LINE_FILTERS` (query echo, banner, box/rule decoration, blanks);
+  :data:`LINE_FILTERS` (query echo, banner, box/rule decoration, blanks); the
+  multi-line query echo (every line from ``Query:`` up to ``Initializing
+  agent...``) is dropped too, and relayed instead if the marker never comes;
   ``Resume this session with:`` help lines and ``Session:``/``Title:``/
   ``Duration:``/``Messages:`` footer lines are faithfully relayed. A success
   run ends with exactly ONE ``final`` event (task 22: the consumers — gateway
@@ -164,6 +166,16 @@ def newest_session_id_from_store(profile_dir: Path) -> str | None:
     return row[0] if row is not None else None
 
 
+_QUERY_ECHO_RE = re.compile(r"^Query: ")
+_INIT_MARKER_RE = re.compile(r"^Initializing agent\.\.\.$")
+
+
+def _decode_line(raw_line: bytes) -> str:
+    """Decode one stdout line and strip the newline + pty ``\\r`` artifacts."""
+    line = raw_line.decode("utf-8", errors="replace")
+    return line.removesuffix("\n").rstrip("\r")
+
+
 def _normalize_line(raw_line: bytes) -> str | None:
     """Decode/strip one stdout line; ``None`` when it matches :data:`LINE_FILTERS`.
 
@@ -258,9 +270,30 @@ class HermesAdapter:
                     proc = await self._spawn(argv, spec.workdir)
                     stderr_task = asyncio.create_task(base.read_stream(proc.stderr))
                     stdout_parts: list[str] = []
+                    # Multi-line query echo: hermes prints the whole prompt
+                    # after "Query: " until "Initializing agent...". Hold those
+                    # lines; drop them at the marker, relay them if it never
+                    # comes (no output is ever silently lost).
+                    echo_held: list[str] | None = None
                     try:
                         async for raw_line in proc.stdout:
+                            text = _decode_line(raw_line)
+                            if _QUERY_ECHO_RE.search(text):
+                                echo_held = []
+                                continue
+                            if echo_held is not None:
+                                if _INIT_MARKER_RE.search(text):
+                                    echo_held = None
+                                else:
+                                    echo_held.append(text)
+                                continue
                             line = _normalize_line(raw_line)
+                            if line is None:
+                                continue
+                            stdout_parts.append(line)
+                            yield StreamEvent(kind="chunk", text=line)
+                        for held in echo_held or ():
+                            line = _normalize_line(held.encode("utf-8"))
                             if line is None:
                                 continue
                             stdout_parts.append(line)
