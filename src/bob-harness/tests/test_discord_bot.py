@@ -569,3 +569,99 @@ async def test_denial_logged_at_info(
     assert any(
         "denied by allowlist" in record.getMessage() for record in caplog.records
     )
+
+
+# ---------------------------------------------------------------------------
+# Task: discord-bot-failing — production wiring never injects a brain.
+# spawn_bot(cfg, bus, manager) (supervisor path) builds DiscordBot WITHOUT a
+# brain; the bot must lazily build the real RouterBrain instead of crashing
+# with "'NoneType' object has no attribute 'route_async'".
+# ---------------------------------------------------------------------------
+
+
+def _patch_lazy_wiring(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[tuple], ScriptedAdapter]:
+    """Patch the two production seams the bot resolves on its own: the
+    RouterBrain constructor (records calls, fake model) and the adapter
+    registry (scripted adapter). Returns (brain_calls, adapter)."""
+    import bob_harness.gateway.discord_bot as discord_bot_mod
+
+    for name in ("DISCORD_ALLOWED_USERS", "DISCORD_ALLOWED_ROLES"):
+        monkeypatch.delenv(name, raising=False)
+    calls: list[tuple] = []
+
+    def fake_brain(brain_cfg: HarnessConfig, *, bus: Bus | None = None) -> RouterBrain:
+        calls.append((brain_cfg, bus))
+        return RouterBrain(
+            brain_cfg,
+            bus=bus,
+            model=make_fake_model([{"agent": "opencode", "task_title": "lazy turn"}] * 4),
+        )
+
+    adapter = ScriptedAdapter([StreamEvent(kind="final", final_text="lazy done")], delay_s=0.0)
+    monkeypatch.setattr(discord_bot_mod, "RouterBrain", fake_brain)
+    monkeypatch.setattr(discord_bot_mod, "registry_get", lambda agent, _cfg: adapter)
+    return calls, adapter
+
+
+async def test_spawn_bot_dm_turn_without_injected_brain(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls, adapter = _patch_lazy_wiring(cfg, monkeypatch)
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
+    bus = Bus()
+    manager = SessionManager(cfg, bus=bus)
+    client = FakeBotClient()
+    bot = await spawn_bot(cfg, bus, manager, client_factory=lambda: client)
+    assert bot is not None
+    dm = client.dm(9100)
+    await bot.on_message(make_message(client, "hi bob", channel=dm, user=FakeUser(9101)))
+    await bot.wait_turns()
+    await settle(getattr(cfg.discord, "chunk_ms", 1.0))
+    assert len(calls) == 1 and calls[0][1] is bus
+    assert adapter.specs, "router output never reached an agent adapter"
+    sends = client.sent_to[dm.id]
+    assert any("[routed to opencode] lazy turn" in text for text in sends)
+    shown = sends + [edit[1] for edit in client.edits]
+    assert any("lazy done" in text for text in shown), "agent output not sent back to the DM"
+
+
+async def test_guild_turn_without_injected_brain_replies_in_channel(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls, _adapter = _patch_lazy_wiring(cfg, monkeypatch)
+    bus = Bus()
+    manager = SessionManager(cfg, bus=bus)
+    client = FakeBotClient()
+    client.text_channel(5200)
+    bot = DiscordBot(cfg, bus, manager, client=client)
+    await bot.start()
+    session = await _guild_turn(bot, client, 5200, 9201, "first")
+    await _guild_turn(bot, client, 5200, 9201, "second")
+    assert len(calls) == 1, "RouterBrain must be built once and cached"
+    records = transcript_records(cfg, session.id)
+    assert sum(1 for record in records if record.get("kind") == "agent_final") == 2
+    shown = client.sent_to[5200] + [edit[1] for edit in client.edits]
+    assert any("lazy done" in text for text in shown)
+
+
+async def test_spawn_bot_forwards_injected_brain(
+    cfg: HarnessConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls, _adapter = _patch_lazy_wiring(cfg, monkeypatch)
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "test-token")
+    bus = Bus()
+    manager = SessionManager(cfg, bus=bus)
+    client = FakeBotClient()
+    injected = RouterBrain(
+        cfg, model=make_fake_model([{"agent": "opencode", "task_title": "injected turn"}])
+    )
+    bot = await spawn_bot(cfg, bus, manager, client_factory=lambda: client, brain=injected)
+    assert bot is not None
+    dm = client.dm(9300)
+    await bot.on_message(make_message(client, "hey", channel=dm, user=FakeUser(9301)))
+    await bot.wait_turns()
+    await settle(getattr(cfg.discord, "chunk_ms", 1.0))
+    assert calls == [], "an injected brain must be used verbatim"
+    assert any("[routed to opencode] injected turn" in text for text in client.sent_to[dm.id])
