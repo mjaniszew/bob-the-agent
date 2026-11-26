@@ -119,7 +119,7 @@ docker compose up -d
 
 Expected containers:
 - `bob-the-agent-ollama` — LLM inference
-- `bob-the-agent` — Single Hermes Agent container (default profile `main` plus multiplexed researcher/simple/coder profiles under `/opt/data/profiles/`)
+- `bob-the-agent` — Single Hermes Agent container (default profile `main` plus multiplexed researcher/simple/coder profiles under `/opt/data/hermes/profiles/`)
 - `bob-the-agent-searxng` — Web search engine
 - `bob-the-agent-valkey` — Cache for SearXNG
 

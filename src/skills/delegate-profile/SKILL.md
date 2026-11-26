@@ -1,6 +1,6 @@
 ---
 name: delegate-profile
-description: Use this skill to delegate tasks to specialized agent profiles running in this same container. Delegates work by running `hermes -p <profile> chat --oneshot` in the foreground or as a background task with a log you can poll. Trigger words: delegate|agent-to-agent|subagent|delegate-profile
+description: "Use this skill to delegate tasks to specialized agent profiles running in this same container. Delegates work by running `hermes -p <profile> chat --oneshot` in the foreground or as a background task with a log you can poll. Trigger words: delegate|agent-to-agent|subagent|delegate-profile"
 tags:
   - delegate
   - agent-to-agent

@@ -2,13 +2,15 @@
 # Base = official Hermes Agent image, v0.21.3 (tag v2026.9.14).
 # s6-overlay v3 stays PID 1 (the image entrypoint /init is never overridden).
 # The container command is /app/scripts/bootstrap.sh: it provisions profiles,
-# then execs the long-running gateway ("hermes gateway run") as its last step.
-# Under s6-overlay v3, CMD runs as a child of the already-running /init, so the
-# gateway becomes the container's long-running foreground process.
+# then execs the Python bob-harness directly (python -m bob_harness.supervisor,
+# gateway :8181) — the container's long-running foreground process.
+# Under s6-overlay v3, CMD runs as a child of the already-running /init.
 FROM nousresearch/hermes-agent:v2026.9.14
 
 # Environment setup
 ENV NODE_COMPILE_CACHE=/var/tmp/node-compile-cache
+# silence pydantic-ai v2 import banner - plan risk row 10
+ENV PYDANTIC_AI_NO_BANNER=1
 
 # Create node compile cache directory (chowned: CMD runs as the hermes user)
 RUN mkdir -p /var/tmp/node-compile-cache && chown hermes:hermes /var/tmp/node-compile-cache
@@ -34,6 +36,13 @@ COPY ./src/agents/ /app/agents/
 COPY ./src/skills/ /app/skills/
 RUN chmod +x /app/scripts/* && chmod -R +x /app/skills/*/scripts/ 2>/dev/null || true
 
+# Task 22: the Python bob-harness is the ONLY orchestrator. This cont-init hook
+# (sorts before 02-reconcile-profiles) clears the persisted legacy-gateway
+# state so the base image never auto-starts `hermes gateway` (its profile
+# Discord bots would compete with the harness bot for the same identity).
+COPY ./src/scripts/cont-init-no-legacy-gateway.sh /etc/cont-init.d/02-bob-harness-only
+RUN chmod +x /etc/cont-init.d/02-bob-harness-only
+
 # YAML merge tooling used by generate-config.sh (merge-yaml.mjs)
 RUN cd /app/scripts && npm install js-yaml@4.1.1
 
@@ -54,6 +63,22 @@ WORKDIR /app
 # exist (and are hermes-writable) even when the mounts are absent.
 RUN mkdir -p /app/projects /app/results \
     && chown hermes:hermes /app/projects /app/results
+
+# ── bob-harness (new orchestrator) ──────────────────────────────────────
+# The bob-harness long-runner (task 22: bootstrap execs `python -m
+# bob_harness.supervisor` directly — no supervisord layer; the supervisor
+# PACKAGE below is simply unused now, left in the lock per its own
+# regeneration policy).
+# uv ships in the base image (0.11.6, /usr/local/bin/uv; Python 3.13 present).
+# Installs from the RUNTIME-ONLY requirements.lock. Lock generated ONCE at R1
+# via `uv pip freeze` after install; regenerated ONLY at an explicit
+# dependency-bump phase. Dev tools stay unpinned in requirements-dev.txt and
+# never enter the image.
+COPY ./src/bob-harness/ /app/bob-harness/
+RUN /usr/local/bin/uv venv /opt/bob-harness-venv --python 3.13 \
+ && /usr/local/bin/uv pip install --python /opt/bob-harness-venv/bin/python \
+      -r /app/bob-harness/requirements.lock \
+ && chown -R hermes:hermes /opt/bob-harness-venv
 
 # No entrypoint override: the image default (entrypoint-dispatch.sh -> /init)
 # stays PID 1.

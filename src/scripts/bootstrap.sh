@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Bob the Agent — single-container bootstrap.
-# Provisions the default profile (main orchestrator) + three secondary
-# Hermes profiles, then execs the long-running gateway (hermes gateway run).
+# Provisions the two surviving Hermes profiles (researcher, simple), seeds the
+# Python bob-harness state, then execs it (python -m bob_harness.supervisor).
 # s6-overlay stays PID 1 (image entrypoint entrypoint-dispatch.sh execs /init,
 # which runs this script as its main program via main-wrapper.sh — dropped to
-# the `hermes` user, HOME=/opt/data, hermes venv already on PATH).
+# the `hermes` user, HOME=HERMES_HOME, hermes venv already on PATH).
 set -euo pipefail
 
-HERMES_HOME="${HERMES_HOME:-/opt/data}"
+HERMES_HOME="${HERMES_HOME:-/opt/data/hermes}"
 TEMPLATE_FILE="/app/config/hermes.template.yaml"
 AGENTS_DIR="/app/agents"
 SKILLS_SRC="/app/skills"
-PROFILE_NAMES="researcher simple coder"
+PROFILE_NAMES="researcher simple"
 
 log() { echo "[bootstrap] $*"; }
 
@@ -57,29 +57,7 @@ copy_skills() { # <target_profile_dir> — rm-then-fresh-copy every skill; skip 
   done
 }
 
-# ---- 1. Default profile (main orchestrator) ------------------------------
-if [ ! -f "$HERMES_HOME/config.yaml" ] || [ ! -f "$HERMES_HOME/.initialized" ]; then
-  log "generating default (main) profile config"
-  /app/scripts/generate-config.sh "$TEMPLATE_FILE" "$AGENTS_DIR" main "$HERMES_HOME/config.yaml"
-else
-  # Reconcile a pre-existing (e.g. migrated) config with the current partial:
-  # deep-merge, partial wins on overlapping keys, user-only keys preserved.
-  # Without this, a migrated config predating the single-container refactor
-  # never gains gateway.multiplex_profiles (or any new partial keys).
-  log "reconciling default (main) profile config with current partial"
-  pre_reconcile_backup "$HERMES_HOME/config.yaml"
-  node /app/scripts/merge-yaml.mjs "$HERMES_HOME/config.yaml" \
-    "$AGENTS_DIR/main/hermes.partial.yml" "$HERMES_HOME/config.yaml" \
-    || log "WARN: main config reconciliation failed; keeping existing config"
-fi
-if [ -f "$HERMES_HOME/SOUL.md" ] && [ ! -f "$HERMES_HOME/.initialized" ]; then
-  rm "$HERMES_HOME/SOUL.md"
-  cp "$AGENTS_DIR/main/SOUL.md" "$HERMES_HOME/SOUL.md"
-fi
-
-copy_skills "$HERMES_HOME"
-
-# ---- 2. Secondary profiles ------------------------------------------------
+# ---- 1. Secondary profiles --------------------------------------------------
 for name in $PROFILE_NAMES; do
   dir="$HERMES_HOME/profiles/$name"
   if [ ! -f "$dir/config.yaml" ]; then
@@ -109,13 +87,43 @@ for name in $PROFILE_NAMES; do
     log "WARN: could not create Bot Chat session for $name"
 done
 
-# ---- 3. OpenCode CLI config (coder two-layer) -----------------------------
+# ---- 2b. bob-harness state root + first-boot seeds (idempotent) ------------
+# bob-harness state root + first-boot seeds (idempotent, never overwrites user
+# files). All bob-harness state lives in its dedicated folder under the
+# existing /opt/data bind (no new volume); the path is a literal so the state
+# root is independent of HERMES_HOME (task 23 folder split).
+H="/opt/data/bob-harness"
+mkdir -p "$H/skills" "$H/memory" "$H/logs"
+# Config: template-copy-once — a boot that died mid-seed reruns safely; user
+# edits on the volume are never overwritten.
+[ -f "$H/config.yaml" ] || cp /app/bob-harness/bob-harness.template.yaml "$H/config.yaml"
+# Skills seed: remove-and-replace every skill SHIPPED in /app/skills (mirrors the
+# per-profile rm-then-fresh copy_skills so the bob-harness index cannot go stale);
+# volume-created skills are preserved. Skip the same heavy dirs as copy_skills.
+for d in "$SKILLS_SRC"/*/; do
+  [ -d "$d" ] || continue
+  n="$(basename "$d")"
+  [ "$n" = "node_modules" ] && continue
+  [ "$n" = "dist" ] && continue
+  [ "$n" = ".venv" ] && continue
+  rm -rf "$H/skills/$n"
+  cp -r "$d" "$H/skills/$n"
+done
+# Memory continuity (best-effort): seed the bob-harness MEMORY.md from the legacy
+# main-profile memories file, pre-truncated to the 2,200-char budget. Never
+# overwrites a user-curated bob-harness file; $HERMES_HOME/memories/MEMORY.md may
+# itself be absent.
+[ -f "$H/memory/MEMORY.md" ] || head -c 2200 "$HERMES_HOME/memories/MEMORY.md" > "$H/memory/MEMORY.md" 2>/dev/null || true
+
+# ---- 3. OpenCode CLI config + state folders (task 23) ---------------------
 # Path is fixed by compose env (OPENCODE_CONFIG) so docker exec can verify it —
 # docker exec does NOT see exports performed inside this process.
 # NOTE: this script runs as the `hermes` user (main-wrapper.sh drops
-# privileges via s6-setuidgid) with HOME=/opt/data — never write under /root.
-OPENCODE_TARGET="${OPENCODE_CONFIG:-/opt/data/.config/opencode/opencode.jsonc}"
+# privileges via s6-setuidgid) with HOME=HERMES_HOME — never write under /root.
+OPENCODE_TARGET="${OPENCODE_CONFIG:-/opt/data/opencode/opencode.jsonc}"
 mkdir -p "$(dirname "$OPENCODE_TARGET")"
+# Pre-create the XDG roots compose pins — the CLI never hits a missing dir.
+mkdir -p /opt/data/opencode/config /opt/data/opencode/data /opt/data/opencode/state /opt/data/opencode/cache
 sed -e "s|OLLAMA_BASE_URL_PLACEHOLDER|${OLLAMA_BASE_URL:-http://ollama:11434}|g" \
     "/app/config/opencode.template.jsonc" > "$OPENCODE_TARGET"
 
@@ -159,11 +167,20 @@ fi
 # ---- 5. Shared workspaces ---------------------------------------------------
 mkdir -p /app/projects /app/results
 
-# ---- 6. Exec the long-running gateway ---------------------------------------
-# s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init). This command runs
-# as a child of the already-running s6; exec-ing the gateway makes the container's lifetime
-# equal to the gateway process — the documented foreground daemon command for
-# Docker deployments. Bootstrap is idempotent, so a container restart re-runs
-# provisioning safely before exec-ing the gateway again.
-log "starting hermes gateway"
-exec hermes gateway run
+# ---- 6. Exec the harness ---------------------------------------------------------
+# s6-overlay stays PID 1 (entrypoint-dispatch.sh execs /init); this command runs as
+# a child of the already-running s6. Task 22: supervisord was removed — as the
+# unprivileged hermes user it could not REOPEN the root-owned container stdout
+# pipe (stdout_logfile=/dev/fd/1 → EACCES making dispatchers → FATAL loop, the
+# harness never launched). Exec-ing bob-harness directly keeps stdout inherited
+# (write-only fds need no reopen), so `docker logs` shows all bob-harness output;
+# uvicorn handles SIGTERM (docker stop) gracefully, and compose's
+# restart: unless-stopped covers crashes. Bootstrap is idempotent, so a
+# container restart re-runs provisioning safely before exec-ing again.
+# NOTE: the bob-harness child CLIs (hermes/opencode) resolve via PATH (hermes venv
+# is already on PATH from main-wrapper) and OPENCODE_*/HERMES_HOME env below.
+log "starting bob-harness (python -m bob_harness.supervisor)"
+export PYTHONPATH="/app/bob-harness"
+export PYTHONUNBUFFERED=1
+export HOME="${HERMES_HOME:-/opt/data/hermes}"
+exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor

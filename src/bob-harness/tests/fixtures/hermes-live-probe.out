@@ -1,0 +1,15 @@
+Query: Reply with exactly: PROBE_OK
+Initializing agent...
+────────────────────────────────────────
+
+
+╭─ ☤ Hermes ───────────────────────────────────────────────────────────────────╮
+PROBE_OK
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Resume this session with:
+  hermes --resume 20261112_223916_4f2531 -p simple
+
+Session:        20261112_223916_4f2531
+Duration:       9s
+Messages:       2 (1 user, 0 tool calls)

@@ -1,0 +1,17 @@
+# Keep local dev artifacts, caches and secrets out of the build context.
+# Found 2026-11-26 (post task-23 verification): with no .dockerignore,
+# COPY ./src/bob-harness/ /app/bob-harness/ baked the workspace's macOS
+# .venv (symlinks pointing at /opt/homebrew/...) plus .pytest_cache and
+# __pycache__ into the image. Harmless to the runtime (bootstrap builds
+# its own venv at /opt/bob-harness-venv) but broken and confusing for
+# any tooling touching /app/bob-harness/.venv inside the container.
+# Local dev venvs (host- and container-created) are never shipped.
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.pyc
+# Secrets must never enter the build context (compose reads .env itself).
+.env
+.env.*

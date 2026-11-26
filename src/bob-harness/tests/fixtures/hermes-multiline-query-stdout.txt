@@ -1,0 +1,17 @@
+Query: #### skill: math-operations
+# Math Operations Skill
+Use this skill to perform mathematical calculations, statistical analysis, and 
+unit conversions with high precision.
+## Input
+Hi Bob, what is 17 * 23? Reply in one sentence.
+Initializing agent...
+
+  ┊ 🐍 preparing execute_code…
+17 * 23 = 391.
+
+Resume this session with:
+  hermes --resume 20261126_143028_6ea177 -p simple
+
+Session:        20261126_143028_6ea177
+Duration:       5s
+Messages:       4 (1 user, 2 tool calls)

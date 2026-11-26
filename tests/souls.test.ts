@@ -6,7 +6,7 @@ const soul = (name: string) =>
   fs.readFileSync(path.join(ROOT, `src/agents/${name}/SOUL.md`), 'utf8');
 
 describe('SOUL.md single-container wording', () => {
-  for (const name of ['main', 'researcher', 'simple', 'coder']) {
+  for (const name of ['researcher', 'simple']) {
     test(`${name}: no NATS / container-era references remain`, () => {
       const s = soul(name);
       expect(s).not.toMatch(/NATS/i);
@@ -16,18 +16,14 @@ describe('SOUL.md single-container wording', () => {
     });
   }
 
-  test('main teaches the real delegate-profile contract', () => {
-    const s = soul('main');
-    expect(s).toMatch(/delegate-profile/);
-    expect(s).toMatch(/send_task_background/);
-    expect(s).toMatch(/check_task/);
-    expect(s).toMatch(/simple 15m, researcher 60m, coder 120m/);
-    expect(s).toMatch(/your own session/);
-  });
-
-  test('researcher, simple, coder know they are profiles delegated to by main', () => {
-    for (const name of ['researcher', 'simple', 'coder']) {
+  test('researcher and simple know they are profiles the harness delegates to', () => {
+    // Identity wording: each surviving SOUL names its own profile.
+    for (const name of ['researcher', 'simple']) {
       expect(soul(name)).toContain(`You run as the \`${name}\` profile`);
+      // They still reference the delegate-profile skill — the mechanism the
+      // harness (and sibling profiles) use to hand them work. No
+      // "delegated to by main" phrase is asserted: main was deleted in R8.
+      expect(soul(name)).toContain('delegate-profile');
     }
   });
 
@@ -36,16 +32,9 @@ describe('SOUL.md single-container wording', () => {
     expect(soul('simple')).toMatch(/you do not delegate/i);
   });
 
-  test('coder keeps OpenCode two-layer instructions', () => {
-    const s = soul('coder');
-    expect(s).toMatch(/opencode/i);
-    expect(s).toMatch(/terminal/);
-    expect(s).toMatch(/\/app\/projects/);
-  });
-
-  test('main dispatches delegation via the standalone cli.ts, not the runner', () => {
-    const s = soul('main');
-    expect(s).not.toContain('skill-runner');
-    expect(s).toContain('node /app/skills/delegate-profile/cli.ts');
+  test('main profile is gone (the harness long-runner replaces it)', () => {
+    // Guard: R8 deleted src/agents/main — if it ever reappears, this suite
+    // reminds you to restore its SOUL coverage deliberately.
+    expect(fs.existsSync(path.join(ROOT, 'src/agents/main'))).toBe(false);
   });
 });

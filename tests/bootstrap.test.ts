@@ -10,9 +10,9 @@ const script = () => fs.readFileSync(scriptPath, 'utf8');
 const q = (p: string): string => `"${p}"`;
 
 afterAll(() => {
-  // The merged-config tests write tmp/*.yaml — don't leave untracked noise
+  // The atomic-merge test writes tmp/*.yaml — don't leave untracked noise
   // behind in the working tree.
-  for (const f of ['merged-main-config.yaml', 'atomic-in-place.yaml', 'atomic-partial.yaml']) {
+  for (const f of ['atomic-in-place.yaml', 'atomic-partial.yaml']) {
     fs.rmSync(path.join(ROOT, 'tmp', f), { force: true });
   }
 });
@@ -28,14 +28,18 @@ describe('bootstrap.sh', () => {
     execSync(`bash -n ${q(scriptPath)}`);
   });
 
-  test('provisions default profile config from template + main partial', () => {
-    expect(script()).toMatch(/generate-config\.sh "\$TEMPLATE_FILE" "\$AGENTS_DIR" main/);
+  test('no main-profile provisioning remains (harness replaces main)', () => {
+    // R8: the main profile (and its partial) was deleted — the harness
+    // long-runner owns orchestration now, bootstrap must not provision main.
+    expect(script()).not.toMatch(/generate-config\.sh "\$TEMPLATE_FILE" "\$AGENTS_DIR" main/);
+    expect(script()).not.toMatch(/merge-yaml\.mjs "\$HERMES_HOME\/config\.yaml"/);
+    expect(script()).not.toMatch(/AGENTS_DIR\/main/);
   });
 
   test('reconciles pre-existing (migrated) configs with the current partial', () => {
     // A migrated config predating the single-container refactor must still
-    // gain gateway.multiplex_profiles etc. — merge partial over existing.
-    expect(script()).toMatch(/merge-yaml\.mjs "\$HERMES_HOME\/config\.yaml"/);
+    // gain the current partial's keys — merge partial over existing, per
+    // profile dir only (there is no $HERMES_HOME top-level config anymore).
     expect(script()).toMatch(/merge-yaml\.mjs "\$dir\/config\.yaml"/);
   });
 
@@ -63,37 +67,63 @@ describe('bootstrap.sh', () => {
     const src = script();
     expect(src).toMatch(/api\/pull/);
     expect(src).toMatch(/api\/tags/);
-    // Model pull must be settled before the gateway execs (section 4 of 6).
+    // Model pull must be settled before the harness execs (section 4 of 5).
     const pullAt = src.indexOf('api/pull');
-    const execAt = src.indexOf('exec hermes gateway run');
+    const execAt = src.indexOf('exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor');
     expect(pullAt).toBeGreaterThanOrEqual(0);
     expect(execAt).toBeGreaterThan(pullAt);
   });
 
-  test('creates secondary profiles researcher, simple, coder under profiles/', () => {
-    for (const name of ['researcher', 'simple', 'coder']) {
+  test('creates secondary profiles researcher, simple under profiles/', () => {
+    for (const name of ['researcher', 'simple']) {
       expect(script()).toMatch(new RegExp(`profiles/\\$\\{?name\\}?`));
     }
-    expect(script()).toMatch(/PROFILE_NAMES="researcher simple coder"/);
+    expect(script()).toMatch(/PROFILE_NAMES="researcher simple"/);
+    // coder rides out until the R12 two-layer split — not provisioned here.
+    expect(script()).not.toMatch(/PROFILE_NAMES="researcher simple coder"/);
   });
 
-  test('merged main config enables multiplex_profiles and bot_mode_protocol', () => {
-    const out = path.join(ROOT, 'tmp', 'merged-main-config.yaml');
-    require('child_process').execSync(
-      `node ${q(path.join(ROOT, 'src/scripts/merge-yaml.mjs'))} ` +
-      `${q(path.join(ROOT, 'src/config/hermes.template.yaml'))} ` +
-      `${q(path.join(ROOT, 'src/agents/main/hermes.partial.yml'))} ${q(out)}`);
-    const merged = fs.readFileSync(out, 'utf8');
-    expect(merged).toMatch(/multiplex_profiles:\s*true/);
-    expect(merged).toMatch(/bot_mode_protocol:\s*true/);
+  test('bob-harness long-runner exec replaces the gateway exec (no supervisord layer)', () => {
+    const src = script();
+    // The bootstrap's final act is the bob-harness long-runner (task 22 removed
+    // the supervisord layer; task 23 renamed the package to bob_harness).
+    expect(src).toMatch(/^exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor$/m);
+    expect(src).not.toContain('exec hermes gateway run');
+    // The ollama model pull must be settled before the supervisor takes over.
+    const pullAt = src.indexOf('api/pull');
+    const execAt = src.indexOf('exec /opt/bob-harness-venv/bin/python -m bob_harness.supervisor');
+    expect(pullAt).toBeGreaterThanOrEqual(0);
+    expect(execAt).toBeGreaterThan(pullAt);
   });
 
-  test('enables gateway multiplexing and bot mode protocol via main config', () => {
-    // The keys live in src/agents/main/hermes.partial.yml (merged into config.yaml)
-    const partial = fs.readFileSync(
-      path.join(ROOT, 'src/agents/main/hermes.partial.yml'), 'utf8');
-    expect(partial).toMatch(/multiplex_profiles:\s*true/);
-    expect(partial).toMatch(/bot_mode_protocol:\s*true/);
+  test('sets HERMES_HOME default to the dedicated hermes folder (task 23)', () => {
+    // The base image's image-ENV default stays /opt/data; bootstrap re-defaults
+    // to the dedicated folder so profile provisioning lands under it.
+    expect(script()).toMatch(/HERMES_HOME="\$\{HERMES_HOME:-\/opt\/data\/hermes\}"/);
+  });
+
+  test('seeds the bob-harness state root at /opt/data/bob-harness (idempotent, first boot)', () => {
+    const src = script();
+    expect(src).toMatch(/H="\/opt\/data\/bob-harness"/);
+    expect(src).toMatch(/mkdir -p "\$H\/skills" "\$H\/memory" "\$H\/logs"/);
+    // Config is template-copy-once (user edits on the volume are never overwritten).
+    expect(src).toMatch(/\[ -f "\$H\/config\.yaml" \] \|\| cp \/app\/bob-harness\/bob-harness\.template\.yaml "\$H\/config\.yaml"/);
+    // Skills seed mirrors copy_skills' rm-then-fresh so the harness skill
+    // index cannot go stale across boots.
+    const rmAt = src.indexOf('rm -rf "$H/skills/$n"');
+    const cpAt = src.indexOf('cp -r "$d" "$H/skills/$n"');
+    expect(rmAt).toBeGreaterThanOrEqual(0);
+    expect(cpAt).toBeGreaterThan(rmAt);
+    // Memory continuity: seed MEMORY.md pre-truncated to the 2200-char budget.
+    expect(src).toMatch(/head -c 2200 "\$HERMES_HOME\/memories\/MEMORY\.md" > "\$H\/memory\/MEMORY\.md"/);
+    // The seed block sits after the profile loop and before the OpenCode section.
+    const loopAt = src.indexOf('for name in $PROFILE_NAMES');
+    const seedAt = src.indexOf('H="/opt/data/bob-harness"');
+    const opencodeAt = src.indexOf('OPENCODE_TARGET=');
+    expect(loopAt).toBeGreaterThanOrEqual(0);
+    expect(opencodeAt).toBeGreaterThanOrEqual(0);
+    expect(seedAt).toBeGreaterThan(loopAt);
+    expect(seedAt).toBeLessThan(opencodeAt);
   });
 
   test('generates per-profile .env with skill variables and chmod 600', () => {
@@ -107,10 +137,27 @@ describe('bootstrap.sh', () => {
     expect(script()).toMatch(/OLLAMA_BASE_URL_PLACEHOLDER/);
   });
 
-  test('creates workspaces and execs the long-running gateway last', () => {
+  test('seeds OpenCode config + XDG state under the dedicated opencode folder (task 23)', () => {
+    const src = script();
+    // OPENCODE_TARGET fallback: compose pins the same path (docker exec can
+    // verify it).
+    expect(src).toMatch(/OPENCODE_TARGET="\$\{OPENCODE_CONFIG:-\/opt\/data\/opencode\/opencode\.jsonc\}"/);
+    // The four XDG roots are pre-created so the CLI never hits a missing dir.
+    expect(src).toMatch(/mkdir -p \/opt\/data\/opencode\/config \/opt\/data\/opencode\/data \/opt\/data\/opencode\/state \/opt\/data\/opencode\/cache/);
+  });
+
+  test('runs the harness with the bob-harness PYTHONPATH + hermes home (env contract)', () => {
+    const src = script();
+    // Line-anchored so explanatory comments don't satisfy the assertion.
+    expect(src).toMatch(/^export PYTHONPATH="\/app\/bob-harness"$/m);
+    expect(src).toMatch(/^export HOME="\$\{HERMES_HOME:-\/opt\/data\/hermes\}"$/m);
+    expect(src).toMatch(/starting bob-harness \(python -m bob_harness\.supervisor\)/);
+  });
+
+  test('creates workspaces and execs the long-running bob-harness last', () => {
     // Line-anchored so explanatory comments don't satisfy the assertion.
     expect(script()).toMatch(/^mkdir -p \/app\/projects \/app\/results$/m);
-    expect(script()).toMatch(/exec hermes gateway run/);
+    expect(script()).toMatch(/exec \/opt\/bob-harness-venv\/bin\/python -m bob_harness\.supervisor/);
   });
 
   test('skill copies skip node_modules and dist (volume bloat guard)', () => {

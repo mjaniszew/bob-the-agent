@@ -8,7 +8,7 @@ x-agent-env: &agent-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   SEARXNG_BASE_URL: ${SEARXNG_BASE_URL}
 x-agent-healthcheck: &agent-healthcheck
-  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8642' || exit 1"]
+  test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8181' || exit 1"]
   interval: 30s
   timeout: 10s
   retries: 3
@@ -50,38 +50,63 @@ services:
           memory: 1G
 
   # ===========================================
-  # Hermes Agent - single multiplexed agent
-  # (profiles: main, researcher, simple, coder)
+  # Hermes Agent - single agent + Python bob-harness long-runner
+  # (profiles: researcher, simple; bob-harness runs the gateway, bot, tasks, scheduler)
   # ===========================================
   agent:
     image: *agent-image
     container_name: bob-the-agent
     command: ["/app/scripts/bootstrap.sh"]
     ports:
-      # Loopback-only (user decision 2026-09-19): the gateway fronts all
-      # profiles behind approvals.mode: off and its auth is unverified —
-      # nothing documented needs LAN exposure (Discord connects outbound).
-      - "8642:8642"
-      - "9119:9119"
+      # bob-harness gateway (API-key secured; replaces the hermes gateway + dashboard).
+      # Loopback default; widen to "8181:8181" when a reverse proxy exists.
+      - "127.0.0.1:8181:8181"
     environment:
       <<: *agent-env
-      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN}
-      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY}
-      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET}
-      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION}
-      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID}
-      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY}
+      USER_X_COM_API_TOKEN: ${USER_X_COM_API_TOKEN:-}
+      USER_XAI_SEARCH_API_KEY: ${USER_XAI_SEARCH_API_KEY:-}
+      USER_AWS_S3_BUCKET: ${USER_AWS_S3_BUCKET:-}
+      USER_AWS_S3_REGION: ${USER_AWS_S3_REGION:-}
+      USER_AWS_S3_ACCESS_KEY_ID: ${USER_AWS_S3_ACCESS_KEY_ID:-}
+      USER_AWS_S3_SECRET_ACCESS_KEY: ${USER_AWS_S3_SECRET_ACCESS_KEY:-}
       HERMES_UID: ${HERMES_UID:-}
       HERMES_GID: ${HERMES_GID:-}
-      HERMES_DASHBOARD: ${HERMES_DASHBOARD:-}
-      HERMES_API_TIMEOUT: ${HERMES_API_TIMEOUT:-3600}
-      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}
-      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
-      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       DISCORD_ALLOWED_ROLES: ${DISCORD_ALLOWED_ROLES:-}
-      OPENCODE_CONFIG: /opt/data/.config/opencode/opencode.jsonc
+      # Task 23 folder split: hermes state (profiles/, memories/, sessions) lives
+      # in the dedicated /opt/data/hermes folder — overrides the base image's
+      # image-ENV default (/opt/data) for the whole process tree incl. docker exec.
+      HERMES_HOME: /opt/data/hermes
+      # Task 23 folder split: opencode config AND XDG state/data/cache live in
+      # the dedicated /opt/data/opencode folder (previously the config hid in
+      # /opt/data/.config/opencode and state leaked into XDG defaults under
+      # HOME). The bob-harness opencode adapter forwards XDG_* to opencode
+      # children only — hermes children keep their narrow allowlist.
+      OPENCODE_CONFIG: /opt/data/opencode/opencode.jsonc
+      XDG_CONFIG_HOME: /opt/data/opencode/config
+      XDG_DATA_HOME: /opt/data/opencode/data
+      XDG_STATE_HOME: /opt/data/opencode/state
+      XDG_CACHE_HOME: /opt/data/opencode/cache
+      # bob-harness (thin Python orchestrator) — API key required (fail-fast if empty);
+      # router defaults to the same ollama OpenAI-compatible endpoint the profiles
+      # use; home channel is the pinned Discord notices channel (Q4).
+      BOB_HARNESS_API_KEY: ${BOB_HARNESS_API_KEY:-}
+      # Point bob-harness at the config bootstrap.sh seeds onto the volume
+      # (/opt/data/bob-harness/config.yaml). Without it, load_config() looks for
+      # ./config.yaml in the CWD (/app) which does not exist and silently falls
+      # back to built-in defaults — every YAML-only setting (logfire.enabled,
+      # scheduler jobs, rate limits) would be discarded. Only BOB_HARNESS_* flat
+      # env vars (above) still override the YAML.
+      BOB_HARNESS_CONFIG: /opt/data/bob-harness/config.yaml
+      BOB_HARNESS_ROUTER_BASE_URL: ${BOB_HARNESS_ROUTER_BASE_URL:-http://ollama:11434/v1}
+      BOB_HARNESS_ROUTER_MODEL: ${BOB_HARNESS_ROUTER_MODEL:-glm-5.3-flash:cloud}
+      BOB_HARNESS_DATA_DIR: /opt/data/bob-harness
+      BOB_HARNESS_WORKDIR: /app/projects
+      BOB_HARNESS_DISCORD_HOME_CHANNEL: ${BOB_HARNESS_DISCORD_HOME_CHANNEL:-}
+      # silence pydantic-ai v2 import banner - plan risk row 10
+      PYDANTIC_AI_NO_BANNER: "1"
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       # CPU-only host: a fresh ~15.5k-token coder prompt prefills at ~20 tok/s
       # (~13 min) — hermes' default 900s read timeout aborts the turn mid-prefill.
     volumes:

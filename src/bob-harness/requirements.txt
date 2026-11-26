@@ -1,0 +1,19 @@
+# Runtime pins for the harness PoC (D10 list + round-1 m7 fixes). Regeneration policy: requirements.lock
+# is generated ONCE at R1 (uv pip freeze BEFORE dev tools are installed); regenerate ONLY at an explicit
+# dependency-bump phase, never mid-phase. Regen #2: task-10 P0 (full uv re-resolution within unchanged
+# caps per OQ8; freeze BEFORE dev tools). Install needs PyPI reachability; test execution stays offline.
+pydantic>=2,<3
+pydantic-ai>=2.73,<3
+# DELIBERATE >=2.73,<3 cap: 2.x is the migration target (task 10); the v1 schema-retry concern (round-1 m7) is superseded by the D3 deferred-tool redesign. Do not drift below 2.73.
+pydantic-ai-harness[coder]==0.73.0
+logfire[system-metrics]>=6
+fastapi>=0.118,<1
+uvicorn[standard]>=0.30
+pyyaml>=6.0.2
+pydantic-settings>=2
+httpx
+discord.py>=2.7,<3
+audioop-lts; python_version >= "3.13"   # env-MARKER line: never transcribe it unconditionally (round-1 m7)
+slowapi>=0.1.10
+apscheduler<4
+supervisor==4.3.0            # 3.13-era release; 4.2.5 predates 3.13 (round-1 M6)

@@ -1,6 +1,6 @@
 ---
 name: aws-s3
-description: Use this skill to upload files to AWS S3 buckets and generate URLs for accessing uploaded files (presigned URLs for private buckets, public URLs for public buckets), especially if it's required to: upload files to cloud storage, generate shareable URLs, persist generated artifacts (reports, documents, images), share files with external users.
+description: "Use this skill to upload files to AWS S3 buckets and generate URLs for accessing uploaded files (presigned URLs for private buckets, public URLs for public buckets), especially if it's required to: upload files to cloud storage, generate shareable URLs, persist generated artifacts (reports, documents, images), share files with external users."
 ---
 
 # AWS S3 Skill
