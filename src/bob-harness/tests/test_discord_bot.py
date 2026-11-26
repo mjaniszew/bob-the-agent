@@ -621,8 +621,10 @@ async def test_spawn_bot_dm_turn_without_injected_brain(
     await settle(getattr(cfg.discord, "chunk_ms", 1.0))
     assert len(calls) == 1 and calls[0][1] is bus
     assert adapter.specs, "router output never reached an agent adapter"
+    session = await manager.get_or_create(channel_handle=f"discord:{dm.id}")
+    routed = [r for r in transcript_records(cfg, session.id) if r.get("kind") == "router"]
+    assert routed and routed[-1]["data"]["task_title"] == "lazy turn"
     sends = client.sent_to[dm.id]
-    assert any("[routed to opencode] lazy turn" in text for text in sends)
     shown = sends + [edit[1] for edit in client.edits]
     assert any("lazy done" in text for text in shown), "agent output not sent back to the DM"
 
@@ -664,4 +666,7 @@ async def test_spawn_bot_forwards_injected_brain(
     await bot.wait_turns()
     await settle(getattr(cfg.discord, "chunk_ms", 1.0))
     assert calls == [], "an injected brain must be used verbatim"
-    assert any("[routed to opencode] injected turn" in text for text in client.sent_to[dm.id])
+    session = await manager.get_or_create(channel_handle=f"discord:{dm.id}")
+    routed = [r for r in transcript_records(cfg, session.id) if r.get("kind") == "router"]
+    assert routed and routed[-1]["data"]["task_title"] == "injected turn"
+    assert "lazy done" in client.sent_to[dm.id]

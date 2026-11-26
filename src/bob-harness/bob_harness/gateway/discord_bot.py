@@ -124,6 +124,13 @@ class DiscordBot:
         self._bus_queue: asyncio.Queue[tuple[str, dict]] | None = None
         self._last_notice_drop = float("-inf")
 
+    def _get_brain(self) -> RouterBrain:
+        """The injected brain, or the real ``RouterBrain(cfg, bus=bus)`` built on
+        first use and cached (production ``spawn_bot`` wiring injects none)."""
+        if self._brain is None:
+            self._brain = RouterBrain(self._cfg, bus=self._bus)
+        return self._brain
+
     @staticmethod
     def _loop_time() -> float:
         try:
@@ -296,7 +303,9 @@ class DiscordBot:
         if session.state != "routing":
             await self._manager.move(session, "routing")
         pre_len = self._transcript_length(session)
-        route = await self._brain.route_async(text, session=session, session_manager=self._manager)
+        route = await self._get_brain().route_async(
+            text, session=session, session_manager=self._manager
+        )
         if self._just_fell_back(session, pre_len):
             await self._bus.publish(
                 "reply.chunk",
@@ -795,6 +804,7 @@ async def spawn_bot(
     manager: SessionManager,
     *,
     client_factory: Callable[[], object] | None = None,
+    brain: RouterBrain | None = None,
     log: logging.Logger | None = None,
 ) -> DiscordBot | None:
     """Build + start the Discord bot on the RUNNING loop; ``None`` (reason
@@ -805,7 +815,8 @@ async def spawn_bot(
     built here (the ONLY lazy ``import discord`` in the module — module import
     stays lightweight and testable). First-connect failures log ERROR + return
     None (F8: web-only; the PoC does not auto-reconnect — docker restart: unless-stopped restarts
-    the whole process). The token is NEVER logged."""
+    the whole process). ``brain`` is forwarded to the bot verbatim; when
+    omitted the bot lazily builds the real ``RouterBrain``. The token is NEVER logged."""
     _logger = log if log is not None else _LOG
     if not cfg.discord.enabled:
         _logger.info("discord bot disabled: discord.enabled false")
@@ -815,7 +826,9 @@ async def spawn_bot(
         _logger.info("discord bot disabled: DISCORD_BOT_TOKEN unset")
         return None
     if client_factory is not None:
-        bot = DiscordBot(cfg, bus, manager, client=client_factory(), log=_logger)
+        bot = DiscordBot(
+            cfg, bus, manager, client=client_factory(), brain=brain, log=_logger
+        )
         await bot.start()
         return bot
     import discord  # lazy: keep module import lightweight + testable (spec rule)
@@ -825,7 +838,7 @@ async def spawn_bot(
     intents.message_content = True  # REQUIRED (DISCORD_SETUP docs) for on_message text
     inner = discord.Client(intents=intents)
     client = _RealClient(inner)
-    bot = DiscordBot(cfg, bus, manager, client=client, log=_logger)
+    bot = DiscordBot(cfg, bus, manager, client=client, brain=brain, log=_logger)
 
     first_connect: asyncio.Future[None] = asyncio.get_running_loop().create_future()
 
